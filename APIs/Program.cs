@@ -8,20 +8,26 @@ using Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add services to the container
 builder.Services.AddControllers();
-
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//DatabaseFactory
+// DatabaseFactory
 builder.Services.AddScoped<IDatabaseFactory, DatabaseFactory>();
 
-// SQL Server Configuration
+// --- SQL Server Configuration (with User Secrets) ---
+var sqlPassword = builder.Configuration["SqlPassword"];
+var sqlConnStrTemplate = builder.Configuration.GetConnectionString("SqlServer_Staging");
+if (!string.IsNullOrEmpty(sqlPassword) && sqlConnStrTemplate.Contains("{SqlPassword}"))
+{
+    var finalSqlConnStr = sqlConnStrTemplate.Replace("{SqlPassword}", sqlPassword);
+    builder.Configuration["ConnectionStrings:SqlServer_Staging"] = finalSqlConnStr;
+}
+
 builder.Services.AddDbContext<EduBusSqlContext>(options =>
     options.UseSqlServer(
-        builder.Configuration.GetConnectionString("SqlServer"),
+        builder.Configuration.GetConnectionString("SqlServer_Staging"),
         sqlOptions =>
         {
             sqlOptions.EnableRetryOnFailure(
@@ -33,17 +39,16 @@ builder.Services.AddDbContext<EduBusSqlContext>(options =>
     )
 );
 
-// MongoDB Configuration
-// Read connection string from appsettings, replace {MongoPassword} with User Secrets
+// --- MongoDB Configuration (with User Secrets) ---
 var mongoPassword = builder.Configuration["MongoPassword"];
-var connStrTemplate = builder.Configuration.GetConnectionString("MongoDB");
-var finalMongoConnStr = connStrTemplate.Replace("{MongoPassword}", mongoPassword);
-
-// Override into IConfiguration to EduBusMongoContext can read
-builder.Configuration["ConnectionStrings:MongoDB"] = finalMongoConnStr;
+var mongoConnStrTemplate = builder.Configuration.GetConnectionString("MongoDB");
+if (!string.IsNullOrEmpty(mongoPassword) && mongoConnStrTemplate.Contains("{MongoPassword}"))
+{
+    var finalMongoConnStr = mongoConnStrTemplate.Replace("{MongoPassword}", mongoPassword);
+    builder.Configuration["ConnectionStrings:MongoDB"] = finalMongoConnStr;
+}
 
 builder.Services.AddSingleton<EduBusMongoContext>();
-
 
 // Repository Registration
 builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
@@ -51,7 +56,7 @@ builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>)
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -59,9 +64,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
