@@ -2,7 +2,7 @@
 
 ## Overview
 
-EduBus APIs is a .NET 8.0 backend solution designed for an educational bus management system. The project follows a clean architecture pattern with clear separation of concerns across multiple projects within a solution structure.
+EduBus APIs is a .NET 8.0 backend solution designed for an educational bus management system. The project follows a clean architecture pattern with clear separation of concerns across multiple projects within a solution structure. The system supports dual database architecture with both SQL Server and MongoDB for flexible data storage.
 
 ## Solution Structure
 
@@ -32,23 +32,47 @@ EduBusAPIs/
 - API controllers and endpoints
 - Request/response handling
 - Swagger documentation
+- Dependency injection configuration
 
 **Key Files**:
 
 - `Program.cs` - Application startup and configuration
-- `appsettings.json` - Application configuration
-- `APIs.csproj` - Project dependencies (Swashbuckle.AspNetCore)
+- `appsettings.json` - Application configuration with database settings
+- `APIs.csproj` - Project dependencies
 - `Controllers/` - API controllers (currently empty)
 
 **Dependencies**:
 
 - Swashbuckle.AspNetCore (v6.4.0) - For API documentation
+- Data project - For data access
+- Services project - For business logic
+- Utils project - For utilities
 
 **Configuration**:
 
 - Swagger/OpenAPI enabled for development
 - HTTPS redirection
 - Authorization middleware configured
+- Dual database support (SQL Server + MongoDB)
+- Repository pattern registration
+
+**Database Configuration**:
+
+```json
+{
+  "ConnectionStrings": {
+    "SqlServer": "Server=localhost;Database=EduBus;Trusted_Connection=true;TrustServerCertificate=true;",
+    "MongoDB": "mongodb://localhost:27017"
+  },
+  "MongoDB": {
+    "DatabaseName": "EduBusDB"
+  },
+  "DatabaseSettings": {
+    "DefaultDatabase": "SqlServer",
+    "UseMultipleDatabases": true
+  }
+}
+```
 
 ### 2. Services Project (Business Logic Layer)
 
@@ -73,6 +97,10 @@ Services/
 └── MapperProfiles/   # AutoMapper profiles
 ```
 
+**Dependencies**:
+
+- Data project - For data access
+
 **Current State**: All directories are empty, indicating the business logic layer is not yet implemented.
 
 ### 3. Data Project (Data Access Layer)
@@ -86,58 +114,149 @@ Services/
 - Database models and entities
 - Repository pattern implementation
 - Data access operations
-- Entity Framework Core integration
+- Dual database support (SQL Server + MongoDB)
+
+**Dependencies**:
+
+- Microsoft.EntityFrameworkCore (v9.0.8)
+- Microsoft.EntityFrameworkCore.SqlServer (v9.0.8)
+- MongoDB.Bson (v3.4.2)
+- MongoDB.Driver (v3.4.2)
 
 **Structure**:
 
 ```
 Data/
 ├── Models/
-│   └── BaseDomain.cs    # Base entity class
+│   ├── BaseDomain.cs           # Base entity class for SQL Server
+│   └── BaseMongoDocument.cs    # Base document class for MongoDB
+├── Contexts/
+│   ├── MongoDB/
+│   │   └── EduBusMongoContext.cs
+│   └── SqlServer/              # Empty (DbContext to be implemented)
 └── Repos/
-    ├── IRepository.cs   # Generic repository interface
-    └── Repository.cs    # Generic repository implementation
+    ├── Interfaces/
+    │   ├── IMongoRepository.cs
+    │   └── ISqlRepository.cs
+    ├── MongoDB/
+    │   └── MongoRepository.cs
+    └── SqlServer/
+        └── SqlRepository.cs
 ```
 
-**Key Components**:
+#### Base Models
 
-#### BaseDomain Class
+**BaseDomain Class** (SQL Server entities):
 
 ```csharp
 public class BaseDomain
 {
     public int Id { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+    public bool IsDeleted { get; set; } = false;
 }
 ```
 
-- Base class for all domain entities
-- Provides common Id property for all entities
+**BaseMongoDocument Class** (MongoDB documents):
+
+```csharp
+public class BaseMongoDocument
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; } = string.Empty;
+
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    [BsonElement("updatedAt")]
+    public DateTime? UpdatedAt { get; set; }
+
+    [BsonElement("isDeleted")]
+    public bool IsDeleted { get; set; } = false;
+}
+```
+
+#### Database Contexts
+
+**EduBusMongoContext**:
+
+- MongoDB connection management
+- Database and collection access
+- Connection health monitoring
+- Index management capabilities
+- Configuration-based connection string and database name
+
+**Features**:
+
+- Connection string validation
+- Database health checks
+- Collection management
+- Index creation support
+- Error handling
 
 #### Repository Pattern
 
-**Interface**: `IRepository<T>`
+**IMongoRepository Interface**:
 
-- Generic repository interface with CRUD operations
-- Supports async operations
-- Includes conditional querying capabilities
+- Generic repository interface for MongoDB documents
+- Full CRUD operations
+- Advanced filtering and sorting
+- Pagination support
+- Atomic operations
 
-**Implementation**: `Repository<T>`
+**Methods**:
 
-- Generic repository implementation using Entity Framework Core
-- Supports:
-  - CRUD operations (Create, Read, Update, Delete)
-  - Conditional queries with expressions
-  - Include operations for related entities
-  - Concurrency handling
-  - Entity tracking and change detection
+- `FindAllAsync()` - Get all non-deleted documents
+- `FindAsync(string id)` - Find by ID
+- `AddAsync(T document)` - Create new document
+- `UpdateAsync(T document)` - Update existing document
+- `DeleteAsync(string id)` - Soft delete by ID
+- `FindByConditionAsync(Expression<Func<T, bool>>)` - Conditional queries
+- `FindByFilterAsync(FilterDefinition<T>)` - MongoDB filter queries
+- `FindByFilterAsync(FilterDefinition<T>, SortDefinition<T>)` - Filtered and sorted queries
+- `FindByFilterAsync(FilterDefinition<T>, int skip, int limit)` - Paginated queries
+- `GetCountAsync()` - Document count
+- `ExistsAsync(string id)` - Check existence
+- `FindOneAndUpdateAsync()` - Atomic update operations
+- `FindOneAndDeleteAsync()` - Atomic delete operations
 
-**Key Features**:
+**ISqlRepository Interface**:
 
-- Async/await pattern throughout
+- Generic repository interface for SQL Server entities
+- Full CRUD operations
+- Include support for related entities
+- Conditional queries
+
+**Methods**:
+
+- `FindAllAsync()` - Get all non-deleted entities
+- `FindAllAsync(params Expression<Func<T, object>>[] includes)` - With includes
+- `FindAsync(int id)` - Find by ID
+- `AddAsync(T entity)` - Create new entity
+- `UpdateAsync(T entity)` - Update existing entity
+- `DeleteAsync(T entity)` - Soft delete entity
+- `FindByConditionAsync(Expression<Func<T, bool>>)` - Conditional queries
+- `FindByConditionAsync(Expression<Func<T, bool>>, params Expression<Func<T, object>>[] includes)` - With includes
+- `GetCountAsync()` - Entity count
+- `ExistsAsync(int id)` - Check existence
+
+**MongoRepository Implementation**:
+
+- Full implementation of IMongoRepository
+- Soft delete support
+- Automatic timestamp management
+- Reflection-based property updates
+- Comprehensive error handling
+
+**SqlRepository Implementation**:
+
+- Full implementation of ISqlRepository
 - Entity Framework Core integration
-- Generic implementation for type safety
-- Concurrency exception handling
-- Include support for eager loading
+- Soft delete support
+- Concurrency handling
+- Include support for related entities
 
 ### 4. Utils Project (Utility Layer)
 
@@ -148,11 +267,31 @@ public class BaseDomain
 **Purpose**:
 
 - Helper classes and utilities
+- Database factory pattern
 - Common functionality
-- Extension methods
 - Shared utilities across projects
 
-**Current State**: Empty project structure, ready for utility implementations.
+**Dependencies**:
+
+- Microsoft.Extensions.Configuration.Abstractions (v9.0.0)
+- Microsoft.Extensions.DependencyInjection.Abstractions (v9.0.0)
+
+**Key Components**:
+
+**DatabaseFactory**:
+
+- Factory pattern for database selection
+- Configuration-based database switching
+- Support for multiple database types
+- Service provider integration
+
+**Features**:
+
+- `DatabaseType` enum (SqlServer, MongoDB)
+- `IDatabaseFactory` interface
+- Configuration-based default database selection
+- Multiple database support toggle
+- Repository resolution by database type
 
 ### 5. Constants Project (Configuration Layer)
 
@@ -182,22 +321,32 @@ The project follows clean architecture principles with clear separation of conce
 
 ### 2. Repository Pattern
 
-- Generic repository interface and implementation
+- Generic repository interfaces and implementations
 - Abstraction over data access
-- Supports multiple entity types through generics
+- Support for multiple database types
 - Async operations for better performance
+- Soft delete support
 
-### 3. Dependency Injection
+### 3. Factory Pattern
+
+- DatabaseFactory for repository resolution
+- Configuration-based database selection
+- Support for multiple database types
+- Service provider integration
+
+### 4. Dual Database Architecture
+
+- SQL Server support with Entity Framework Core
+- MongoDB support with MongoDB.Driver
+- Configuration-based database selection
+- Repository pattern abstraction
+
+### 5. Dependency Injection
 
 - Built-in .NET dependency injection container
 - Service registration in Program.cs
+- Repository pattern registration
 - Loose coupling between layers
-
-### 4. Generic Repository Pattern
-
-- Type-safe repository operations
-- Reusable across different entity types
-- Consistent CRUD operations
 
 ## Technology Stack
 
@@ -205,14 +354,31 @@ The project follows clean architecture principles with clear separation of conce
 
 - **.NET 8.0**: Latest LTS version of .NET
 - **ASP.NET Core**: Web framework for building APIs
-- **Entity Framework Core**: ORM for data access
+- **Entity Framework Core**: ORM for SQL Server
+- **MongoDB.Driver**: Official MongoDB driver for .NET
 - **Swagger/OpenAPI**: API documentation
+
+### Database Technologies
+
+- **SQL Server**: Relational database with Entity Framework Core
+- **MongoDB**: NoSQL database with MongoDB.Driver
+- **Dual Database Support**: Configuration-based database selection
 
 ### Project Dependencies
 
-- **APIs Project**: Swashbuckle.AspNetCore for API documentation
-- **Data Project**: Entity Framework Core (implicitly used)
-- **Services, Utils, Constants**: No external dependencies currently
+- **APIs Project**:
+  - Swashbuckle.AspNetCore for API documentation
+  - Data, Services, Utils project references
+- **Data Project**:
+  - Entity Framework Core for SQL Server
+  - MongoDB.Driver for MongoDB
+- **Services Project**:
+  - Data project reference
+- **Utils Project**:
+  - Microsoft.Extensions.Configuration.Abstractions
+  - Microsoft.Extensions.DependencyInjection.Abstractions
+- **Constants Project**:
+  - No external dependencies
 
 ## Development Status
 
@@ -220,23 +386,29 @@ The project follows clean architecture principles with clear separation of conce
 
 - ✅ Solution structure and project setup
 - ✅ Basic API configuration with Swagger
-- ✅ Repository pattern implementation
-- ✅ Base domain model
+- ✅ Dual database support (SQL Server + MongoDB)
+- ✅ Repository pattern implementation for both databases
+- ✅ Base domain models for both database types
+- ✅ MongoDB context and connection management
 - ✅ Generic repository with full CRUD operations
+- ✅ Soft delete support
+- ✅ Database factory pattern
+- ✅ Configuration-based database selection
+- ✅ Dependency injection setup
 
 ### Pending Implementation
 
+- ❌ SQL Server DbContext implementation
 - ❌ API Controllers
 - ❌ Business logic services
 - ❌ Domain models and entities
 - ❌ Data transfer objects (DTOs)
 - ❌ AutoMapper profiles
-- ❌ Database context configuration
 - ❌ Authentication and authorization
 - ❌ Validation and error handling
 - ❌ Logging configuration
-- ❌ Utility classes
 - ❌ Application constants
+- ❌ Unit tests
 
 ## Configuration
 
@@ -249,9 +421,10 @@ The project follows clean architecture principles with clear separation of conce
 
 ### Database Configuration
 
-- Entity Framework Core is referenced but not configured
-- No connection string defined
-- No DbContext implementation
+- **SQL Server**: Entity Framework Core configured
+- **MongoDB**: MongoDB.Driver configured
+- **Connection Strings**: Configured in appsettings.json
+- **Database Selection**: Configuration-based with fallback to SQL Server
 
 ## API Documentation
 
@@ -262,11 +435,11 @@ The project includes Swagger/OpenAPI documentation:
 
 ## Next Steps for Development
 
-1. **Database Setup**
+1. **SQL Server Implementation**
 
    - Create DbContext class
-   - Configure connection strings
    - Add Entity Framework migrations
+   - Configure SQL Server repository registration
 
 2. **Domain Models**
 
@@ -312,11 +485,15 @@ The project includes Swagger/OpenAPI documentation:
 ## Best Practices Implemented
 
 1. **Separation of Concerns**: Clear project boundaries
-2. **Generic Repository**: Reusable data access pattern
-3. **Async/Await**: Non-blocking operations
-4. **Dependency Injection**: Loose coupling
-5. **Clean Architecture**: Layered design
-6. **Type Safety**: Generic implementations
+2. **Repository Pattern**: Reusable data access pattern
+3. **Factory Pattern**: Database selection abstraction
+4. **Async/Await**: Non-blocking operations
+5. **Dependency Injection**: Loose coupling
+6. **Clean Architecture**: Layered design
+7. **Type Safety**: Generic implementations
+8. **Soft Delete**: Data integrity preservation
+9. **Dual Database Support**: Flexible data storage
+10. **Configuration Management**: Environment-based settings
 
 ## Development Guidelines
 
@@ -326,5 +503,7 @@ The project includes Swagger/OpenAPI documentation:
 4. **Documentation**: Use XML comments for public APIs
 5. **Testing**: Write unit tests for business logic
 6. **Security**: Implement proper authentication and authorization
+7. **Database Selection**: Use configuration-based database selection
+8. **Repository Usage**: Use appropriate repository based on entity type
 
-This architecture provides a solid foundation for building a scalable and maintainable educational bus management system.
+This architecture provides a solid foundation for building a scalable and maintainable educational bus management system with flexible database support.

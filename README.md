@@ -1,6 +1,6 @@
 # EduBus APIs
 
-A comprehensive backend API system for educational bus management, built with .NET 8.0 and following clean architecture principles.
+A comprehensive backend API system for educational bus management, built with .NET 8.0 and following clean architecture principles with dual database support.
 
 ## 📋 Table of Contents
 
@@ -25,11 +25,11 @@ EduBus APIs is a backend system designed to manage educational bus services, inc
 - Real-time tracking
 - User management (admin, driver, parent, student)
 
-The system is built using modern .NET 8.0 technologies and follows clean architecture principles for maintainability and scalability.
+The system is built using modern .NET 8.0 technologies with **dual database support** (SQL Server + MongoDB) and follows clean architecture principles for maintainability and scalability.
 
 ## 🏗️ Architecture
 
-The project follows **Clean Architecture** with clear separation of concerns:
+The project follows **Clean Architecture** with clear separation of concerns and **dual database support**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -41,6 +41,14 @@ The project follows **Clean Architecture** with clear separation of concerns:
 ├─────────────────────────────────────────────────────────────┤
 │                    Data Access Layer                        │
 │                    (Data Project)                          │
+│              ┌─────────────────────────────┐               │
+│              │    SQL Server Repository    │               │
+│              │    (Entity Framework)       │               │
+│              └─────────────────────────────┘               │
+│              ┌─────────────────────────────┐               │
+│              │    MongoDB Repository       │               │
+│              │    (MongoDB.Driver)         │               │
+│              └─────────────────────────────┘               │
 ├─────────────────────────────────────────────────────────────┤
 │                  Infrastructure Layer                       │
 │              (Utils & Constants Projects)                  │
@@ -51,9 +59,18 @@ The project follows **Clean Architecture** with clear separation of concerns:
 
 - **Separation of Concerns**: Each layer has a specific responsibility
 - **Dependency Inversion**: High-level modules don't depend on low-level modules
-- **Repository Pattern**: Abstraction over data access
+- **Repository Pattern**: Abstraction over data access with dual database support
 - **Generic Repository**: Reusable data access for all entities
+- **Factory Pattern**: Database selection based on configuration
 - **Async/Await**: Non-blocking operations throughout
+- **Soft Delete**: Data integrity preservation
+
+### Dual Database Architecture
+
+- **SQL Server**: For relational data (users, roles, structured business data)
+- **MongoDB**: For document-based data (logs, analytics, flexible schemas)
+- **Configuration-based**: Database selection through appsettings.json
+- **Repository Abstraction**: Unified interface for both database types
 
 ## 🛠️ Technology Stack
 
@@ -61,15 +78,20 @@ The project follows **Clean Architecture** with clear separation of concerns:
 
 - **.NET 8.0**: Latest LTS version
 - **ASP.NET Core**: Web framework
-- **Entity Framework Core**: ORM for data access
-- **SQL Server**: Primary database
+- **Entity Framework Core**: ORM for SQL Server
+- **MongoDB.Driver**: Official MongoDB driver for .NET
+
+### Database Technologies
+
+- **SQL Server**: Relational database with Entity Framework Core
+- **MongoDB**: NoSQL database with MongoDB.Driver
+- **Dual Database Support**: Configuration-based database selection
 
 ### Key Libraries
 
 - **Swashbuckle.AspNetCore**: API documentation
-- **AutoMapper**: Object mapping (planned)
-- **FluentValidation**: Input validation (planned)
-- **JWT Bearer**: Authentication (planned)
+- **Microsoft.Extensions.Configuration**: Configuration management
+- **Microsoft.Extensions.DependencyInjection**: Dependency injection
 
 ### Development Tools
 
@@ -83,23 +105,34 @@ The project follows **Clean Architecture** with clear separation of concerns:
 EduBusAPIs/
 ├── 📄 EduBusAPIs.sln              # Solution file
 ├── 🌐 APIs/                       # Web API Layer
-│   ├── Controllers/               # API Controllers
+│   ├── Controllers/               # API Controllers (empty)
 │   ├── Program.cs                 # Application entry point
 │   ├── appsettings.json          # Configuration
 │   └── APIs.csproj               # Project file
 ├── ⚙️ Services/                   # Business Logic Layer
-│   ├── Contracts/                # Service interfaces
-│   ├── Implementations/          # Service implementations
-│   ├── Models/                   # Business models/DTOs
-│   └── MapperProfiles/           # AutoMapper profiles
+│   ├── Contracts/                # Service interfaces (empty)
+│   ├── Implementations/          # Service implementations (empty)
+│   ├── Models/                   # Business models/DTOs (empty)
+│   └── MapperProfiles/           # AutoMapper profiles (empty)
 ├── 🗄️ Data/                      # Data Access Layer
 │   ├── Models/                   # Domain entities
-│   │   └── BaseDomain.cs         # Base entity class
+│   │   ├── BaseDomain.cs         # Base entity class (SQL Server)
+│   │   └── BaseMongoDocument.cs  # Base document class (MongoDB)
+│   ├── Contexts/                 # Database contexts
+│   │   ├── MongoDB/
+│   │   │   └── EduBusMongoContext.cs
+│   │   └── SqlServer/            # Empty (DbContext to be implemented)
 │   └── Repos/                    # Repository implementations
-│       ├── IRepository.cs        # Generic repository interface
-│       └── Repository.cs         # Generic repository implementation
+│       ├── Interfaces/
+│       │   ├── IMongoRepository.cs
+│       │   └── ISqlRepository.cs
+│       ├── MongoDB/
+│       │   └── MongoRepository.cs
+│       └── SqlServer/
+│           └── SqlRepository.cs
 ├── 🔧 Utils/                     # Utility Layer
-└── 📋 Constants/                 # Constants Layer
+│   └── DatabaseFactory.cs        # Database factory pattern
+└── 📋 Constants/                 # Constants Layer (empty)
 ```
 
 ## 🚀 Getting Started
@@ -109,6 +142,7 @@ EduBusAPIs/
 - **.NET 8.0 SDK**: [Download here](https://dotnet.microsoft.com/download/dotnet/8.0)
 - **Visual Studio 2022** or **VS Code**
 - **SQL Server** (LocalDB or full instance)
+- **MongoDB** (local installation or cloud)
 
 ### Installation
 
@@ -131,34 +165,36 @@ EduBusAPIs/
    dotnet build
    ```
 
-4. **Run the application**
+4. **Configure databases**
+
+   Update `APIs/appsettings.json` with your database connection strings:
+
+   ```json
+   {
+     "ConnectionStrings": {
+       "SqlServer": "Server=localhost;Database=EduBus;Trusted_Connection=true;TrustServerCertificate=true;",
+       "MongoDB": "mongodb://localhost:27017"
+     },
+     "MongoDB": {
+       "DatabaseName": "EduBusDB"
+     },
+     "DatabaseSettings": {
+       "DefaultDatabase": "SqlServer",
+       "UseMultipleDatabases": true
+     }
+   }
+   ```
+
+5. **Run the application**
 
    ```bash
    cd APIs
    dotnet run
    ```
 
-5. **Access the API**
+6. **Access the API**
    - **API Base URL**: `https://localhost:7223` or `http://localhost:5223`
    - **Swagger UI**: `https://localhost:7223/swagger`
-
-### Configuration
-
-The application uses `appsettings.json` for configuration:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\mssqllocaldb;Database=EduBusDb;Trusted_Connection=true;MultipleActiveResultSets=true"
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  }
-}
-```
 
 ## 📊 Development Status
 
@@ -166,14 +202,21 @@ The application uses `appsettings.json` for configuration:
 
 - [x] Solution structure and project setup
 - [x] Clean architecture implementation
-- [x] Repository pattern with generic implementation
-- [x] Base domain model
+- [x] Dual database support (SQL Server + MongoDB)
+- [x] Repository pattern with generic implementation for both databases
+- [x] Base domain models for both database types
+- [x] MongoDB context and connection management
+- [x] Generic repository with full CRUD operations
+- [x] Soft delete support
+- [x] Database factory pattern
+- [x] Configuration-based database selection
+- [x] Dependency injection setup
 - [x] Basic API configuration with Swagger
 - [x] Async/await patterns throughout
 
 ### 🚧 In Progress
 
-- [ ] Database context configuration
+- [ ] SQL Server DbContext implementation
 - [ ] Domain entities implementation
 - [ ] Service layer development
 
@@ -184,12 +227,14 @@ The application uses `appsettings.json` for configuration:
 - [ ] Validation and error handling
 - [ ] Real-time features
 - [ ] Testing implementation
+- [ ] AutoMapper integration
+- [ ] Logging and monitoring
 
 ## 📚 API Documentation
 
 ### Current Endpoints
 
-Currently, no API endpoints are implemented. The project is in the foundation phase.
+Currently, no API endpoints are implemented. The project is in the foundation phase with data access layer completed.
 
 ### Planned Endpoints
 
@@ -238,18 +283,19 @@ APIs/APIs.http
 
 ### Architecture Documentation
 
-- **[Project Architecture](PROJECT_ARCHITECTURE.md)**: Detailed architecture overview
-- **[Code Structure Analysis](CODE_STRUCTURE.md)**: In-depth code analysis
-- **[Development Roadmap](DEVELOPMENT_ROADMAP.md)**: Implementation plan and timeline
+- **[Project Architecture](PROJECT_ARCHITECTURE.md)**: Detailed architecture overview with dual database support
+- **[Development Guide](DEVELOPMENT_GUIDE.md)**: Comprehensive guide for team development
 
 ### Key Concepts
 
 #### Repository Pattern
 
-The project implements a generic repository pattern for data access:
+The project implements separate repository patterns for each database type:
+
+**SQL Server Repository**:
 
 ```csharp
-public interface IRepository<T>
+public interface ISqlRepository<T> where T : BaseDomain
 {
     Task<IEnumerable<T>> FindAllAsync();
     Task<T?> FindAsync(int id);
@@ -260,14 +306,64 @@ public interface IRepository<T>
 }
 ```
 
-#### Base Domain Model
+**MongoDB Repository**:
 
-All entities inherit from `BaseDomain`:
+```csharp
+public interface IMongoRepository<T> where T : BaseMongoDocument
+{
+    Task<IEnumerable<T>> FindAllAsync();
+    Task<T?> FindAsync(string id);
+    Task<T> AddAsync(T document);
+    Task<T?> UpdateAsync(T document);
+    Task<T?> DeleteAsync(string id);
+    Task<IEnumerable<T>> FindByConditionAsync(Expression<Func<T, bool>> expression);
+}
+```
+
+#### Base Models
+
+**SQL Server Entities** (inherit from `BaseDomain`):
 
 ```csharp
 public class BaseDomain
 {
     public int Id { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? UpdatedAt { get; set; }
+    public bool IsDeleted { get; set; } = false;
+}
+```
+
+**MongoDB Documents** (inherit from `BaseMongoDocument`):
+
+```csharp
+public class BaseMongoDocument
+{
+    [BsonId]
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string Id { get; set; } = string.Empty;
+
+    [BsonElement("createdAt")]
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    [BsonElement("updatedAt")]
+    public DateTime? UpdatedAt { get; set; }
+
+    [BsonElement("isDeleted")]
+    public bool IsDeleted { get; set; } = false;
+}
+```
+
+#### Database Factory
+
+Configuration-based database selection:
+
+```csharp
+public interface IDatabaseFactory
+{
+    T GetRepository<T>() where T : class;
+    DatabaseType GetDefaultDatabaseType();
+    bool IsDatabaseEnabled(DatabaseType databaseType);
 }
 ```
 
@@ -280,6 +376,8 @@ public class BaseDomain
 3. **Error Handling**: Implement proper exception handling
 4. **Documentation**: Add XML comments for public APIs
 5. **Testing**: Write unit tests for business logic
+6. **Database Selection**: Use appropriate repository based on entity type
+7. **Repository Usage**: Follow the established patterns for each database type
 
 ### Branch Strategy
 
@@ -303,6 +401,7 @@ public class BaseDomain
 - Use GitHub Issues for bug reports
 - Provide detailed reproduction steps
 - Include environment information
+- Specify database type if relevant
 
 ### Getting Help
 
@@ -318,8 +417,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **.NET Team**: For the excellent framework
 - **Entity Framework Team**: For the powerful ORM
+- **MongoDB Team**: For the MongoDB.Driver
 - **Clean Architecture**: For the architectural principles
 
 ---
-
-**Note**: This project is currently in active development. The API endpoints and features mentioned are planned and will be implemented according to the development roadmap.
