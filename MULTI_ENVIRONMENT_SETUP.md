@@ -25,7 +25,7 @@ APIs/
 ## Connection String Keys
 
 - **SQL Server**: `ConnectionStrings:SqlServer`
-- **MongoDB**: `ConnectionStrings:MongoDb`
+- **MongoDb**: `ConnectionStrings:MongoDb`
 
 ## Environment Variables (Azure)
 
@@ -49,7 +49,7 @@ dotnet user-secrets init
 # SQL Server LocalDB
 dotnet user-secrets set "ConnectionStrings:SqlServer" "Server=(localdb)\MSSQLLocalDB;Database=edubus_dev;Trusted_Connection=True;Encrypt=False"
 
-# MongoDB Local
+# MongoDb Local
 dotnet user-secrets set "ConnectionStrings:MongoDb" "mongodb://localhost:27017/edubus"
 ```
 
@@ -79,7 +79,7 @@ dotnet user-secrets list
    - **Type**: `SQLAzure`
    - **Value**: `Server=tcp:your-server.database.windows.net,1433;Initial Catalog=YourDatabase;Persist Security Info=False;User ID=your-username;Password=your-password;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30`
 
-#### MongoDB Connection String
+#### MongoDb Connection String
 
 1. Add second connection string:
    - **Name**: `MongoDb`
@@ -100,7 +100,7 @@ dotnet user-secrets list
 ### Production Notes
 
 - Connection strings in Azure override all local configuration
-- Ensure database name in MongoDB connection string is `edubus`
+- Ensure database name in MongoDb connection string is `edubus`
 - Use Key Vault for sensitive secrets in production
 
 ---
@@ -119,7 +119,7 @@ dotnet user-secrets list
 The application includes comprehensive health checks:
 
 - **Liveness Probe**: `/health/live` - Checks if application is running
-- **Readiness Probe**: `/health/ready` - Checks if dependencies (SQL Server, MongoDB) are healthy
+- **Readiness Probe**: `/health/ready` - Checks if dependencies (SQL Server, MongoDb) are healthy
 - **Detailed Health**: `/health` - Comprehensive health report
 
 ### Health Check Endpoints
@@ -171,7 +171,7 @@ builder.Services.AddDbContext<EduBusSqlContext>(options =>
     })
 );
 
-// MongoDB Configuration
+// MongoDb Configuration
 var mongoConnectionString = builder.Configuration.GetConnectionString("MongoDb");
 var mongoUrl = new MongoUrl(mongoConnectionString);
 builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoUrl));
@@ -194,7 +194,7 @@ builder.Services.AddSingleton(sp =>
 1. **User Secrets not working**: Ensure you're in Development environment
 2. **Connection string not found**: Check the exact key names (`SqlServer`, `MongoDb`)
 3. **Azure configuration not applied**: Restart the App Service after saving
-4. **MongoDB connection failed**: Verify database name in connection string
+4. **MongoDb connection failed**: Verify database name in connection string
 
 ### Verification Commands
 

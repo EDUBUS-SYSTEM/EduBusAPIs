@@ -21,7 +21,7 @@ builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
     .AddDbContextCheck<EduBusSqlContext>("sql_server", tags: new[] { "ready" })
     .AddMongoDb(
-        sp => new MongoClient(builder.Configuration.GetConnectionString("MongoDB") ?? "mongodb://localhost:27017/edubus"),
+        sp => new MongoClient(builder.Configuration.GetConnectionString("MongoDb") ?? "mongodb://localhost:27017/edubus"),
         name: "mongodb",
         tags: new[] { "ready" },
         timeout: TimeSpan.FromSeconds(3)
