@@ -6,7 +6,7 @@ namespace Utils
     public enum DatabaseType
     {
         SqlServer,
-        MongoDB
+        MongoDb
     }
 
     public interface IDatabaseFactory
@@ -39,8 +39,8 @@ namespace Utils
             {
                 DatabaseType.SqlServer => _serviceProvider.GetService<T>() ?? 
                     throw new InvalidOperationException($"SQL Server repository of type {typeof(T).Name} not registered"),
-                DatabaseType.MongoDB => _serviceProvider.GetService<T>() ?? 
-                    throw new InvalidOperationException($"MongoDB repository of type {typeof(T).Name} not registered"),
+                DatabaseType.MongoDb => _serviceProvider.GetService<T>() ?? 
+                    throw new InvalidOperationException($"MongoDb repository of type {typeof(T).Name} not registered"),
                 _ => throw new ArgumentException($"Unsupported database type: {databaseType}")
             };
         }
@@ -50,7 +50,7 @@ namespace Utils
             var defaultDb = _configuration["DatabaseSettings:DefaultDatabase"];
             return defaultDb?.ToLowerInvariant() switch
             {
-                "mongodb" => DatabaseType.MongoDB,
+                "mongodb" => DatabaseType.MongoDb,
                 "sqlserver" or "sql" => DatabaseType.SqlServer,
                 _ => DatabaseType.SqlServer // Default fallback
             };
@@ -68,7 +68,7 @@ namespace Utils
             return databaseType switch
             {
                 DatabaseType.SqlServer => !string.IsNullOrEmpty(_configuration.GetConnectionString("SqlServer")),
-                DatabaseType.MongoDB => !string.IsNullOrEmpty(_configuration.GetConnectionString("MongoDB")),
+                DatabaseType.MongoDb => !string.IsNullOrEmpty(_configuration.GetConnectionString("MongoDb")),
                 _ => false
             };
         }
