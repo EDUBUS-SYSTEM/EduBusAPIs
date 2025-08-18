@@ -298,3 +298,6 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# User Secrets (Development)
+**/Properties/launchSettings.json
