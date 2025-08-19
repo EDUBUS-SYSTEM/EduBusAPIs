@@ -18,7 +18,7 @@ namespace Data.Repos.SqlServer
             _table = dbContext.Set<T>();
         }
 
-        public virtual async Task<T?> FindAsync(int id) => await _table.FindAsync(id);
+        public virtual async Task<T?> FindAsync(Guid id) => await _table.FindAsync(id);
 
         public virtual async Task<IEnumerable<T>> FindAllAsync() => await _table.Where(e => !e.IsDeleted).ToListAsync();
 
@@ -100,7 +100,7 @@ namespace Data.Repos.SqlServer
 
         public virtual async Task<int> GetCountAsync() => await _table.Where(e => !e.IsDeleted).CountAsync();
 
-        public virtual async Task<bool> ExistsAsync(int id)
+        public virtual async Task<bool> ExistsAsync(Guid id)
         {
             return await _table.AnyAsync(e => e.Id == id && !e.IsDeleted);
         }

@@ -12,12 +12,12 @@ namespace Data.Contexts.MongoDB
         public EduBusMongoContext(IConfiguration configuration)
         {
             _configuration = configuration;
-            var connectionString = configuration.GetConnectionString("MongoDB");
-            var databaseName = configuration["MongoDB:DatabaseName"] ?? "EduBusDB";
+            var connectionString = configuration.GetConnectionString("MongoDb");
+            var databaseName = configuration["MongoDb:DatabaseName"] ?? "EduBusDB";
             
             if (string.IsNullOrEmpty(connectionString))
             {
-                throw new ArgumentException("MongoDB connection string is not configured");
+                throw new ArgumentException("MongoDb connection string is not configured");
             }
 
             var client = new MongoClient(connectionString);
@@ -53,12 +53,7 @@ namespace Data.Contexts.MongoDB
 
         public async Task CreateIndexesAsync()
         {
-            // Create indexes for collections here
-            // Example:
-            // var userCollection = GetCollection<User>("users");
-            // var indexKeysDefinition = Builders<User>.IndexKeys.Ascending(x => x.Email);
-            // var indexModel = new CreateIndexModel<User>(indexKeysDefinition, new CreateIndexOptions { Unique = true });
-            // await userCollection.Indexes.CreateOneAsync(indexModel);
+            await MongoIndexes.EnsureAsync(_database);
         }
     }
 }
