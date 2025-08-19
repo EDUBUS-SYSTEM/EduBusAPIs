@@ -58,6 +58,9 @@ builder.Services.AddSingleton<EduBusMongoContext>();
 builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
 builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>));
 
+// Register DbContext for SqlRepository
+builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
+
 var app = builder.Build();
 
 // Configure HTTP request pipeline

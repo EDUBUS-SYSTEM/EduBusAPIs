@@ -20,7 +20,7 @@ namespace Data.Repos.MongoDB
             return await _collection.Find(filter).ToListAsync();
         }
 
-        public virtual async Task<T?> FindAsync(string id)
+        public virtual async Task<T?> FindAsync(Guid id)
         {
             var filter = Builders<T>.Filter.And(
                 Builders<T>.Filter.Eq(x => x.Id, id),
@@ -66,7 +66,7 @@ namespace Data.Repos.MongoDB
             return null;
         }
 
-        public virtual async Task<T?> DeleteAsync(string id)
+        public virtual async Task<T?> DeleteAsync(Guid id)
         {
             var filter = Builders<T>.Filter.Eq(x => x.Id, id);
             var update = Builders<T>.Update
@@ -123,7 +123,7 @@ namespace Data.Repos.MongoDB
             return await _collection.CountDocumentsAsync(filter);
         }
 
-        public virtual async Task<bool> ExistsAsync(string id)
+        public virtual async Task<bool> ExistsAsync(Guid id)
         {
             var filter = Builders<T>.Filter.And(
                 Builders<T>.Filter.Eq(x => x.Id, id),

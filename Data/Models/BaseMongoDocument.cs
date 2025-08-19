@@ -6,8 +6,9 @@ namespace Data.Models
     public class BaseMongoDocument
     {
         [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string Id { get; set; } = string.Empty;
+        [BsonRepresentation(BsonType.Binary)]
+        [BsonGuidRepresentation(GuidRepresentation.Standard)]
+        public Guid Id { get; set; } = Guid.NewGuid();
         
         [BsonElement("createdAt")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
