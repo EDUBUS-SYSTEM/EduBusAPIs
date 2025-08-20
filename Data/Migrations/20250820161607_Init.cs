@@ -4,10 +4,12 @@ using NetTopologySuite.Geometries;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddNewPropertyForPickupPoint : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -67,49 +69,53 @@ namespace Data.Migrations
                 name: "Admins",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Admins", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Admins", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Admins_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Admins_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
                 name: "Drivers",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
                     HashedLicenseNumber = table.Column<byte[]>(type: "varbinary(256)", maxLength: 256, nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Drivers", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Drivers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Drivers_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Drivers_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
                 name: "Parents",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
+                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Parents", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Parents", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Parents_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Parents_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -133,7 +139,7 @@ namespace Data.Migrations
                         name: "FK_UnitPrices_Admins_AdminId",
                         column: x => x.AdminId,
                         principalTable: "Admins",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -156,7 +162,7 @@ namespace Data.Migrations
                         name: "FK_Vehicles_Admins_AdminId",
                         column: x => x.AdminId,
                         principalTable: "Admins",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -179,7 +185,7 @@ namespace Data.Migrations
                         name: "FK_Students_Parents_ParentId",
                         column: x => x.ParentId,
                         principalTable: "Parents",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -201,7 +207,7 @@ namespace Data.Migrations
                         name: "FK_Transactions_Parents_ParentId",
                         column: x => x.ParentId,
                         principalTable: "Parents",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -225,7 +231,7 @@ namespace Data.Migrations
                         name: "FK_DriverVehicles_Drivers_DriverId",
                         column: x => x.DriverId,
                         principalTable: "Drivers",
-                        principalColumn: "UserAccountId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_DriverVehicles_Vehicles_VehicleId",
@@ -346,11 +352,37 @@ namespace Data.Migrations
                         onDelete: ReferentialAction.SetNull);
                 });
 
+            migrationBuilder.InsertData(
+                table: "UserAccounts",
+                columns: new[] { "Id", "CreatedAt", "Email", "FirstName", "HashedPassword", "LastName", "PhoneNumber", "UpdatedAt" },
+                values: new object[,]
+                {
+                    { new Guid("550e8400-e29b-41d4-a716-446655440001"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "admin@edubus.com", "Nguyen", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Admin", "0901234567", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440002"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "driver@edubus.com", "Tran", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Driver", "0901234568", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440003"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "parent@edubus.com", "Le", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Thi Parent", "0901234569", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Admins",
+                column: "Id",
+                value: new Guid("550e8400-e29b-41d4-a716-446655440001"));
+
+            migrationBuilder.InsertData(
+                table: "Drivers",
+                columns: new[] { "Id", "HashedLicenseNumber" },
+                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440002"), new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 } });
+
+            migrationBuilder.InsertData(
+                table: "Parents",
+                columns: new[] { "Id", "Address" },
+                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440003"), "123 Nguyen Van Linh, District 7, Ho Chi Minh City" });
+
             migrationBuilder.CreateIndex(
                 name: "UQ_Drivers_HashedLicenseNumber",
                 table: "Drivers",
                 column: "HashedLicenseNumber",
-                unique: true);
+                unique: true,
+                filter: "[HashedLicenseNumber] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DriverVehicles_DriverId",

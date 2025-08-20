@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Data.SeedConfiguration;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 
@@ -330,6 +331,11 @@ namespace Data.Contexts.SqlServer
                     .HasForeignKey(d => d.AdminId)
                     .OnDelete(DeleteBehavior.ClientSetNull);
             });
+
+            // Apply Seed Configurations
+            modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
+            modelBuilder.ApplyConfiguration(new DriverSeedConfiguration());
+            modelBuilder.ApplyConfiguration(new ParentSeedConfiguration());
 
             OnModelCreatingPartial(modelBuilder);
         }

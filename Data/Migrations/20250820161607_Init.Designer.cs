@@ -13,8 +13,8 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    [Migration("20250818121715_AddNewRela")]
-    partial class AddNewRela
+    [Migration("20250820161607_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -582,6 +582,20 @@ namespace Data.Migrations
                     b.HasBaseType("Data.Models.UserAccount");
 
                     b.ToTable("Admins", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440001"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            Email = "admin@edubus.com",
+                            FirstName = "Nguyen",
+                            HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
+                            IsDeleted = false,
+                            LastName = "Van Admin",
+                            PhoneNumber = "0901234567",
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("Data.Models.Driver", b =>
@@ -598,6 +612,21 @@ namespace Data.Migrations
                         .HasFilter("[HashedLicenseNumber] IS NOT NULL");
 
                     b.ToTable("Drivers", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440002"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            Email = "driver@edubus.com",
+                            FirstName = "Tran",
+                            HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
+                            IsDeleted = false,
+                            LastName = "Van Driver",
+                            PhoneNumber = "0901234568",
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            HashedLicenseNumber = new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 }
+                        });
                 });
 
             modelBuilder.Entity("Data.Models.Parent", b =>
@@ -609,6 +638,21 @@ namespace Data.Migrations
                         .HasColumnType("nvarchar(500)");
 
                     b.ToTable("Parents", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            Email = "parent@edubus.com",
+                            FirstName = "Le",
+                            HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
+                            IsDeleted = false,
+                            LastName = "Thi Parent",
+                            PhoneNumber = "0901234569",
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City"
+                        });
                 });
 
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
