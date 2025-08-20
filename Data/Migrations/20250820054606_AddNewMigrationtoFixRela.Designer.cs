@@ -13,8 +13,8 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    [Migration("20250818121715_AddNewRela")]
-    partial class AddNewRela
+    [Migration("20250820054606_AddNewMigrationtoFixRela")]
+    partial class AddNewMigrationtoFixRela
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

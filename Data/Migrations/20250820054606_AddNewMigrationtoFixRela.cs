@@ -7,7 +7,7 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddNewPropertyForPickupPoint : Migration
+    public partial class AddNewMigrationtoFixRela : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -67,49 +67,53 @@ namespace Data.Migrations
                 name: "Admins",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Admins", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Admins", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Admins_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Admins_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
                 name: "Drivers",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
                     HashedLicenseNumber = table.Column<byte[]>(type: "varbinary(256)", maxLength: 256, nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Drivers", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Drivers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Drivers_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Drivers_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
                 name: "Parents",
                 columns: table => new
                 {
-                    UserAccountId = table.Column<Guid>(type: "uniqueidentifier", nullable: false)
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
+                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Parents", x => x.UserAccountId);
+                    table.PrimaryKey("PK_Parents", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Parents_UserAccounts_UserAccountId",
-                        column: x => x.UserAccountId,
+                        name: "FK_Parents_UserAccounts_Id",
+                        column: x => x.Id,
                         principalTable: "UserAccounts",
-                        principalColumn: "Id");
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -133,7 +137,7 @@ namespace Data.Migrations
                         name: "FK_UnitPrices_Admins_AdminId",
                         column: x => x.AdminId,
                         principalTable: "Admins",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -156,7 +160,7 @@ namespace Data.Migrations
                         name: "FK_Vehicles_Admins_AdminId",
                         column: x => x.AdminId,
                         principalTable: "Admins",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -179,7 +183,7 @@ namespace Data.Migrations
                         name: "FK_Students_Parents_ParentId",
                         column: x => x.ParentId,
                         principalTable: "Parents",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -201,7 +205,7 @@ namespace Data.Migrations
                         name: "FK_Transactions_Parents_ParentId",
                         column: x => x.ParentId,
                         principalTable: "Parents",
-                        principalColumn: "UserAccountId");
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
@@ -225,7 +229,7 @@ namespace Data.Migrations
                         name: "FK_DriverVehicles_Drivers_DriverId",
                         column: x => x.DriverId,
                         principalTable: "Drivers",
-                        principalColumn: "UserAccountId",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_DriverVehicles_Vehicles_VehicleId",
@@ -350,7 +354,8 @@ namespace Data.Migrations
                 name: "UQ_Drivers_HashedLicenseNumber",
                 table: "Drivers",
                 column: "HashedLicenseNumber",
-                unique: true);
+                unique: true,
+                filter: "[HashedLicenseNumber] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DriverVehicles_DriverId",
