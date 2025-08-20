@@ -51,6 +51,8 @@ dotnet user-secrets set "ConnectionStrings:SqlServer" "Server=;Database=edubus_d
 dotnet user-secrets set "ConnectionStrings:MongoDb" "mongodb://localhost:27017/edubus"
 ```
 
+dotnet user-secrets set "Jwt:Key" "super-secret-key-for-EduBus-123789@@"
+
 **Step 3: Verify User Secrets**
 
 ```bash
