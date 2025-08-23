@@ -1,4 +1,5 @@
-using Data.Models;
+﻿using Data.Models;
+using Data.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text;
@@ -24,6 +25,9 @@ namespace Data.SeedConfiguration
                 FirstName = "Tran",
                 LastName = "Van Driver",
                 PhoneNumber = "0901234568",
+                Address = "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam",
+                DateOfBirth = new DateTime(1985, 5, 20),
+                Gender = Gender.Male,
                 HashedLicenseNumber = hashedLicenseBytes,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
