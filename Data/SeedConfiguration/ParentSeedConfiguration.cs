@@ -1,4 +1,5 @@
 using Data.Models;
+using Data.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text;
@@ -23,6 +24,8 @@ namespace Data.SeedConfiguration
                 LastName = "Thi Parent",
                 PhoneNumber = "0901234569",
                 Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City",
+                DateOfBirth = new DateTime(1984, 6, 12),
+                Gender = Gender.Female,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 IsDeleted = false

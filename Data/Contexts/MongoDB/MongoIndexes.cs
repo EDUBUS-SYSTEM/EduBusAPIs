@@ -21,6 +21,9 @@ namespace Data.Contexts.MongoDB
             
             // Trip indexes
             await CreateTripIndexesAsync(db);
+            
+            // FileStorage indexes
+            await CreateFileStorageIndexesAsync(db);
         }
 
         private static async Task CreateNotificationIndexesAsync(IMongoDatabase db)
@@ -117,6 +120,30 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.PlannedStartAt)
                 .Ascending(x => x.PlannedEndAt);
             await tripCollection.Indexes.CreateOneAsync(new CreateIndexModel<Trip>(plannedKeys));
+        }
+
+        private static async Task CreateFileStorageIndexesAsync(IMongoDatabase db)
+        {
+            var fileStorageCollection = db.GetCollection<FileStorage>("file_storage");
+            
+            // Index for entity files
+            var entityKeys = Builders<FileStorage>.IndexKeys
+                .Ascending(x => x.EntityId)
+                .Ascending(x => x.EntityType)
+                .Ascending(x => x.FileType);
+            await fileStorageCollection.Indexes.CreateOneAsync(new CreateIndexModel<FileStorage>(entityKeys));
+            
+            // Index for active files
+            var activeKeys = Builders<FileStorage>.IndexKeys
+                .Ascending(x => x.IsActive)
+                .Descending(x => x.CreatedAt);
+            await fileStorageCollection.Indexes.CreateOneAsync(new CreateIndexModel<FileStorage>(activeKeys));
+            
+            // Index for file type
+            var fileTypeKeys = Builders<FileStorage>.IndexKeys
+                .Ascending(x => x.FileType)
+                .Ascending(x => x.IsActive);
+            await fileStorageCollection.Indexes.CreateOneAsync(new CreateIndexModel<FileStorage>(fileTypeKeys));
         }
     }
 }

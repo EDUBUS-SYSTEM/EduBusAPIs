@@ -1,4 +1,4 @@
-﻿using Data.Contexts.SqlServer;
+using Data.Contexts.SqlServer;
 using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +20,18 @@ namespace Data.Repos.SqlServer
             return await _context.UserAccounts
                 .Where(u => !u.IsDeleted && u.Email == email)
                 .FirstOrDefaultAsync();
+        }
+
+        public async Task<bool> IsEmailExistAsync(string email)
+        {
+            return await _context.UserAccounts
+                .AnyAsync(u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
+        }
+
+        public async Task<bool> IsPhoneNumberExistAsync(string phoneNumber)
+        {
+            return await _context.UserAccounts
+                  .AnyAsync(u => u.PhoneNumber == phoneNumber);
         }
     }
 }

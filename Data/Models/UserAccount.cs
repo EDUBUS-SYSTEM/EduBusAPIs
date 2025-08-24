@@ -1,4 +1,6 @@
-﻿namespace Data.Models;
+﻿using Data.Models.Enums;
+
+namespace Data.Models;
 
 public partial class UserAccount : BaseDomain
 {
@@ -10,5 +12,10 @@ public partial class UserAccount : BaseDomain
 
     public string LastName { get; set; } = null!;
 
-    public string? PhoneNumber { get; set; }
+    public string PhoneNumber { get; set; }
+    public string? Address { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public Gender Gender { get; set; }
+    
+    public Guid? UserPhotoFileId { get; set; }
 }

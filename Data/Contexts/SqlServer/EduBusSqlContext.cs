@@ -20,6 +20,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<Driver> Drivers { get; set; }
 
+        public virtual DbSet<DriverLicense> DriverLicenses { get; set; }
+
         public virtual DbSet<DriverVehicle> DriverVehicles { get; set; }
 
         public virtual DbSet<Grade> Grades { get; set; }
@@ -52,7 +54,7 @@ namespace Data.Contexts.SqlServer
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
             => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
+                "Server=(local);Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
                 sql => sql.UseNetTopologySuite()
             );
 
@@ -79,13 +81,24 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<Driver>(entity =>
             {
-                entity.HasIndex(e => e.HashedLicenseNumber, "UQ_Drivers_HashedLicenseNumber").IsUnique();
-
-                entity.Property(e => e.HashedLicenseNumber).HasMaxLength(256);
-
                 entity.HasOne<UserAccount>()
                     .WithOne()
                     .HasForeignKey<Driver>(e => e.Id);
+            });
+
+            modelBuilder.Entity<DriverLicense>(entity =>
+            {
+                entity.HasIndex(e => e.DriverId, "IX_DriverLicenses_DriverId");
+                entity.HasIndex(e => e.HashedLicenseNumber, "UQ_DriverLicenses_HashedLicenseNumber").IsUnique();
+
+                entity.Property(e => e.HashedLicenseNumber).HasMaxLength(256);
+                entity.Property(e => e.IssuedBy).HasMaxLength(200);
+                entity.Property(e => e.DateOfIssue).HasColumnType("date");
+
+                entity.HasOne(d => d.Driver)
+                    .WithOne(d => d.DriverLicense)
+                    .HasForeignKey<DriverLicense>(d => d.DriverId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<DriverVehicle>(entity =>
@@ -296,7 +309,8 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<UserAccount>(entity =>
             {
-                entity.HasIndex(e => e.PhoneNumber, "IX_UserAccounts_PhoneNumber");
+                entity.HasIndex(e => e.PhoneNumber, "IX_UserAccounts_PhoneNumber")
+                      .IsUnique();
 
                 entity.HasIndex(e => e.Email, "UQ_UserAccounts_Email").IsUnique();
 
@@ -304,14 +318,25 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
-                entity.Property(e => e.Email).HasMaxLength(320);
-                entity.Property(e => e.FirstName).HasMaxLength(200);
-                entity.Property(e => e.HashedPassword).HasMaxLength(256);
+                entity.Property(e => e.Email).HasMaxLength(320)
+                                             .IsRequired();
+                entity.Property(e => e.FirstName).HasMaxLength(200)
+                                                 .IsRequired();
+                entity.Property(e => e.HashedPassword).HasMaxLength(256)
+                                                      .IsRequired();
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.LastName).HasMaxLength(200);
-                entity.Property(e => e.PhoneNumber).HasMaxLength(32);
+                entity.Property(e => e.LastName).HasMaxLength(200)
+                                                .IsRequired();
+                entity.Property(e => e.PhoneNumber).HasMaxLength(32)
+                                                   .IsRequired();
+                entity.Property(e => e.Address)
+                      .HasMaxLength(500);
+                entity.Property(e => e.DateOfBirth)
+                      .HasColumnType("date");
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
+                entity.Property(e => e.Gender)
+                    .HasConversion<int>();
             });
 
             modelBuilder.Entity<Vehicle>(entity =>
@@ -354,7 +379,6 @@ namespace Data.Contexts.SqlServer
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
-
 
             // Apply Seed Configurations
             modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());

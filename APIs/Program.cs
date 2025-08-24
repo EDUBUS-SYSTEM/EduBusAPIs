@@ -14,6 +14,7 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Services.MapperProfiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -91,13 +92,45 @@ builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>)
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
+
+// Repository Registration for MongoDB
+builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IParentService, ParentService>();
+builder.Services.AddScoped<IDriverService, DriverService>();
+builder.Services.AddScoped<IDriverLicenseService, DriverLicenseService>();
+builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
-
 
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
+// Register Parent AutoMapper
+builder.Services.AddAutoMapper(typeof(MappingProfile));
+
+// JWT Authentication 
+var jwt = builder.Configuration.GetSection("Jwt");
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.RequireHttpsMetadata = true;
+        o.SaveToken = true;
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwt["Issuer"],
+            ValidateAudience = true,
+            ValidAudience = jwt["Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(2)
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 // JWT Authentication 
 var jwt = builder.Configuration.GetSection("Jwt");

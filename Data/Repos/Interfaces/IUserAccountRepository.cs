@@ -10,5 +10,7 @@ namespace Data.Repos.Interfaces
     public interface IUserAccountRepository : ISqlRepository<UserAccount>
     {
         Task<UserAccount?> GetByEmailAsync(string email);
+        Task<bool> IsEmailExistAsync(string email);
+        Task<bool> IsPhoneNumberExistAsync(string phoneNumber);
     }
 }
