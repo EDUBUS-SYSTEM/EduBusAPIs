@@ -14,5 +14,8 @@ namespace Services.Contracts
         Task<CreateUserResponse> CreateDriverAsync(CreateDriverRequest dto);
         Task<ImportUsersResult> ImportDriversFromExcelAsync(Stream excelFileStream);
         Task<byte[]> ExportDriversToExcelAsync();
+        Task<Data.Models.Driver?> GetDriverByIdAsync(Guid driverId);
+        Task<Guid?> GetHealthCertificateFileIdAsync(Guid driverId);
+        Task<Guid?> GetUserPhotoFileIdAsync(Guid driverId);
     }
 }

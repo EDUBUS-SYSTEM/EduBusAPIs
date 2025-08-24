@@ -2,7 +2,9 @@
 
 public partial class Driver : UserAccount
 {
-    public byte[] HashedLicenseNumber { get; set; } = null!;
+    public Guid? HealthCertificateFileId { get; set; }
 
     public virtual ICollection<DriverVehicle> DriverVehicles { get; set; } = new List<DriverVehicle>();
+    
+    public virtual DriverLicense? DriverLicense { get; set; }
 }

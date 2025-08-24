@@ -9,6 +9,6 @@ namespace Services.Models.Driver
 {
     public class ImportDriverDto : ImportUserDto
     {
-        public string LicenseNumber { get; set; } = string.Empty;
+        // License number will be handled separately through DriverLicense entity
     }
 }

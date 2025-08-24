@@ -34,5 +34,6 @@ namespace Services.Models.UserAccount
 
         [Required(ErrorMessage = "Address is required.")]
         public string Address { get; set; } = string.Empty;
+
     }
 }

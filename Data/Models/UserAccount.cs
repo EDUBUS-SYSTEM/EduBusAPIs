@@ -16,4 +16,6 @@ public partial class UserAccount : BaseDomain
     public string? Address { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public Gender Gender { get; set; }
+    
+    public Guid? UserPhotoFileId { get; set; }
 }

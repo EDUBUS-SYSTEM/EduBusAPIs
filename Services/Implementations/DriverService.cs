@@ -42,9 +42,6 @@ namespace Services.Implementations
             var rawPassword = SecurityHelper.GenerateRandomPassword();
             var hashedPassword = SecurityHelper.HashPassword(rawPassword);
             driver.HashedPassword = hashedPassword;
-            //hash licenseNumber
-            var hashLicenseNumber = SecurityHelper.EncryptToBytes(dto.LicenseNumber);
-            driver.HashedLicenseNumber = hashedPassword;
             var createdDriver = await _driverRepository.AddAsync(driver);
             var response = _mapper.Map<CreateUserResponse>(createdDriver);
             response.Password = rawPassword;    
@@ -83,8 +80,7 @@ namespace Services.Implementations
                             PhoneNumber = row.Cell(4).GetString().Trim(),
                             Gender = row.Cell(5).GetValue<int>(),
                             DateOfBirthString = row.Cell(6).GetString().Trim(),
-                            Address = row.Cell(7).GetString().Trim(),
-                            LicenseNumber = row.Cell(8).GetString().Trim()
+                            Address = row.Cell(7).GetString().Trim()
                         };
 
                         // Validate basic data
@@ -94,8 +90,7 @@ namespace Services.Implementations
                             string.IsNullOrWhiteSpace(driverDto.PhoneNumber) ||
                             driverDto.Gender == 0 ||
                             string.IsNullOrWhiteSpace(driverDto.DateOfBirthString) ||
-                            string.IsNullOrWhiteSpace(driverDto.Address) ||
-                            string.IsNullOrWhiteSpace(driverDto.LicenseNumber))
+                            string.IsNullOrWhiteSpace(driverDto.Address))
 
                         {
                             result.FailedUsers.Add(new ImportUserError
@@ -234,9 +229,7 @@ namespace Services.Implementations
                         var rawPassword = SecurityHelper.GenerateRandomPassword();
                         var hashedPassword = SecurityHelper.HashPassword(rawPassword);
                         driver.HashedPassword = hashedPassword;
-                        //hash LicenseNumber
-                        var hashLicenseNumber = SecurityHelper.EncryptToBytes(driverDto.LicenseNumber);
-                        driver.HashedLicenseNumber = hashLicenseNumber;
+                        // Note: License number will be handled separately through DriverLicense entity
                         // Thêm vào database
                         var createdDriver = await _driverRepository.AddAsync(driver);
 
@@ -286,7 +279,6 @@ namespace Services.Implementations
                 worksheet.Cell(1, 5).Value = "Gender";
                 worksheet.Cell(1, 6).Value = "Date of Birth";
                 worksheet.Cell(1, 7).Value = "Address";
-                worksheet.Cell(1, 8).Value = "License Number";
 
                 int row = 2;
                 foreach (var d in drivers)
@@ -298,8 +290,6 @@ namespace Services.Implementations
                     worksheet.Cell(row, 5).Value = d.Gender.ToString();
                     worksheet.Cell(row, 6).Value = d.DateOfBirth?.ToString("dd/MM/yyyy");
                     worksheet.Cell(row, 7).Value = d.Address;
-                    var licenseNumber = SecurityHelper.DecryptFromBytes(d.HashedLicenseNumber);
-                    worksheet.Cell(row, 8).Value = licenseNumber;
                     row++;
                 }
 
@@ -309,6 +299,23 @@ namespace Services.Implementations
                     return stream.ToArray();
                 }
             }
+        }
+
+        public async Task<Driver?> GetDriverByIdAsync(Guid driverId)
+        {
+            return await _driverRepository.FindAsync(driverId);
+        }
+
+        public async Task<Guid?> GetHealthCertificateFileIdAsync(Guid driverId)
+        {
+            var driver = await _driverRepository.FindAsync(driverId);
+            return driver?.HealthCertificateFileId;
+        }
+
+        public async Task<Guid?> GetUserPhotoFileIdAsync(Guid driverId)
+        {
+            var driver = await _driverRepository.FindAsync(driverId);
+            return driver?.UserPhotoFileId;
         }
 
     }

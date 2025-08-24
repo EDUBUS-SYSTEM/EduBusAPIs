@@ -20,6 +20,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<Driver> Drivers { get; set; }
 
+        public virtual DbSet<DriverLicense> DriverLicenses { get; set; }
+
         public virtual DbSet<DriverVehicle> DriverVehicles { get; set; }
 
         public virtual DbSet<Grade> Grades { get; set; }
@@ -76,13 +78,24 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<Driver>(entity =>
             {
-                entity.HasIndex(e => e.HashedLicenseNumber, "UQ_Drivers_HashedLicenseNumber").IsUnique();
-
-                entity.Property(e => e.HashedLicenseNumber).HasMaxLength(256);
-
                 entity.HasOne<UserAccount>()
                     .WithOne()
                     .HasForeignKey<Driver>(e => e.Id);
+            });
+
+            modelBuilder.Entity<DriverLicense>(entity =>
+            {
+                entity.HasIndex(e => e.DriverId, "IX_DriverLicenses_DriverId");
+                entity.HasIndex(e => e.HashedLicenseNumber, "UQ_DriverLicenses_HashedLicenseNumber").IsUnique();
+
+                entity.Property(e => e.HashedLicenseNumber).HasMaxLength(256);
+                entity.Property(e => e.IssuedBy).HasMaxLength(200);
+                entity.Property(e => e.DateOfIssue).HasColumnType("date");
+
+                entity.HasOne(d => d.Driver)
+                    .WithOne(d => d.DriverLicense)
+                    .HasForeignKey<DriverLicense>(d => d.DriverId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<DriverVehicle>(entity =>
@@ -320,7 +333,7 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
                 entity.Property(e => e.Gender)
-                    .HasConversion<int>(); // Enum lưu dưới dạng int
+                    .HasConversion<int>();
             });
 
             modelBuilder.Entity<Vehicle>(entity =>

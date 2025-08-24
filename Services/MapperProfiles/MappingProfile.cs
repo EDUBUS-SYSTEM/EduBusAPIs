@@ -32,6 +32,10 @@ namespace Services.MapperProfiles
                opt => opt.MapFrom(src => DateHelper.ParseDate(src.DateOfBirthString)));
             CreateMap<Driver, ImportUserSuccess>();
 
+            // driver license mapping
+            CreateMap<CreateDriverLicenseRequest, DriverLicense>();
+            CreateMap<DriverLicense, DriverLicenseResponse>();
+
         }
     }
 }
