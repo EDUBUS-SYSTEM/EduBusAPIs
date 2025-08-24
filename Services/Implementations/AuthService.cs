@@ -13,13 +13,13 @@ namespace Services.Implementations
     public class AuthService : IAuthService
     {
         private readonly IUserAccountRepository _userRepo;
+        private readonly IRefreshTokenRepository _refreshRepo;
         private readonly IConfiguration _config;
 
-        private static readonly Dictionary<Guid, string> _refreshTokens = new();
-
-        public AuthService(IUserAccountRepository userRepo, IConfiguration config)
+        public AuthService(IUserAccountRepository userRepo, IRefreshTokenRepository refreshRepo, IConfiguration config)
         {
             _userRepo = userRepo;
+            _refreshRepo = refreshRepo;
             _config = config;
         }
 
@@ -39,7 +39,7 @@ namespace Services.Implementations
                 _ => "Unknown"
             };
 
-            var (access, refresh, expires) = GenerateTokens(user, role);
+            var (access, refresh, expires) = await GenerateTokensAsync(user, role);
 
             return new AuthResponse
             {
@@ -51,38 +51,54 @@ namespace Services.Implementations
             };
         }
 
-        public bool VerifyPassword(string plainPassword, byte[] hashedBytes)
+        public async Task LogoutAsync(Guid userId)
         {
-            var hashString = Encoding.UTF8.GetString(hashedBytes);
-            return BCrypt.Net.BCrypt.Verify(plainPassword, hashString);
+            await _refreshRepo.InvalidateUserTokensAsync(userId);
         }
 
-        public (string accessToken, string refreshToken, DateTime expiresUtc) GenerateTokens(UserAccount user, string role)
+        public async Task<(string accessToken, string refreshToken, DateTime expiresUtc)?> RefreshTokensAsync(string refreshToken)
         {
-            var (token, expires) = GenerateJwt(user, role);
-            var refresh = Guid.NewGuid().ToString("N");
+            var tokenInDb = await _refreshRepo.GetByTokenAsync(refreshToken);
 
-            _refreshTokens[user.Id] = refresh;
+            if (tokenInDb == null || tokenInDb.ExpiresAtUtc <= DateTime.UtcNow || tokenInDb.RevokedAtUtc != null)
+                return null;
 
-            return (token, refresh, expires);
+            var user = await _userRepo.FindAsync(tokenInDb.UserId);
+            if (user == null) return null;
+
+            var role = user switch
+            {
+                Admin => "Admin",
+                Driver => "Driver",
+                Parent => "Parent",
+                _ => "Unknown"
+            };
+
+            return await GenerateTokensAsync(user, role);
         }
 
-        public void InvalidateRefreshToken(Guid userId)
+        private async Task<(string token, string refresh, DateTime expiresUtc)> GenerateTokensAsync(UserAccount user, string role)
         {
-            _refreshTokens.Remove(userId);
+            var (access, expires) = GenerateJwt(user, role,
+                int.Parse(_config["Jwt:AccessTokenMinutes"] ?? "15"));
+
+            var refresh = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Token = Guid.NewGuid().ToString("N"),
+                ExpiresAtUtc = DateTime.UtcNow.AddDays(
+                    int.Parse(_config["Jwt:RefreshTokenDays"] ?? "7"))
+            };
+
+            await _refreshRepo.AddAsync(refresh);
+
+            await _refreshRepo.EnforceUserTokenLimitAsync(user.Id, 3);
+
+            return (access, refresh.Token, expires);
         }
 
-        public bool ValidateRefreshToken(Guid userId, string refreshToken)
-        {
-            return _refreshTokens.TryGetValue(userId, out var saved) && saved == refreshToken;
-        }
-
-        public UserAccount? GetUserById(Guid userId)
-        {
-            return _userRepo.FindAsync(userId).Result;
-        }
-
-        private (string token, DateTime expiresUtc) GenerateJwt(UserAccount user, string role)
+        private (string token, DateTime expiresUtc) GenerateJwt(UserAccount user, string role, int ttlMinutes)
         {
             var keyStr = _config["Jwt:Key"];
             var issuer = _config["Jwt:Issuer"];
@@ -98,7 +114,7 @@ namespace Services.Implementations
                 new Claim(ClaimTypes.Role, role)
             };
 
-            var expires = DateTime.UtcNow.AddHours(4);
+            var expires = DateTime.UtcNow.AddMinutes(ttlMinutes);
 
             var token = new JwtSecurityToken(
                 issuer: issuer,
@@ -110,5 +126,17 @@ namespace Services.Implementations
 
             return (new JwtSecurityTokenHandler().WriteToken(token), expires);
         }
+
+        private bool VerifyPassword(string plainPassword, byte[] hashedBytes)
+        {
+            var hashString = Encoding.UTF8.GetString(hashedBytes);
+            return BCrypt.Net.BCrypt.Verify(plainPassword, hashString);
+        }
+
+        public async Task<UserAccount?> GetUserByIdAsync(Guid userId)
+        {
+            return await _userRepo.FindAsync(userId);
+        }
+
     }
 }

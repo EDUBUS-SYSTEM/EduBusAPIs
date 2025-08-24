@@ -1,5 +1,4 @@
-﻿using AutoMapper;
-using Data.Models;
+﻿using Data.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
@@ -48,12 +47,12 @@ namespace APIs.Controllers
         // POST /auth/logout
         [Authorize]
         [HttpPost("logout")]
-        public IActionResult Logout()
+        public async Task<IActionResult> Logout()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (userId != null)
             {
-                _authService.InvalidateRefreshToken(Guid.Parse(userId));
+                await _authService.LogoutAsync(Guid.Parse(userId));
             }
 
             return Ok(new
@@ -66,21 +65,10 @@ namespace APIs.Controllers
 
         // POST /auth/refresh-token
         [HttpPost("refresh-token")]
-        public IActionResult Refresh([FromBody] RefreshTokenRequest dto)
+        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest dto)
         {
-            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userIdStr))
-            {
-                return Unauthorized(new
-                {
-                    success = false,
-                    data = (object?)null,
-                    error = new { code = "UNAUTHORIZED", message = "Missing user id" }
-                });
-            }
-
-            var userId = Guid.Parse(userIdStr);
-            if (!_authService.ValidateRefreshToken(userId, dto.RefreshToken))
+            var result = await _authService.RefreshTokensAsync(dto.RefreshToken);
+            if (result == null)
             {
                 return Unauthorized(new
                 {
@@ -90,27 +78,7 @@ namespace APIs.Controllers
                 });
             }
 
-            // regenerate tokens
-            var user = _authService.GetUserById(userId);
-            if (user == null)
-            {
-                return Unauthorized(new
-                {
-                    success = false,
-                    data = (object?)null,
-                    error = new { code = "USER_NOT_FOUND", message = "User not found" }
-                });
-            }
-
-            var role = user switch
-            {
-                Admin => "Admin",
-                Driver => "Driver",
-                Parent => "Parent",
-                _ => "Unknown"
-            };
-
-            var (newAccess, newRefresh, expires) = _authService.GenerateTokens(user, role);
+            var (newAccess, newRefresh, expires) = result.Value;
 
             return Ok(new
             {
@@ -121,6 +89,59 @@ namespace APIs.Controllers
                     refreshToken = newRefresh,
                     expiresAtUtc = expires
                 },
+                error = (object?)null
+            });
+        }
+
+        //API - Test Author
+        // GET /auth/admin
+        [Authorize(Roles = "Admin")]
+        [HttpGet("admin")]
+        public IActionResult AdminOnly()
+        {
+            return Ok(new
+            {
+                success = true,
+                data = new { message = "You are an Admin!" },
+                error = (object?)null
+            });
+        }
+
+        // GET /auth/driver
+        [Authorize(Roles = "Driver")]
+        [HttpGet("driver")]
+        public IActionResult DriverOnly()
+        {
+            return Ok(new
+            {
+                success = true,
+                data = new { message = "You are a Driver!" },
+                error = (object?)null
+            });
+        }
+
+        // GET /auth/parent
+        [Authorize(Roles = "Parent")]
+        [HttpGet("parent")]
+        public IActionResult ParentOnly()
+        {
+            return Ok(new
+            {
+                success = true,
+                data = new { message = "You are a Parent!" },
+                error = (object?)null
+            });
+        }
+
+        // GET /auth/any
+        [Authorize(Roles = "Admin,Driver,Parent")]
+        [HttpGet("any")]
+        public IActionResult AnyRole()
+        {
+            return Ok(new
+            {
+                success = true,
+                data = new { message = "You are authenticated with a valid role!" },
                 error = (object?)null
             });
         }

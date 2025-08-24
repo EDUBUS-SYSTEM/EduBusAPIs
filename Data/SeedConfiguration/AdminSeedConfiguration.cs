@@ -1,4 +1,4 @@
-﻿using Data.Models;
+using Data.Models;
 using Data.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

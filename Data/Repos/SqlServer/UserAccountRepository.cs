@@ -1,4 +1,4 @@
-﻿using Data.Contexts.SqlServer;
+using Data.Contexts.SqlServer;
 using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +21,7 @@ namespace Data.Repos.SqlServer
                 .Where(u => !u.IsDeleted && u.Email == email)
                 .FirstOrDefaultAsync();
         }
+
         public async Task<bool> IsEmailExistAsync(string email)
         {
             return await _context.UserAccounts

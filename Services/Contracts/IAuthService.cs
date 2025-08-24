@@ -11,9 +11,8 @@ namespace Services.Contracts
     public interface IAuthService
     {
         Task<AuthResponse?> LoginAsync(LoginRequest request);
-        void InvalidateRefreshToken(Guid userId);
-        bool ValidateRefreshToken(Guid userId, string refreshToken);
-        UserAccount? GetUserById(Guid userId);
-        (string accessToken, string refreshToken, DateTime expiresUtc) GenerateTokens(UserAccount user, string role);
+        Task LogoutAsync(Guid userId);
+        Task<(string accessToken, string refreshToken, DateTime expiresUtc)?> RefreshTokensAsync(string refreshToken);
+        Task<UserAccount?> GetUserByIdAsync(Guid userId);
     }
 }
