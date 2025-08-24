@@ -1,4 +1,5 @@
-using Data.Models;
+﻿using Data.Models;
+using Data.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text;
@@ -22,6 +23,9 @@ namespace Data.SeedConfiguration
                 FirstName = "Nguyen",
                 LastName = "Van Admin",
                 PhoneNumber = "0901234567",
+                Address = "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam",
+                DateOfBirth = new DateTime(1990, 1, 1),
+                Gender = Gender.Male,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 IsDeleted = false

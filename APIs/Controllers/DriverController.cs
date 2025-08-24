@@ -1,0 +1,183 @@
+﻿using Microsoft.AspNetCore.Mvc;
+using Services.Contracts;
+using Services.Models.Driver;
+using Services.Models.UserAccount;
+using Data.Models;
+
+namespace APIs.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class DriverController : ControllerBase
+    {
+        private readonly IDriverService _driverService;
+        private readonly IFileService _fileService;
+        
+        public DriverController(IDriverService driverService, IFileService fileService)
+        {
+            _driverService = driverService;
+            _fileService = fileService;
+        }
+        [HttpPost]
+        public async Task<ActionResult<CreateUserResponse>> CreateDriver([FromBody] CreateDriverRequest dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+            try
+            {
+                var response = await _driverService.CreateDriverAsync(dto);
+                return Ok(response);
+            }
+            catch (ArgumentNullException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An internal error occurred.");
+            }
+        }
+        [HttpPost("import")]
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> ImportDrivers([FromForm] IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest("File is required.");
+
+            if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                return BadRequest("Invalid file format. Only .xlsx files are supported.");
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var result = await _driverService.ImportDriversFromExcelAsync(stream);
+
+                return Ok(new
+                {
+                    TotalProcessed = result.TotalProcessed,
+                    SuccessUsers = result.SuccessfulUsers,
+                    FailedUsers = result.FailedUsers
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    Message = "An error occurred while importing drivers.",
+                    Details = ex.Message
+                });
+            }
+        }
+        [HttpGet("export")]
+        public async Task<IActionResult> ExportDrivers()
+        {
+            var fileContent = await _driverService.ExportDriversToExcelAsync();
+            if (fileContent == null || fileContent.Length == 0)
+            {
+                return NotFound(new { message = "No data to export to Excel." });
+            }
+
+            return File(fileContent,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "Drivers.xlsx");
+        }
+
+        [HttpPost("{driverId}/upload-health-certificate")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<object>> UploadHealthCertificate(Guid driverId, IFormFile file)
+        {
+            try
+            {
+                if (file == null)
+                    return BadRequest("No file provided.");
+
+                var fileId = await _fileService.UploadHealthCertificateAsync(driverId, file);
+                return Ok(new { FileId = fileId, Message = "Health certificate uploaded successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while uploading the health certificate.");
+            }
+        }
+
+        [HttpPost("{driverId}/upload-user-photo")]
+        [Consumes("multipart/form-data")]
+        public async Task<ActionResult<object>> UploadUserPhoto(Guid driverId, IFormFile file)
+        {
+            try
+            {
+                if (file == null)
+                    return BadRequest("No file provided.");
+
+                var fileId = await _fileService.UploadUserPhotoAsync(driverId, file);
+                return Ok(new { FileId = fileId, Message = "User photo uploaded successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while uploading the user photo.");
+            }
+        }
+
+        [HttpGet("{driverId}/health-certificate")]
+        public async Task<IActionResult> GetHealthCertificate(Guid driverId)
+        {
+            try
+            {
+                var fileId = await _driverService.GetHealthCertificateFileIdAsync(driverId);
+                if (!fileId.HasValue)
+                    return NotFound("Health certificate not found.");
+
+                var fileContent = await _fileService.GetFileAsync(fileId.Value);
+                var contentType = await _fileService.GetFileContentTypeAsync(fileId.Value);
+
+                return File(fileContent, contentType);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while retrieving the health certificate.");
+            }
+        }
+
+        [HttpGet("{driverId}/user-photo")]
+        public async Task<IActionResult> GetUserPhoto(Guid driverId)
+        {
+            try
+            {
+                var fileId = await _driverService.GetUserPhotoFileIdAsync(driverId);
+                if (!fileId.HasValue)
+                    return NotFound("User photo not found.");
+
+                var fileContent = await _fileService.GetFileAsync(fileId.Value);
+                var contentType = await _fileService.GetFileContentTypeAsync(fileId.Value);
+
+                return File(fileContent, contentType);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while retrieving the user photo.");
+            }
+        }
+    }
+}

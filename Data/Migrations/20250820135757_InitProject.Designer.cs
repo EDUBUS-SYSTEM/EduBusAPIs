@@ -13,8 +13,12 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    [Migration("20250820161607_Init")]
-    partial class Init
+<<<<<<<< Updated upstream:Data/Migrations/20250821154211_InitProject.Designer.cs
+    [Migration("20250821154211_InitProject")]
+========
+    [Migration("20250820135757_InitProject")]
+>>>>>>>> Stashed changes:Data/Migrations/20250820135757_InitProject.Designer.cs
+    partial class InitProject
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -478,11 +482,18 @@ namespace Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("(newsequentialid())");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)")
                         .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("date");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -493,6 +504,9 @@ namespace Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("HashedPassword")
                         .IsRequired()
@@ -510,6 +524,7 @@ namespace Data.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PhoneNumber")
+                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
@@ -519,7 +534,8 @@ namespace Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex(new[] { "PhoneNumber" }, "IX_UserAccounts_PhoneNumber");
+                    b.HasIndex(new[] { "PhoneNumber" }, "IX_UserAccounts_PhoneNumber")
+                        .IsUnique();
 
                     b.HasIndex(new[] { "Email" }, "UQ_UserAccounts_Email")
                         .IsUnique();
@@ -587,9 +603,12 @@ namespace Data.Migrations
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440001"),
+                            Address = "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "admin@edubus.com",
                             FirstName = "Nguyen",
+                            Gender = 1,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Van Admin",
@@ -617,9 +636,12 @@ namespace Data.Migrations
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440002"),
+                            Address = "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1985, 5, 20, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "driver@edubus.com",
                             FirstName = "Tran",
+                            Gender = 1,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Van Driver",
@@ -633,25 +655,23 @@ namespace Data.Migrations
                 {
                     b.HasBaseType("Data.Models.UserAccount");
 
-                    b.Property<string>("Address")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.ToTable("Parents", (string)null);
 
                     b.HasData(
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1984, 6, 12, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "parent@edubus.com",
                             FirstName = "Le",
+                            Gender = 2,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Thi Parent",
                             PhoneNumber = "0901234569",
-                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
-                            Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City"
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 

@@ -4,6 +4,7 @@ using Data.Contexts.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 
@@ -12,9 +13,15 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    partial class EduBusSqlContextModelSnapshot : ModelSnapshot
+<<<<<<<< Updated upstream:Data/Migrations/20250821154211_InitProject.Designer.cs
+    [Migration("20250821154211_InitProject")]
+========
+    [Migration("20250820135757_InitProject")]
+>>>>>>>> Stashed changes:Data/Migrations/20250820135757_InitProject.Designer.cs
+    partial class InitProject
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

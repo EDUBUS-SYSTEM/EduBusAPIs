@@ -9,7 +9,7 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     /// <inheritdoc />
-    public partial class Init : Migration
+    public partial class InitProject : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -55,7 +55,10 @@ namespace Data.Migrations
                     HashedPassword = table.Column<byte[]>(type: "varbinary(256)", maxLength: 256, nullable: false),
                     FirstName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     LastName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: true),
+                    PhoneNumber = table.Column<string>(type: "nvarchar(32)", maxLength: 32, nullable: false),
+                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DateOfBirth = table.Column<DateTime>(type: "date", nullable: true),
+                    Gender = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2(3)", precision: 3, nullable: false, defaultValueSql: "(sysutcdatetime())"),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2(3)", precision: 3, nullable: true),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false)
@@ -104,8 +107,12 @@ namespace Data.Migrations
                 name: "Parents",
                 columns: table => new
                 {
+<<<<<<<< Updated upstream:Data/Migrations/20250821154211_InitProject.cs
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())")
+========
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
                     Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
+>>>>>>>> Stashed changes:Data/Migrations/20250820135757_InitProject.cs
                 },
                 constraints: table =>
                 {
@@ -354,12 +361,12 @@ namespace Data.Migrations
 
             migrationBuilder.InsertData(
                 table: "UserAccounts",
-                columns: new[] { "Id", "CreatedAt", "Email", "FirstName", "HashedPassword", "LastName", "PhoneNumber", "UpdatedAt" },
+                columns: new[] { "Id", "Address", "CreatedAt", "DateOfBirth", "Email", "FirstName", "Gender", "HashedPassword", "LastName", "PhoneNumber", "UpdatedAt" },
                 values: new object[,]
                 {
-                    { new Guid("550e8400-e29b-41d4-a716-446655440001"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "admin@edubus.com", "Nguyen", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Admin", "0901234567", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
-                    { new Guid("550e8400-e29b-41d4-a716-446655440002"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "driver@edubus.com", "Tran", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Driver", "0901234568", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
-                    { new Guid("550e8400-e29b-41d4-a716-446655440003"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), "parent@edubus.com", "Le", new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Thi Parent", "0901234569", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) }
+                    { new Guid("550e8400-e29b-41d4-a716-446655440001"), "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1990, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "admin@edubus.com", "Nguyen", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Admin", "0901234567", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440002"), "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1985, 5, 20, 0, 0, 0, 0, DateTimeKind.Unspecified), "driver@edubus.com", "Tran", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Driver", "0901234568", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440003"), "123 Nguyen Van Linh, District 7, Ho Chi Minh City", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1984, 6, 12, 0, 0, 0, 0, DateTimeKind.Unspecified), "parent@edubus.com", "Le", 2, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Thi Parent", "0901234569", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) }
                 });
 
             migrationBuilder.InsertData(
@@ -374,8 +381,8 @@ namespace Data.Migrations
 
             migrationBuilder.InsertData(
                 table: "Parents",
-                columns: new[] { "Id", "Address" },
-                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440003"), "123 Nguyen Van Linh, District 7, Ho Chi Minh City" });
+                column: "Id",
+                value: new Guid("550e8400-e29b-41d4-a716-446655440003"));
 
             migrationBuilder.CreateIndex(
                 name: "UQ_Drivers_HashedLicenseNumber",
@@ -495,7 +502,8 @@ namespace Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_UserAccounts_PhoneNumber",
                 table: "UserAccounts",
-                column: "PhoneNumber");
+                column: "PhoneNumber",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "UQ_UserAccounts_Email",

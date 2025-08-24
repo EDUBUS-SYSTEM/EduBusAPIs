@@ -21,5 +21,16 @@ namespace Data.Repos.SqlServer
                 .Where(u => !u.IsDeleted && u.Email == email)
                 .FirstOrDefaultAsync();
         }
+        public async Task<bool> IsEmailExistAsync(string email)
+        {
+            return await _context.UserAccounts
+                .AnyAsync(u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
+        }
+
+        public async Task<bool> IsPhoneNumberExistAsync(string phoneNumber)
+        {
+            return await _context.UserAccounts
+                  .AnyAsync(u => u.PhoneNumber == phoneNumber);
+        }
     }
 }

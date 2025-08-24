@@ -14,6 +14,7 @@ using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Services.MapperProfiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -81,12 +82,23 @@ builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>)
 
 // Repository Registration for SqlServer
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
+builder.Services.AddScoped<IParentRepository, ParentRepository>();
+builder.Services.AddScoped<IDriverRepository, DriverRepository>();
+builder.Services.AddScoped<IDriverLicenseRepository, DriverLicenseRepository>();
 
+// Repository Registration for MongoDB
+builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
-
+builder.Services.AddScoped<IParentService, ParentService>();
+builder.Services.AddScoped<IDriverService, DriverService>();
+builder.Services.AddScoped<IDriverLicenseService, DriverLicenseService>();
+builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
+// Register Parent AutoMapper
+builder.Services.AddAutoMapper(typeof(MappingProfile));
 
 // JWT Authentication 
 var jwt = builder.Configuration.GetSection("Jwt");

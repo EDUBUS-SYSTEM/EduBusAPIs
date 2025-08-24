@@ -1,4 +1,5 @@
-﻿using Data.Models;
+﻿using AutoMapper;
+using Data.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
