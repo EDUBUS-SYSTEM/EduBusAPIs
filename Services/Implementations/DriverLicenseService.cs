@@ -42,7 +42,8 @@ namespace Services.Implementations
 
         public async Task<DriverLicenseResponse?> GetDriverLicenseByDriverIdAsync(Guid driverId)
         {
-            var driverLicense = await _driverLicenseRepository.FindByConditionAsync(dl => dl.DriverId == driverId);
+            var driverLicenses = await _driverLicenseRepository.FindByConditionAsync(dl => dl.DriverId == driverId);
+            var driverLicense = driverLicenses.FirstOrDefault();
             return driverLicense != null ? _mapper.Map<DriverLicenseResponse>(driverLicense) : null;
         }
 
