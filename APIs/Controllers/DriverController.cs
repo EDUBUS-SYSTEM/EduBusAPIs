@@ -3,6 +3,8 @@ using Services.Contracts;
 using Services.Models.Driver;
 using Services.Models.UserAccount;
 using Data.Models;
+using Constants;
+using Microsoft.AspNetCore.Authorization;
 
 namespace APIs.Controllers
 {
@@ -18,6 +20,8 @@ namespace APIs.Controllers
             _driverService = driverService;
             _fileService = fileService;
         }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost]
         public async Task<ActionResult<CreateUserResponse>> CreateDriver([FromBody] CreateDriverRequest dto)
         {
@@ -43,9 +47,11 @@ namespace APIs.Controllers
                 return StatusCode(500, "An internal error occurred.");
             }
         }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> ImportDrivers([FromForm] IFormFile file)
+        public async Task<IActionResult> ImportDrivers(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("File is required.");
@@ -74,6 +80,8 @@ namespace APIs.Controllers
                 });
             }
         }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpGet("export")]
         public async Task<IActionResult> ExportDrivers()
         {
@@ -88,6 +96,7 @@ namespace APIs.Controllers
                         "Drivers.xlsx");
         }
 
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
         [HttpPost("{driverId}/upload-health-certificate")]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<object>> UploadHealthCertificate(Guid driverId, IFormFile file)
@@ -110,28 +119,7 @@ namespace APIs.Controllers
             }
         }
 
-        [HttpPost("{driverId}/upload-user-photo")]
-        [Consumes("multipart/form-data")]
-        public async Task<ActionResult<object>> UploadUserPhoto(Guid driverId, IFormFile file)
-        {
-            try
-            {
-                if (file == null)
-                    return BadRequest("No file provided.");
-
-                var fileId = await _fileService.UploadUserPhotoAsync(driverId, file);
-                return Ok(new { FileId = fileId, Message = "User photo uploaded successfully." });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "An error occurred while uploading the user photo.");
-            }
-        }
-
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
         [HttpGet("{driverId}/health-certificate")]
         public async Task<IActionResult> GetHealthCertificate(Guid driverId)
         {
@@ -153,30 +141,6 @@ namespace APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, "An error occurred while retrieving the health certificate.");
-            }
-        }
-
-        [HttpGet("{driverId}/user-photo")]
-        public async Task<IActionResult> GetUserPhoto(Guid driverId)
-        {
-            try
-            {
-                var fileId = await _driverService.GetUserPhotoFileIdAsync(driverId);
-                if (!fileId.HasValue)
-                    return NotFound("User photo not found.");
-
-                var fileContent = await _fileService.GetFileAsync(fileId.Value);
-                var contentType = await _fileService.GetFileContentTypeAsync(fileId.Value);
-
-                return File(fileContent, contentType);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return NotFound(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "An error occurred while retrieving the user photo.");
             }
         }
     }

@@ -53,6 +53,16 @@ dotnet user-secrets set "ConnectionStrings:MongoDb" "mongodb://localhost:27017/e
 
 dotnet user-secrets set "Jwt:Key" "super-secret-key-for-EduBus-123789@@"
 
+```bash
+dotnet user-secrets set "EmailSettings:SmtpServer" "smtp.gmail.com"
+dotnet user-secrets set "EmailSettings:SmtpPort" "587"
+dotnet user-secrets set "EmailSettings:SenderEmail" "edubusfuda@gmail.com"
+dotnet user-secrets set "EmailSettings:SenderName" "EduBus"
+dotnet user-secrets set "EmailSettings:Username" "edubusfuda@gmail.com"
+dotnet user-secrets set "EmailSettings:Password" "pzdn bovm zlvl zadj"
+dotnet user-secrets set "EmailSettings:EnableSsl" "true"
+```
+
 **Step 3: Verify User Secrets**
 
 ```bash

@@ -16,6 +16,5 @@ namespace Services.Contracts
         Task<byte[]> ExportDriversToExcelAsync();
         Task<Data.Models.Driver?> GetDriverByIdAsync(Guid driverId);
         Task<Guid?> GetHealthCertificateFileIdAsync(Guid driverId);
-        Task<Guid?> GetUserPhotoFileIdAsync(Guid driverId);
     }
 }

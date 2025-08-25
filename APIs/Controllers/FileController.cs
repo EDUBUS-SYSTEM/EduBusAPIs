@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
+using Constants;
 
 namespace APIs.Controllers
 {
@@ -16,6 +17,7 @@ namespace APIs.Controllers
             _fileService = fileService;
         }
 
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpPost("user-photo/{userId}")]
         public async Task<ActionResult<object>> UploadUserPhoto(Guid userId, IFormFile file)
         {
@@ -37,6 +39,7 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
         [HttpPost("health-certificate/{driverId}")]
         public async Task<ActionResult<object>> UploadHealthCertificate(Guid driverId, IFormFile file)
         {
@@ -58,6 +61,7 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
         [HttpPost("license-image/{driverLicenseId}")]
         public async Task<ActionResult<object>> UploadLicenseImage(Guid driverLicenseId, IFormFile file)
         {
@@ -79,6 +83,7 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet("{fileId}")]
         public async Task<IActionResult> DownloadFile(Guid fileId)
         {
@@ -99,6 +104,7 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Admin)]
         [HttpDelete("{fileId}")]
         public async Task<ActionResult> DeleteFile(Guid fileId)
         {

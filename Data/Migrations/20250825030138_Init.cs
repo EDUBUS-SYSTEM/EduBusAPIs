@@ -9,7 +9,7 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     /// <inheritdoc />
-    public partial class InitProject : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -59,6 +59,7 @@ namespace Data.Migrations
                     Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     DateOfBirth = table.Column<DateTime>(type: "date", nullable: true),
                     Gender = table.Column<int>(type: "int", nullable: false),
+                    UserPhotoFileId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2(3)", precision: 3, nullable: false, defaultValueSql: "(sysutcdatetime())"),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2(3)", precision: 3, nullable: true),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false)
@@ -90,7 +91,7 @@ namespace Data.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
-                    HashedLicenseNumber = table.Column<byte[]>(type: "varbinary(256)", maxLength: 256, nullable: false)
+                    HealthCertificateFileId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -107,12 +108,7 @@ namespace Data.Migrations
                 name: "Parents",
                 columns: table => new
                 {
-<<<<<<<< Updated upstream:Data/Migrations/20250821154211_InitProject.cs
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())")
-========
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false, defaultValueSql: "(newsequentialid())"),
-                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true)
->>>>>>>> Stashed changes:Data/Migrations/20250820135757_InitProject.cs
                 },
                 constraints: table =>
                 {
@@ -120,6 +116,31 @@ namespace Data.Migrations
                     table.ForeignKey(
                         name: "FK_Parents_UserAccounts_Id",
                         column: x => x.Id,
+                        principalTable: "UserAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RefreshTokens",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UserId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Token = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    ExpiresAtUtc = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedAtUtc = table.Column<DateTime>(type: "datetime2(3)", precision: 3, nullable: false, defaultValueSql: "(sysutcdatetime())"),
+                    RevokedAtUtc = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_RefreshTokens", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RefreshTokens_UserAccounts_UserId",
+                        column: x => x.UserId,
                         principalTable: "UserAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
@@ -170,6 +191,33 @@ namespace Data.Migrations
                         column: x => x.AdminId,
                         principalTable: "Admins",
                         principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DriverLicenses",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    HashedLicenseNumber = table.Column<byte[]>(type: "varbinary(256)", maxLength: 256, nullable: false),
+                    DateOfIssue = table.Column<DateTime>(type: "date", nullable: false),
+                    IssuedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    LicenseImageFileId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    CreatedBy = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    UpdatedBy = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    DriverId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DriverLicenses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DriverLicenses_Drivers_DriverId",
+                        column: x => x.DriverId,
+                        principalTable: "Drivers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -361,12 +409,12 @@ namespace Data.Migrations
 
             migrationBuilder.InsertData(
                 table: "UserAccounts",
-                columns: new[] { "Id", "Address", "CreatedAt", "DateOfBirth", "Email", "FirstName", "Gender", "HashedPassword", "LastName", "PhoneNumber", "UpdatedAt" },
+                columns: new[] { "Id", "Address", "CreatedAt", "DateOfBirth", "Email", "FirstName", "Gender", "HashedPassword", "LastName", "PhoneNumber", "UpdatedAt", "UserPhotoFileId" },
                 values: new object[,]
                 {
-                    { new Guid("550e8400-e29b-41d4-a716-446655440001"), "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1990, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "admin@edubus.com", "Nguyen", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Admin", "0901234567", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
-                    { new Guid("550e8400-e29b-41d4-a716-446655440002"), "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1985, 5, 20, 0, 0, 0, 0, DateTimeKind.Unspecified), "driver@edubus.com", "Tran", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Driver", "0901234568", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) },
-                    { new Guid("550e8400-e29b-41d4-a716-446655440003"), "123 Nguyen Van Linh, District 7, Ho Chi Minh City", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1984, 6, 12, 0, 0, 0, 0, DateTimeKind.Unspecified), "parent@edubus.com", "Le", 2, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Thi Parent", "0901234569", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc) }
+                    { new Guid("550e8400-e29b-41d4-a716-446655440001"), "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1990, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), "admin@edubus.com", "Nguyen", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Admin", "0901234567", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), null },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440002"), "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1985, 5, 20, 0, 0, 0, 0, DateTimeKind.Unspecified), "driver@edubus.com", "Tran", 1, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Van Driver", "0901234568", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), null },
+                    { new Guid("550e8400-e29b-41d4-a716-446655440003"), "123 Nguyen Van Linh, District 7, Ho Chi Minh City", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new DateTime(1984, 6, 12, 0, 0, 0, 0, DateTimeKind.Unspecified), "parent@edubus.com", "Le", 2, new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 }, "Thi Parent", "0901234569", new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), null }
                 });
 
             migrationBuilder.InsertData(
@@ -376,20 +424,35 @@ namespace Data.Migrations
 
             migrationBuilder.InsertData(
                 table: "Drivers",
-                columns: new[] { "Id", "HashedLicenseNumber" },
-                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440002"), new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 } });
+                columns: new[] { "Id", "HealthCertificateFileId" },
+                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440002"), null });
 
             migrationBuilder.InsertData(
                 table: "Parents",
                 column: "Id",
                 value: new Guid("550e8400-e29b-41d4-a716-446655440003"));
 
+            migrationBuilder.InsertData(
+                table: "DriverLicenses",
+                columns: new[] { "Id", "CreatedAt", "CreatedBy", "DateOfIssue", "DriverId", "HashedLicenseNumber", "IsDeleted", "IssuedBy", "LicenseImageFileId", "UpdatedAt", "UpdatedBy" },
+                values: new object[] { new Guid("550e8400-e29b-41d4-a716-446655440004"), new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), new Guid("550e8400-e29b-41d4-a716-446655440001"), new DateTime(2020, 1, 15, 0, 0, 0, 0, DateTimeKind.Unspecified), new Guid("550e8400-e29b-41d4-a716-446655440002"), new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 }, false, "Cục Đăng kiểm Việt Nam", null, new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc), null });
+
             migrationBuilder.CreateIndex(
-                name: "UQ_Drivers_HashedLicenseNumber",
-                table: "Drivers",
+                name: "IX_DriverLicenses_DriverId",
+                table: "DriverLicenses",
+                column: "DriverId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DriverLicenses_DriverId1",
+                table: "DriverLicenses",
+                column: "DriverId");
+
+            migrationBuilder.CreateIndex(
+                name: "UQ_DriverLicenses_HashedLicenseNumber",
+                table: "DriverLicenses",
                 column: "HashedLicenseNumber",
-                unique: true,
-                filter: "[HashedLicenseNumber] IS NOT NULL");
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_DriverVehicles_DriverId",
@@ -429,6 +492,17 @@ namespace Data.Migrations
                 name: "IX_PickupPoints_Description",
                 table: "PickupPoints",
                 column: "Description");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RefreshTokens_Token",
+                table: "RefreshTokens",
+                column: "Token",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_RefreshTokens_UserId",
+                table: "RefreshTokens",
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_SGE_GradeId",
@@ -527,10 +601,16 @@ namespace Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "DriverLicenses");
+
+            migrationBuilder.DropTable(
                 name: "DriverVehicles");
 
             migrationBuilder.DropTable(
                 name: "Images");
+
+            migrationBuilder.DropTable(
+                name: "RefreshTokens");
 
             migrationBuilder.DropTable(
                 name: "StudentGradeEnrollments");

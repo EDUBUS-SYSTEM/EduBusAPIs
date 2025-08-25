@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.UserAccount;
 using System.Security.Claims;
+using Constants;
 
 namespace APIs.Controllers
 {
@@ -95,7 +96,7 @@ namespace APIs.Controllers
 
         //API - Test Author
         // GET /auth/admin
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = Roles.Admin)]
         [HttpGet("admin")]
         public IActionResult AdminOnly()
         {
@@ -108,7 +109,7 @@ namespace APIs.Controllers
         }
 
         // GET /auth/driver
-        [Authorize(Roles = "Driver")]
+        [Authorize(Roles = Roles.Driver)]
         [HttpGet("driver")]
         public IActionResult DriverOnly()
         {
@@ -121,7 +122,7 @@ namespace APIs.Controllers
         }
 
         // GET /auth/parent
-        [Authorize(Roles = "Parent")]
+        [Authorize(Roles = Roles.Parent)]
         [HttpGet("parent")]
         public IActionResult ParentOnly()
         {
@@ -134,7 +135,7 @@ namespace APIs.Controllers
         }
 
         // GET /auth/any
-        [Authorize(Roles = "Admin,Driver,Parent")]
+        [Authorize(Roles = Roles.AllRoles)]
         [HttpGet("any")]
         public IActionResult AnyRole()
         {

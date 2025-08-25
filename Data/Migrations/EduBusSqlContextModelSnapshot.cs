@@ -23,6 +23,74 @@ namespace Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Data.Models.DriverLicense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateOfIssue")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("HashedLicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varbinary(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IssuedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("LicenseImageFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "DriverId" }, "IX_DriverLicenses_DriverId")
+                        .HasDatabaseName("IX_DriverLicenses_DriverId1");
+
+                    b.HasIndex(new[] { "HashedLicenseNumber" }, "UQ_DriverLicenses_HashedLicenseNumber")
+                        .IsUnique();
+
+                    b.ToTable("DriverLicenses");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440004"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = new Guid("550e8400-e29b-41d4-a716-446655440001"),
+                            DateOfIssue = new DateTime(2020, 1, 15, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DriverId = new Guid("550e8400-e29b-41d4-a716-446655440002"),
+                            HashedLicenseNumber = new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 },
+                            IsDeleted = false,
+                            IssuedBy = "Cục Đăng kiểm Việt Nam",
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
+
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
                 {
                     b.Property<Guid>("Id")
@@ -570,6 +638,9 @@ namespace Data.Migrations
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
 
+                    b.Property<Guid?>("UserPhotoFileId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
                     b.HasIndex(new[] { "PhoneNumber" }, "IX_UserAccounts_PhoneNumber")
@@ -659,14 +730,8 @@ namespace Data.Migrations
                 {
                     b.HasBaseType("Data.Models.UserAccount");
 
-                    b.Property<byte[]>("HashedLicenseNumber")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("varbinary(256)");
-
-                    b.HasIndex(new[] { "HashedLicenseNumber" }, "UQ_Drivers_HashedLicenseNumber")
-                        .IsUnique()
-                        .HasFilter("[HashedLicenseNumber] IS NOT NULL");
+                    b.Property<Guid?>("HealthCertificateFileId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.ToTable("Drivers", (string)null);
 
@@ -684,8 +749,7 @@ namespace Data.Migrations
                             IsDeleted = false,
                             LastName = "Van Driver",
                             PhoneNumber = "0901234568",
-                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
-                            HashedLicenseNumber = new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 }
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -711,6 +775,17 @@ namespace Data.Migrations
                             PhoneNumber = "0901234569",
                             UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
                         });
+                });
+
+            modelBuilder.Entity("Data.Models.DriverLicense", b =>
+                {
+                    b.HasOne("Data.Models.Driver", "Driver")
+                        .WithOne("DriverLicense")
+                        .HasForeignKey("Data.Models.DriverLicense", "DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
@@ -914,6 +989,8 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.Driver", b =>
                 {
+                    b.Navigation("DriverLicense");
+
                     b.Navigation("DriverVehicles");
                 });
 

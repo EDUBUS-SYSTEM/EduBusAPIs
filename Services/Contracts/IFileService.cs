@@ -10,5 +10,6 @@ namespace Services.Contracts
         Task<byte[]> GetFileAsync(Guid fileId);
         Task<bool> DeleteFileAsync(Guid fileId);
         Task<string> GetFileContentTypeAsync(Guid fileId);
+        Task<Guid?> GetUserPhotoFileIdAsync(Guid userId);
     }
 }

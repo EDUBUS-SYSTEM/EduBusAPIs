@@ -48,7 +48,9 @@ namespace APIs.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "An error occurred while retrieving the driver license.");
+                Console.WriteLine($"Error retrieving driver license: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                return StatusCode(500, $"An error occurred while retrieving the driver license: {ex.Message}");
             }
         }
 

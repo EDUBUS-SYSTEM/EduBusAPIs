@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Data\Data.csproj" />
     <ProjectReference Include="..\Utils\Utils.csproj" />
+    <ProjectReference Include="..\Constants\Constants.csproj" />
   </ItemGroup>
 
 </Project>

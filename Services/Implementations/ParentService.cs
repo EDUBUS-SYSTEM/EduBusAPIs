@@ -6,11 +6,6 @@ using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.Implementations
@@ -309,10 +304,15 @@ namespace Services.Implementations
         {
             try
             {
+                Console.WriteLine($"Sending welcome email to: {email}");
                 await _emailService.SendEmailAsync(email, subject, body);
+                Console.WriteLine($"Welcome email sent successfully to: {email}");
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"Failed to send welcome email to {email}: {ex.Message}");
+                // Don't throw - email failure shouldn't prevent user creation
+                // But log it for monitoring
             }
         }
         private void QueueWelcomeEmail(string email, string subject, string body)

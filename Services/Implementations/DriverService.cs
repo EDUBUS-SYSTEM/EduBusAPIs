@@ -2,16 +2,9 @@
 using ClosedXML.Excel;
 using Data.Models;
 using Data.Repos.Interfaces;
-using Data.Repos.SqlServer;
 using Services.Contracts;
 using Services.Models.Driver;
-using Services.Models.Parent;
 using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.Implementations
@@ -222,7 +215,7 @@ namespace Services.Implementations
                             }
                         }
 
-                        // Map DTO thành entity
+                        // Map DTO -> entity
                         var driver = _mapper.Map<Driver>(driverDto);
 
                         // Generate password
@@ -310,12 +303,6 @@ namespace Services.Implementations
         {
             var driver = await _driverRepository.FindAsync(driverId);
             return driver?.HealthCertificateFileId;
-        }
-
-        public async Task<Guid?> GetUserPhotoFileIdAsync(Guid driverId)
-        {
-            var driver = await _driverRepository.FindAsync(driverId);
-            return driver?.UserPhotoFileId;
         }
 
     }

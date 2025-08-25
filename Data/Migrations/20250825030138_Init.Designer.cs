@@ -13,8 +13,8 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    [Migration("20250821063438_AddRefreshTokenTable")]
-    partial class AddRefreshTokenTable
+    [Migration("20250825030138_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -25,6 +25,74 @@ namespace Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("Data.Models.DriverLicense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateOfIssue")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("HashedLicenseNumber")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varbinary(256)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("IssuedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("LicenseImageFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "DriverId" }, "IX_DriverLicenses_DriverId")
+                        .HasDatabaseName("IX_DriverLicenses_DriverId1");
+
+                    b.HasIndex(new[] { "HashedLicenseNumber" }, "UQ_DriverLicenses_HashedLicenseNumber")
+                        .IsUnique();
+
+                    b.ToTable("DriverLicenses");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440004"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = new Guid("550e8400-e29b-41d4-a716-446655440001"),
+                            DateOfIssue = new DateTime(2020, 1, 15, 0, 0, 0, 0, DateTimeKind.Unspecified),
+                            DriverId = new Guid("550e8400-e29b-41d4-a716-446655440002"),
+                            HashedLicenseNumber = new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 },
+                            IsDeleted = false,
+                            IssuedBy = "Cục Đăng kiểm Việt Nam",
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        });
+                });
 
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
                 {
@@ -523,11 +591,18 @@ namespace Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("(newsequentialid())");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)")
                         .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<DateTime?>("DateOfBirth")
+                        .HasColumnType("date");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -538,6 +613,9 @@ namespace Data.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
 
                     b.Property<byte[]>("HashedPassword")
                         .IsRequired()
@@ -555,6 +633,7 @@ namespace Data.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PhoneNumber")
+                        .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
 
@@ -562,9 +641,13 @@ namespace Data.Migrations
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
 
+                    b.Property<Guid?>("UserPhotoFileId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.HasKey("Id");
 
-                    b.HasIndex(new[] { "PhoneNumber" }, "IX_UserAccounts_PhoneNumber");
+                    b.HasIndex(new[] { "PhoneNumber" }, "IX_UserAccounts_PhoneNumber")
+                        .IsUnique();
 
                     b.HasIndex(new[] { "Email" }, "UQ_UserAccounts_Email")
                         .IsUnique();
@@ -632,9 +715,12 @@ namespace Data.Migrations
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440001"),
+                            Address = "123 Lê Duẩn, Quận Hải Châu, Đà Nẵng, Vietnam",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1990, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "admin@edubus.com",
                             FirstName = "Nguyen",
+                            Gender = 1,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Van Admin",
@@ -647,14 +733,8 @@ namespace Data.Migrations
                 {
                     b.HasBaseType("Data.Models.UserAccount");
 
-                    b.Property<byte[]>("HashedLicenseNumber")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("varbinary(256)");
-
-                    b.HasIndex(new[] { "HashedLicenseNumber" }, "UQ_Drivers_HashedLicenseNumber")
-                        .IsUnique()
-                        .HasFilter("[HashedLicenseNumber] IS NOT NULL");
+                    b.Property<Guid?>("HealthCertificateFileId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.ToTable("Drivers", (string)null);
 
@@ -662,15 +742,17 @@ namespace Data.Migrations
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440002"),
+                            Address = "456 Trần Phú, Quận Hải Châu, Đà Nẵng, Vietnam",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1985, 5, 20, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "driver@edubus.com",
                             FirstName = "Tran",
+                            Gender = 1,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Van Driver",
                             PhoneNumber = "0901234568",
-                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
-                            HashedLicenseNumber = new byte[] { 36, 50, 97, 36, 49, 49, 36, 80, 81, 118, 51, 99, 49, 121, 113, 66, 87, 86, 72, 120, 107, 100, 48, 76, 72, 65, 107, 67, 79, 89, 122, 54, 84, 116, 120, 77, 81, 74, 113, 104, 78, 56, 47, 76, 101, 119, 100, 66, 80, 106, 52, 74, 47, 72, 83, 46, 105, 75, 56, 79 }
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
                         });
                 });
 
@@ -678,26 +760,35 @@ namespace Data.Migrations
                 {
                     b.HasBaseType("Data.Models.UserAccount");
 
-                    b.Property<string>("Address")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
                     b.ToTable("Parents", (string)null);
 
                     b.HasData(
                         new
                         {
                             Id = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City",
                             CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            DateOfBirth = new DateTime(1984, 6, 12, 0, 0, 0, 0, DateTimeKind.Unspecified),
                             Email = "parent@edubus.com",
                             FirstName = "Le",
+                            Gender = 2,
                             HashedPassword = new byte[] { 36, 50, 97, 36, 49, 48, 36, 57, 50, 73, 88, 85, 78, 112, 107, 106, 79, 48, 114, 79, 81, 53, 98, 121, 77, 105, 46, 89, 101, 52, 111, 75, 111, 69, 97, 51, 82, 111, 57, 108, 108, 67, 47, 46, 111, 103, 47, 97, 116, 50, 46, 117, 104, 101, 87, 71, 47, 105, 103, 105 },
                             IsDeleted = false,
                             LastName = "Thi Parent",
                             PhoneNumber = "0901234569",
-                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
-                            Address = "123 Nguyen Van Linh, District 7, Ho Chi Minh City"
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
                         });
+                });
+
+            modelBuilder.Entity("Data.Models.DriverLicense", b =>
+                {
+                    b.HasOne("Data.Models.Driver", "Driver")
+                        .WithOne("DriverLicense")
+                        .HasForeignKey("Data.Models.DriverLicense", "DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
@@ -901,6 +992,8 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.Driver", b =>
                 {
+                    b.Navigation("DriverLicense");
+
                     b.Navigation("DriverVehicles");
                 });
 

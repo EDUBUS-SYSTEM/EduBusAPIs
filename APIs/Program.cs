@@ -6,6 +6,9 @@ using Data.Repos.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using Utils;
 using MongoDB.Driver;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Bson.Serialization.Serializers;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Services.Contracts;
@@ -18,6 +21,8 @@ using Services.MapperProfiles;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure MongoDB Guid representation
+BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresentation.Standard));
 
 // Load configuration 
 builder.Configuration
@@ -91,7 +96,9 @@ builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>)
 // Repository Registration for SqlServer
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-
+builder.Services.AddScoped<IParentRepository, ParentRepository>();
+builder.Services.AddScoped<IDriverRepository, DriverRepository>();
+builder.Services.AddScoped<IDriverLicenseRepository, DriverLicenseRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
@@ -108,29 +115,6 @@ builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupServic
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
 // Register Parent AutoMapper
 builder.Services.AddAutoMapper(typeof(MappingProfile));
-
-// JWT Authentication 
-var jwt = builder.Configuration.GetSection("Jwt");
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o =>
-    {
-        o.RequireHttpsMetadata = true;
-        o.SaveToken = true;
-        o.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwt["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwt["Audience"],
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["Key"]!)),
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(2)
-        };
-    });
-
-builder.Services.AddAuthorization();
 
 // JWT Authentication 
 var jwt = builder.Configuration.GetSection("Jwt");
@@ -159,7 +143,6 @@ builder.Services
             ClockSkew = TimeSpan.FromMinutes(2)
         };
     });
-
 
 builder.Services.AddAuthorization();
 
