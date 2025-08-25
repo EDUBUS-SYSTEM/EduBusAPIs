@@ -33,28 +33,52 @@ namespace Services.Implementations
         }
         public async Task SendEmailAsync(string to, string subject, string body)
         {
+            try
+            {
+                // Validate configuration
+                var smtpServer = _config["EmailSettings:SmtpServer"];
+                var smtpPort = _config["EmailSettings:SmtpPort"];
+                var senderEmail = _config["EmailSettings:SenderEmail"];
+                var senderName = _config["EmailSettings:SenderName"];
+                var username = _config["EmailSettings:Username"];
+                var password = _config["EmailSettings:Password"];
 
-            var email = new MimeMessage();
-            email.From.Add(new MailboxAddress(
-                _config["EmailSettings:SenderName"],
-                _config["EmailSettings:SenderEmail"]));
+                if (string.IsNullOrEmpty(smtpServer) || string.IsNullOrEmpty(smtpPort) || 
+                    string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(username) || 
+                    string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException("Email configuration is incomplete. Please check EmailSettings in configuration.");
+                }
 
-            email.To.Add(MailboxAddress.Parse(to));
-            email.Subject = subject;
-            email.Body = new TextPart(TextFormat.Html) { Text = body };
+                Console.WriteLine($"Attempting to send email to: {to}");
+                Console.WriteLine($"SMTP Server: {smtpServer}:{smtpPort}");
 
-            using var smtp = new SmtpClient();
-            await smtp.ConnectAsync(
-                _config["EmailSettings:SmtpServer"],
-                int.Parse(_config["EmailSettings:SmtpPort"]),
-                SecureSocketOptions.StartTls);
+                var email = new MimeMessage();
+                email.From.Add(new MailboxAddress(senderName, senderEmail));
+                email.To.Add(MailboxAddress.Parse(to));
+                email.Subject = subject;
+                email.Body = new TextPart(TextFormat.Html) { Text = body };
 
-            await smtp.AuthenticateAsync(
-                _config["EmailSettings:Username"],
-                _config["EmailSettings:Password"]);
-
-            await smtp.SendAsync(email);
-            await smtp.DisconnectAsync(true);
+                using var smtp = new SmtpClient();
+                
+                Console.WriteLine("Connecting to SMTP server...");
+                await smtp.ConnectAsync(smtpServer, int.Parse(smtpPort), SecureSocketOptions.StartTls);
+                
+                Console.WriteLine("Authenticating...");
+                await smtp.AuthenticateAsync(username, password);
+                
+                Console.WriteLine("Sending email...");
+                await smtp.SendAsync(email);
+                await smtp.DisconnectAsync(true);
+                
+                Console.WriteLine($"Email sent successfully to: {to}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error sending email to {to}: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                throw;
+            }
         }
         public void QueueEmail(string to, string subject, string body)
         {
