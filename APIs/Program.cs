@@ -34,6 +34,30 @@ builder.Configuration
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+    
+    options.AddPolicy("AllowSpecificOrigins", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:3000",     // React development
+                "http://localhost:3001",     // React alternative port
+                "https://localhost:3000",    // React HTTPS
+                "https://localhost:3001"     // React HTTPS alternative
+            )
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "EduBus APIs", Version = "v1" });
@@ -156,6 +180,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Use CORS - Choose one policy based on your needs
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("AllowAll"); // Allow all origins in development
+}
+else
+{
+    app.UseCors("AllowSpecificOrigins"); // Restrict to specific origins in production
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
