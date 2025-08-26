@@ -164,6 +164,12 @@ namespace Services.Implementations
             return fileStorage.ContentType;
         }
 
+        public async Task<Guid?> GetUserPhotoFileIdAsync(Guid userId)
+        {
+            var userAccount = await _userAccountRepository.FindAsync(userId);
+            return userAccount?.UserPhotoFileId;
+        }
+
         private async Task ValidateFileAsync(IFormFile file, string[] allowedExtensions, long maxSize)
         {
             if (file == null || file.Length == 0)

@@ -7,6 +7,7 @@ using Services.Models.UserAccount;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Constants;
 
 namespace Services.Implementations
 {
@@ -33,10 +34,10 @@ namespace Services.Implementations
 
             var role = user switch
             {
-                Admin => "Admin",
-                Driver => "Driver",
-                Parent => "Parent",
-                _ => "Unknown"
+                Admin => Roles.Admin,
+                Driver => Roles.Driver,
+                Parent => Roles.Parent,
+                _ => Roles.Unknown
             };
 
             var (access, refresh, expires) = await GenerateTokensAsync(user, role);
@@ -68,10 +69,10 @@ namespace Services.Implementations
 
             var role = user switch
             {
-                Admin => "Admin",
-                Driver => "Driver",
-                Parent => "Parent",
-                _ => "Unknown"
+                Admin => Roles.Admin,
+                Driver => Roles.Driver,
+                Parent => Roles.Parent,
+                _ => Roles.Unknown
             };
 
             return await GenerateTokensAsync(user, role);

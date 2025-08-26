@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
+using Microsoft.AspNetCore.Authorization;
+using Constants;
 
 namespace APIs.Controllers
 {
@@ -15,6 +16,7 @@ namespace APIs.Controllers
         {
             _parentService = parentService;
         }
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost]
         public async Task<ActionResult<CreateUserResponse>> CreateParent([FromBody] CreateParentRequest dto)
         {
@@ -41,9 +43,10 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> ImportParents([FromForm] IFormFile file)
+        public async Task<IActionResult> ImportParents(IFormFile file)
         {
             if (file == null || file.Length == 0)
                 return BadRequest("File is required.");
@@ -73,6 +76,7 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Admin)]
         [HttpGet("export")]
         public async Task<IActionResult> ExportParents()
         {
