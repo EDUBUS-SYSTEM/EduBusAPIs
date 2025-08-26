@@ -1,10 +1,12 @@
 using System.Linq.Expressions;
 using Data.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Data.Repos.Interfaces
 {
     public interface ISqlRepository<T> where T : BaseDomain
     {
+        IQueryable<T> GetQueryable();
         Task<IEnumerable<T>> FindAllAsync();
         Task<IEnumerable<T>> FindAllAsync(params Expression<Func<T, object>>[] includes);
         Task<T?> FindAsync(Guid id);

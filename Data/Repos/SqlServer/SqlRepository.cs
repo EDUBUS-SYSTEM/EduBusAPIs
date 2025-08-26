@@ -18,6 +18,8 @@ namespace Data.Repos.SqlServer
             _table = dbContext.Set<T>();
         }
 
+        public virtual IQueryable<T> GetQueryable() => _table.AsQueryable();
+
         public virtual async Task<T?> FindAsync(Guid id) => await _table.FindAsync(id);
 
         public virtual async Task<IEnumerable<T>> FindAllAsync() => await _table.Where(e => !e.IsDeleted).ToListAsync();

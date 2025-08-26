@@ -5,11 +5,13 @@ using Services.Models.UserAccount;
 using Data.Models;
 using Constants;
 using Microsoft.AspNetCore.Authorization;
+using Utils;
 
 namespace APIs.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class DriverController : ControllerBase
     {
         private readonly IDriverService _driverService;
@@ -96,13 +98,20 @@ namespace APIs.Controllers
                         "Drivers.xlsx");
         }
 
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
+        /// <summary>
+        /// Upload health certificate - Drivers can upload their own certificate, Admin can upload for any driver
+        /// </summary>
         [HttpPost("{driverId}/upload-health-certificate")]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<object>> UploadHealthCertificate(Guid driverId, IFormFile file)
         {
             try
             {
+                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, driverId))
+                {
+                    return Forbid();
+                }
+
                 if (file == null)
                     return BadRequest("No file provided.");
 
@@ -119,12 +128,19 @@ namespace APIs.Controllers
             }
         }
 
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
+        /// <summary>
+        /// Get health certificate - Drivers can view their own certificate, Admin can view any driver's certificate
+        /// </summary>
         [HttpGet("{driverId}/health-certificate")]
         public async Task<IActionResult> GetHealthCertificate(Guid driverId)
         {
             try
             {
+                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, driverId))
+                {
+                    return Forbid();
+                }
+
                 var fileId = await _driverService.GetHealthCertificateFileIdAsync(driverId);
                 if (!fileId.HasValue)
                     return NotFound("Health certificate not found.");

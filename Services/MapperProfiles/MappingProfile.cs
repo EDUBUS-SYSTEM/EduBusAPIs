@@ -3,11 +3,6 @@ using Data.Models;
 using Services.Models.Driver;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.MapperProfiles
@@ -36,6 +31,10 @@ namespace Services.MapperProfiles
             CreateMap<CreateDriverLicenseRequest, DriverLicense>();
             CreateMap<DriverLicense, DriverLicenseResponse>();
 
+            // user account mapping
+            CreateMap<UserAccount, UserDto>();
+            CreateMap<UserAccount, UserResponse>();
+            CreateMap<UserUpdateRequest, UserAccount>();
         }
     }
 }
