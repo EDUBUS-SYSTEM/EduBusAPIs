@@ -1,3 +1,4 @@
+using Constants;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
@@ -11,10 +12,12 @@ namespace APIs.Controllers
     public class DriverLicenseController : ControllerBase
     {
         private readonly IDriverLicenseService _driverLicenseService;
+        private readonly IFileService _fileService;
 
-        public DriverLicenseController(IDriverLicenseService driverLicenseService)
+        public DriverLicenseController(IDriverLicenseService driverLicenseService, IFileService fileService)
         {
             _driverLicenseService = driverLicenseService;
+            _fileService = fileService;
         }
 
         [HttpPost]
@@ -86,6 +89,28 @@ namespace APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, "An error occurred while deleting the driver license.");
+            }
+        }
+
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Driver}")]
+        [HttpPost("license-image/{driverLicenseId}")]
+        public async Task<ActionResult<object>> UploadLicenseImage(Guid driverLicenseId, IFormFile file)
+        {
+            try
+            {
+                if (file == null)
+                    return BadRequest("No file provided.");
+
+                var fileId = await _fileService.UploadLicenseImageAsync(driverLicenseId, file);
+                return Ok(new { FileId = fileId, Message = "License image uploaded successfully." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while uploading the file.");
             }
         }
     }
