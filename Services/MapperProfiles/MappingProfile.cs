@@ -2,6 +2,8 @@
 using Data.Models;
 using Services.Models.Driver;
 using Services.Models.Parent;
+using Services.Models.Student;
+using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
 using System;
 using System.Collections.Generic;
@@ -35,6 +37,16 @@ namespace Services.MapperProfiles
             // driver license mapping
             CreateMap<CreateDriverLicenseRequest, DriverLicense>();
             CreateMap<DriverLicense, DriverLicenseResponse>();
+
+            // student mapping
+            CreateMap<Student, StudentDto>();
+            CreateMap<CreateStudentRequest, Student>();
+            CreateMap<UpdateStudentRequest, Student>();
+            CreateMap<ImportStudentDto, Student>();
+            //student grade mapping
+            CreateMap<CreateStudentGradeRequest, StudentGradeEnrollment>();
+            CreateMap<UpdateStudentGradeResponse, StudentGradeEnrollment>();
+            CreateMap<StudentGradeEnrollment, StudentGradeDto>();
 
         }
     }
