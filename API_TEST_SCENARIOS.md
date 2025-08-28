@@ -586,49 +586,122 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 
 ## 6. File Management
 
-### 6.1 Upload User Photo (via FileController)
+### 6.1 Upload File (Admin Only)
 
-**Endpoint:** `POST /api/File/user-photo/{userId}`
-**Authorization:** Bearer Token (All roles)
+**Endpoint:** `POST /api/File/upload`
+**Authorization:** Bearer Token (Admin only)
 **Content-Type:** multipart/form-data
 
 **Form Data:**
 
-- `file`: [Select image file - JPG, PNG, max 2MB]
+- `file`: [Select file]
+- `entityType`: "UserAccount" | "Driver" | "DriverLicense" | "Student" | "Parent" | "Template"
+- `entityId`: [Guid of entity] (can be empty for Template)
+- `fileType`: "UserPhoto" | "HealthCertificate" | "LicenseImage" | "Document" | "Image" | "UserAccount" | "Driver" | "Parent"
 
-### 6.2 Upload Health Certificate (via FileController)
+**Response:**
 
-**Endpoint:** `POST /api/File/health-certificate/{driverId}`
-**Authorization:** Bearer Token (Admin, Driver)
-**Content-Type:** multipart/form-data
+```json
+{
+  "fileId": "guid-here",
+  "message": "File uploaded successfully.",
+  "entityType": "UserAccount",
+  "entityId": "guid-here",
+  "fileType": "UserPhoto"
+}
+```
 
-**Form Data:**
+**Example for Template Upload:**
 
-- `file`: [Select file - PDF, JPG, PNG, max 5MB]
+```bash
+curl -X 'POST' \
+  'https://localhost:7061/api/File/upload' \
+  -H 'Authorization: Bearer {token}' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@driver_template.xlsx' \
+  -F 'entityType=Template' \
+  -F 'entityId=' \
+  -F 'fileType=Driver'
+```
 
-### 6.3 Upload License Image (via FileController)
+### 6.2 Download Template File (Admin Only)
 
-**Endpoint:** `POST /api/File/license-image/{driverLicenseId}`
-**Authorization:** Bearer Token (Admin, Driver)
-**Content-Type:** multipart/form-data
+**Endpoint:** `GET /api/File/template/{templateType}`
+**Authorization:** Bearer Token (Admin only)
 
-**Form Data:**
+**Template Types:**
 
-- `file`: [Select file - JPG, PNG, PDF, max 5MB]
+- `UserAccount` - Template for importing UserAccount
+- `Driver` - Template for importing Driver
+- `Parent` - Template for importing Parent
 
-### 6.4 Download File
+**Example:**
+
+```http
+GET /api/File/template/UserAccount
+Authorization: Bearer {admin_token}
+```
+
+**Expected Response:** Excel file download
+
+### 6.3 Download File
 
 **Endpoint:** `GET /api/File/{fileId}`
 **Authorization:** Bearer Token (All roles)
 
 **Expected Response:** File download
 
-### 6.5 Delete File
+### 6.4 Delete File
 
 **Endpoint:** `DELETE /api/File/{fileId}`
 **Authorization:** Bearer Token (Admin only)
 
 **Expected Response:** 204 No Content
+
+### 6.5 File Type Validation Rules
+
+| File Type         | Allowed Extensions                         | Max Size | Description                 |
+| ----------------- | ------------------------------------------ | -------- | --------------------------- |
+| UserPhoto         | .jpg, .jpeg, .png                          | 2MB      | User profile photos         |
+| HealthCertificate | .pdf, .jpg, .jpeg, .png                    | 5MB      | Driver health certificates  |
+| LicenseImage      | .jpg, .jpeg, .png, .pdf                    | 5MB      | Driver license images       |
+| Document          | .pdf, .doc, .docx, .txt                    | 10MB     | General documents           |
+| Image             | .jpg, .jpeg, .png, .gif, .bmp              | 5MB      | General images              |
+| UserAccount       | .xlsx                                      | 10MB     | UserAccount import template |
+| Driver            | .xlsx                                      | 10MB     | Driver import template      |
+| Parent            | .xlsx                                      | 10MB     | Parent import template      |
+| Default           | .pdf, .jpg, .jpeg, .png, .doc, .docx, .txt | 10MB     | Fallback for unknown types  |
+
+**Note:** Specific upload endpoints are already handled in their respective controllers:
+
+- Upload User Photo: `POST /api/UserAccount/{userId}/upload-user-photo`
+- Upload Health Certificate: `POST /api/Driver/{driverId}/upload-health-certificate`
+- Upload License Image: `POST /api/DriverLicense/license-image/{driverLicenseId}`
+
+**To use Excel templates for import:**
+
+1. **Upload template** using the upload endpoint with:
+
+   - `entityType`: "Template"
+   - `entityId`: "00000000-0000-0000-0000-000000000000"
+   - `fileType`: "UserAccount" | "Driver" | "Parent"
+
+2. **Download template** using the template endpoint:
+   - `GET /api/File/template/UserAccount`
+   - `GET /api/File/template/Driver`
+   - `GET /api/File/template/Parent`
+
+**Example workflow:**
+
+```bash
+# 1. Upload template (Admin only)
+POST /api/File/upload
+# Response: {"fileId": "12345678-1234-1234-1234-123456789012", ...}
+
+# 2. Download template (Admin only)
+GET /api/File/template/UserAccount
+# Response: Excel file download
+```
 
 ---
 
@@ -701,29 +774,29 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 
 ---
 
-## 8. Error Scenarios to Test
+## 9. Error Scenarios to Test
 
-### 8.1 Authentication Errors
+### 9.1 Authentication Errors
 
 - Invalid credentials
 - Expired token
 - Missing token
 - Invalid refresh token
 
-### 8.2 Authorization Errors
+### 9.2 Authorization Errors
 
 - Accessing Admin-only endpoints as Driver/Parent
 - Accessing Driver-only endpoints as Parent
 - Accessing Parent-only endpoints as Driver
 
-### 8.3 File Upload Errors
+### 9.3 File Upload Errors
 
 - File too large
 - Invalid file type
 - Missing file
 - Corrupted file
 
-### 8.4 Data Validation Errors
+### 9.4 Data Validation Errors
 
 - Invalid email format
 - Duplicate email
@@ -731,7 +804,7 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 - Missing required fields
 - Invalid date format
 
-### 8.5 Business Logic Errors
+### 9.5 Business Logic Errors
 
 - Uploading health certificate for non-driver user
 - Accessing non-existent files
