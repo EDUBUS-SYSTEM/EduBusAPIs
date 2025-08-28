@@ -736,3 +736,127 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 - Uploading health certificate for non-driver user
 - Accessing non-existent files
 - Importing duplicate data
+
+## 9. Vehicle Management
+### 9.1 Create Vehicle
+
+Endpoint: POST /api/Vehicle (Admin only)
+Request Body:
+```json
+{
+  "licensePlate": "43A-12345",
+  "capacity": 16,
+  "status": "active",
+  "adminId": "550e8400-e29b-41d4-a716-446655440001"
+}
+```
+
+Expected Response:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "licensePlate": "43A-12345",
+    "capacity": 16,
+    "status": "active",
+    "adminId": "550e8400-e29b-41d4-a716-446655440001",
+    "createdAt": "2025-08-28T10:00:00Z",
+    "isDeleted": false
+  },
+  "error": null
+}
+```
+### 9.2 Get All Vehicles
+
+Endpoint: GET /api/Vehicle?page=1&perPage=20&sortBy=createdAt&sortOrder=desc (All roles)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "licensePlate": "43A-12345",
+      "capacity": 16,
+      "status": "active",
+      "adminId": "uuid",
+      "createdAt": "2025-08-28T10:00:00Z"
+    }
+  ],
+  "error": null
+}
+```
+### 9.3 Get Vehicle by Id
+
+Endpoint: GET /api/Vehicle/{vehicleId} (All roles)
+Expected Response: Vehicle details with decrypted licensePlate (if implemented).
+
+### 9.4 Update Vehicle
+
+Endpoint: PUT /api/Vehicle/{vehicleId} (Admin only)
+Request Body:
+```json
+{
+  "licensePlate": "43A-67890",
+  "capacity": 20,
+  "status": "maintenance",
+  "adminId": "550e8400-e29b-41d4-a716-446655440001"
+}
+```
+### 9.5 Partial Update Vehicle
+
+Endpoint: PATCH /api/Vehicle/{vehicleId} (Admin only)
+Request Body:
+```json
+{
+  "status": "retired"
+}
+```
+### 9.6 Delete Vehicle
+
+Endpoint: DELETE /api/Vehicle/{vehicleId} (Admin only)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": null,
+  "error": null
+}
+```
+### 9.7 Assign Driver to Vehicle
+
+Endpoint: POST /api/Vehicle/{vehicleId}/drivers (Admin only)
+Request Body:
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "isPrimaryDriver": true,
+  "startTimeUtc": "2025-08-28T08:00:00Z",
+  "endTimeUtc": "2025-12-31T23:59:59Z"
+}
+```
+### 9.8 Get Drivers of Vehicle
+
+Endpoint: GET /api/Vehicle/{vehicleId}/drivers?isActive=true (All roles)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "driverId": "uuid",
+      "vehicleId": "uuid",
+      "isPrimaryDriver": true,
+      "startTimeUtc": "2025-08-28T08:00:00Z",
+      "endTimeUtc": "2025-12-31T23:59:59Z",
+      "driver": {
+        "id": "uuid",
+        "fullName": "John Driver",
+        "phoneNumber": "0123456789"
+      }
+    }
+  ],
+  "error": null
+}
+```

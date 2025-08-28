@@ -13,7 +13,7 @@ using NetTopologySuite.Geometries;
 namespace Data.Migrations
 {
     [DbContext(typeof(EduBusSqlContext))]
-    [Migration("20250825030138_Init")]
+    [Migration("20250828115240_Init")]
     partial class Init
     {
         /// <inheritdoc />

@@ -123,6 +123,8 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IParentRepository, ParentRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 builder.Services.AddScoped<IDriverLicenseRepository, DriverLicenseRepository>();
+builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
+builder.Services.AddScoped<IDriverVehicleRepository, DriverVehicleRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
@@ -134,6 +136,8 @@ builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddScoped<IDriverLicenseService, DriverLicenseService>();
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IVehicleService, VehicleService>();
+builder.Services.AddScoped<IDriverVehicleService, DriverVehicleService>();
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
 
 // Register DbContext for SqlRepository
