@@ -78,6 +78,12 @@ namespace APIs.Controllers
             return Ok(student);
         }
 
+        [HttpGet("parent/{parentId}")]
+        public async Task<IActionResult> GetStudentsByParent(Guid parentId)
+        {
+            var students = await _studentService.GetStudentsByParentAsync(parentId);
+            return Ok(students);
+        }
         
         [HttpPost("import")]
         [Consumes("multipart/form-data")]

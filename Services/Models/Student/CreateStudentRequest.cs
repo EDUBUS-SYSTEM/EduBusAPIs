@@ -9,8 +9,7 @@ namespace Services.Models.Student
 {
     public class CreateStudentRequest
     {
-        [Required(ErrorMessage = "ParentId is required.")]
-        public Guid ParentId { get; set; }
+        public Guid? ParentId { get; set; }
 
         [Required(ErrorMessage = "First name is required.")]
         [StringLength(50, ErrorMessage = "First name cannot exceed 50 characters.")]
@@ -19,5 +18,20 @@ namespace Services.Models.Student
         [Required(ErrorMessage = "Last name is required.")]
         [StringLength(50, ErrorMessage = "Last name cannot exceed 50 characters.")]
         public string LastName { get; set; } = null!;
+
+        [StringLength(32, ErrorMessage = "Phone number cannot exceed 32 characters.")]
+        [RegularExpression(@"^[0-9+\-\s()]+$", ErrorMessage = "Invalid phone number format.")]
+        public string ParentPhoneNumber { get; set; } = string.Empty;
+
+        // Custom validation
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (!ParentId.HasValue && string.IsNullOrWhiteSpace(ParentPhoneNumber))
+            {
+                yield return new ValidationResult(
+                    "Either ParentId or ParentPhoneNumber must be provided.",
+                    new[] { nameof(ParentId), nameof(ParentPhoneNumber) });
+            }
+        }
     }
 }

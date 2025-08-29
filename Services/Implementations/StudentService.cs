@@ -32,10 +32,14 @@ namespace Services.Implementations
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
-            var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId);
-            if (!parent.Any())
+            // If ParentId provided, ensure it exists; else allow null and keep ParentPhoneNumber for later linking
+            if (request.ParentId.HasValue)
             {
-                throw new KeyNotFoundException("Parent not found");
+                var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
+                if (!parent.Any())
+                {
+                    throw new KeyNotFoundException("Parent not found");
+                }
             }
 
             var student = _mapper.Map<Student>(request);
@@ -53,11 +57,19 @@ namespace Services.Implementations
             var student = await _studentRepository.FindAsync(request.Id);
             if (student == null)
                 throw new KeyNotFoundException("Student not found");
-            var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId);
-            if (!parent.Any())
+            
+            // If ParentId provided, ensure it exists
+            if (request.ParentId.HasValue)
             {
-                throw new KeyNotFoundException("Parent not found");
+                var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
+                if (!parent.Any())
+                {
+                    throw new KeyNotFoundException("Parent not found");
+                }
+                // Clear ParentPhoneNumber when linking to existing parent
+                request.ParentPhoneNumber = string.Empty;
             }
+            
             _mapper.Map(request, student);
             await _studentRepository.UpdateAsync(student);
             return _mapper.Map<StudentDto>(student);
@@ -72,6 +84,12 @@ namespace Services.Implementations
         public async Task<IEnumerable<StudentDto>> GetAllStudentsAsync()
         {
             var students = await _studentRepository.FindAllAsync() ?? new List<Student>();
+            return _mapper.Map<IEnumerable<StudentDto>>(students);
+        }
+
+        public async Task<IEnumerable<StudentDto>> GetStudentsByParentAsync(Guid parentId)
+        {
+            var students = await _studentRepository.FindByConditionAsync(st => st.ParentId == parentId) ?? new List<Student>();
             return _mapper.Map<IEnumerable<StudentDto>>(students);
         }
 
@@ -145,23 +163,25 @@ namespace Services.Implementations
                 {
                     try
                     {
+                        // Try to find existing parent by phone number
                         var parent = (await _parentRepository.FindByConditionAsync(p => p.PhoneNumber == studentDto.ParentPhoneNumber)).FirstOrDefault();
-                        if (parent == null)
-                        {
-                            result.FailedStudents.Add(new ImportStudentError
-                            {
-                                RowNumber = rowNumber,
-                                FirstName = studentDto.FirstName,
-                                LastName = studentDto.LastName,
-                                ParentPhoneNumber = studentDto.ParentPhoneNumber,
-                                ErrorMessage = "Parents phone number does not exist in the database."
-                            });
-                            continue;
-                        }
-
-                        // Map DTO in entity
+                        
+                        // Map DTO to entity
                         var student = _mapper.Map<Student>(studentDto);
-                        student.ParentId = parent.Id;
+                        
+                        if (parent != null)
+                        {
+                            // Link to existing parent and clear ParentPhoneNumber to avoid duplication
+                            student.ParentId = parent.Id;
+                            student.ParentPhoneNumber = string.Empty;
+                        }
+                        else
+                        {
+                            // Keep ParentPhoneNumber for later linking when parent registers
+                            student.ParentId = null;
+                            student.ParentPhoneNumber = studentDto.ParentPhoneNumber;
+                        }
+                        
                         student.IsActive = true;
                         // add database
                         var createdStudent = await _studentRepository.AddAsync(student);
@@ -192,7 +212,7 @@ namespace Services.Implementations
 
         public async Task<byte[]> ExportStudentsToExcelAsync()
         {
-            var students = await _studentRepository.FindAllAsync(st => st.Parent);
+            var students = await _studentRepository.FindAllAsync();
             if (students == null || !students.Any())
             {
                 return Array.Empty<byte>();
@@ -206,13 +226,27 @@ namespace Services.Implementations
                 worksheet.Cell(1, 2).Value = "Last Name";
                 worksheet.Cell(1, 3).Value = "Parent Name";
                 worksheet.Cell(1, 4).Value = "Parent Phone Number";
+                worksheet.Cell(1, 5).Value = "Status";
                 int row = 2;
                 foreach (var st in students)
                 {
                     worksheet.Cell(row, 1).Value = st.FirstName;
                     worksheet.Cell(row, 2).Value = st.LastName;
-                    worksheet.Cell(row, 3).Value = $"{st.Parent.FirstName} {st.Parent.LastName}";
-                    worksheet.Cell(row, 4).Value = st.Parent.PhoneNumber;
+                    
+                    if (st.ParentId.HasValue && st.Parent != null)
+                    {
+                        // Student is linked to parent
+                        worksheet.Cell(row, 3).Value = $"{st.Parent.FirstName} {st.Parent.LastName}";
+                        worksheet.Cell(row, 4).Value = st.Parent.PhoneNumber;
+                        worksheet.Cell(row, 5).Value = "Linked";
+                    }
+                    else
+                    {
+                        // Student is not linked to parent yet
+                        worksheet.Cell(row, 3).Value = "Not linked";
+                        worksheet.Cell(row, 4).Value = st.ParentPhoneNumber;
+                        worksheet.Cell(row, 5).Value = "Pending";
+                    }
                     row++;
                 }
 

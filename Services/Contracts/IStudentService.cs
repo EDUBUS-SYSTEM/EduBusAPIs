@@ -14,6 +14,7 @@ namespace Services.Contracts
         Task<StudentDto> UpdateStudentAsync(UpdateStudentRequest request);
         Task<StudentDto?> GetStudentByIdAsync(Guid id);
         Task<IEnumerable<StudentDto>> GetAllStudentsAsync();
+        Task<IEnumerable<StudentDto>> GetStudentsByParentAsync(Guid parentId);
         Task<ImportStudentResult> ImportStudentsFromExcelAsync(Stream excelFileStream);
         Task<byte[]> ExportStudentsToExcelAsync();
     }

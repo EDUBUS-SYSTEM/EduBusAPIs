@@ -181,6 +181,7 @@ namespace Data.Contexts.SqlServer
             modelBuilder.Entity<Student>(entity =>
             {
                 entity.HasIndex(e => e.ParentId, "IX_Students_ParentId");
+                entity.HasIndex(e => e.ParentPhoneNumber, "IX_Students_ParentPhoneNumber");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.CreatedAt)
@@ -195,7 +196,7 @@ namespace Data.Contexts.SqlServer
 
                 entity.HasOne(d => d.Parent).WithMany(p => p.Students)
                     .HasForeignKey(d => d.ParentId)
-                    .OnDelete(DeleteBehavior.ClientSetNull);
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<StudentGradeEnrollment>(entity =>

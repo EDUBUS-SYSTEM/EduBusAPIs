@@ -11,8 +11,8 @@ namespace Services.Models.Student
     {
         [Required(ErrorMessage = "StudentId is required.")]
         public Guid Id { get; set; }
-        [Required(ErrorMessage = "ParentId is required.")]
-        public Guid ParentId { get; set; }
+        
+        public Guid? ParentId { get; set; }
 
         [Required(ErrorMessage = "First name is required.")]
         [StringLength(50, ErrorMessage = "First name cannot exceed 50 characters.")]
@@ -21,6 +21,11 @@ namespace Services.Models.Student
         [Required(ErrorMessage = "Last name is required.")]
         [StringLength(50, ErrorMessage = "Last name cannot exceed 50 characters.")]
         public string LastName { get; set; } = null!;
+        
         public bool IsActive { get; set; } = true;
+
+        [StringLength(32, ErrorMessage = "Phone number cannot exceed 32 characters.")]
+        [RegularExpression(@"^[0-9+\-\s()]+$", ErrorMessage = "Invalid phone number format.")]
+        public string ParentPhoneNumber { get; set; } = string.Empty;
     }
 }
