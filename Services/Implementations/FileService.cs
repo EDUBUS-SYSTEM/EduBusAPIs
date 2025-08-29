@@ -24,6 +24,47 @@ namespace Services.Implementations
             _driverLicenseRepository = driverLicenseRepository;
         }
 
+        public async Task<Guid> UploadFileAsync(Guid entityId, string entityType, string fileType, IFormFile file)
+        {
+            // Validate file based on file type
+            var (allowedExtensions, maxSize) = GetFileTypeValidation(fileType);
+            await ValidateFileAsync(file, allowedExtensions, maxSize);
+
+            // For template files, use Guid.Empty as entityId
+            var actualEntityId = entityType.ToLower() == "template" ? Guid.Empty : entityId;
+
+            // Deactivate existing file of the same type for this entity
+            var existingFile = await _fileStorageRepository.GetActiveFileByEntityAsync(actualEntityId, entityType, fileType);
+            if (existingFile != null)
+            {
+                await _fileStorageRepository.DeactivateFileAsync(existingFile.Id);
+            }
+
+            var fileStorage = new FileStorage
+            {
+                FileName = $"{fileType.ToLower()}_{actualEntityId}_{DateTime.UtcNow:yyyyMMddHHmmss}{Path.GetExtension(file.FileName)}",
+                OriginalFileName = file.FileName,
+                ContentType = file.ContentType,
+                FileSize = file.Length,
+                FileContent = await GetFileBytesAsync(file),
+                FileType = fileType,
+                EntityId = actualEntityId,
+                EntityType = entityType,
+                UploadedBy = actualEntityId, // Assuming the entity ID is the creator
+                IsActive = true
+            };
+
+            var createdFile = await _fileStorageRepository.AddAsync(fileStorage);
+
+            // Update related entity if needed (skip for template files)
+            if (entityType.ToLower() != "template")
+            {
+                await UpdateEntityWithFileId(entityId, entityType, fileType, createdFile.Id);
+            }
+
+            return createdFile.Id;
+        }
+
         public async Task<Guid> UploadUserPhotoAsync(Guid userId, IFormFile file)
         {
             await ValidateFileAsync(file, new[] { ".jpg", ".jpeg", ".png" }, 2 * 1024 * 1024); // 2MB max
@@ -168,6 +209,78 @@ namespace Services.Implementations
         {
             var userAccount = await _userAccountRepository.FindAsync(userId);
             return userAccount?.UserPhotoFileId;
+        }
+
+        public async Task<FileStorage?> GetTemplateFileAsync(string templateType)
+        {
+            if (string.IsNullOrWhiteSpace(templateType))
+            {
+                return null;
+            }
+
+            var normalized = templateType.Trim().ToLowerInvariant();
+            var resolvedFileType = normalized switch
+            {
+                "useraccount" => "UserAccount",
+                "driver" => "Driver",
+                "parent" => "Parent",
+                _ => templateType
+            };
+
+            var templateFile = await _fileStorageRepository.GetActiveFileByEntityAsync(Guid.Empty, "Template", resolvedFileType);
+            return templateFile;
+        }
+
+        private (string[] allowedExtensions, long maxSize) GetFileTypeValidation(string fileType)
+        {
+            return fileType.ToLower() switch
+            {
+                "userphoto" => (new[] { ".jpg", ".jpeg", ".png" }, 2 * 1024 * 1024), // 2MB
+                "healthcertificate" => (new[] { ".pdf", ".jpg", ".jpeg", ".png" }, 5 * 1024 * 1024), // 5MB
+                "licenseimage" => (new[] { ".jpg", ".jpeg", ".png", ".pdf" }, 5 * 1024 * 1024), // 5MB
+                "document" => (new[] { ".pdf", ".doc", ".docx", ".txt" }, 10 * 1024 * 1024), // 10MB
+                "image" => (new[] { ".jpg", ".jpeg", ".png", ".gif", ".bmp" }, 5 * 1024 * 1024), // 5MB
+                "useraccount" => (new[] { ".xlsx" }, 10 * 1024 * 1024), // 10MB - Excel template
+                "driver" => (new[] { ".xlsx" }, 10 * 1024 * 1024), // 10MB - Excel template
+                "parent" => (new[] { ".xlsx" }, 10 * 1024 * 1024), // 10MB - Excel template
+                _ => (new[] { ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx", ".txt" }, 10 * 1024 * 1024) // Default: 10MB
+            };
+        }
+
+        private async Task UpdateEntityWithFileId(Guid entityId, string entityType, string fileType, Guid fileId)
+        {
+            switch (entityType.ToLower())
+            {
+                case "useraccount" when fileType.ToLower() == "userphoto":
+                    var userAccount = await _userAccountRepository.FindAsync(entityId);
+                    if (userAccount != null)
+                    {
+                        userAccount.UserPhotoFileId = fileId;
+                        userAccount.UpdatedAt = DateTime.UtcNow;
+                        await _userAccountRepository.UpdateAsync(userAccount);
+                    }
+                    break;
+
+                case "driver" when fileType.ToLower() == "healthcertificate":
+                    var driver = await _driverRepository.FindAsync(entityId);
+                    if (driver != null)
+                    {
+                        driver.HealthCertificateFileId = fileId;
+                        driver.UpdatedAt = DateTime.UtcNow;
+                        await _driverRepository.UpdateAsync(driver);
+                    }
+                    break;
+
+                case "driverlicense" when fileType.ToLower() == "licenseimage":
+                    var driverLicense = await _driverLicenseRepository.FindAsync(entityId);
+                    if (driverLicense != null)
+                    {
+                        driverLicense.LicenseImageFileId = fileId;
+                        driverLicense.UpdatedAt = DateTime.UtcNow;
+                        await _driverLicenseRepository.UpdateAsync(driverLicense);
+                    }
+                    break;
+            }
         }
 
         private async Task ValidateFileAsync(IFormFile file, string[] allowedExtensions, long maxSize)

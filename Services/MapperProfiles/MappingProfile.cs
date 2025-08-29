@@ -5,11 +5,6 @@ using Services.Models.Parent;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.MapperProfiles
@@ -49,6 +44,10 @@ namespace Services.MapperProfiles
             CreateMap<UpdateStudentGradeResponse, StudentGradeEnrollment>();
             CreateMap<StudentGradeEnrollment, StudentGradeDto>();
 
+            // user account mapping
+            CreateMap<UserAccount, UserDto>();
+            CreateMap<UserAccount, UserResponse>();
+            CreateMap<UserUpdateRequest, UserAccount>();
         }
     }
 }
