@@ -43,6 +43,7 @@ namespace Services.MapperProfiles
             CreateMap<CreateStudentRequest, Student>();
             CreateMap<UpdateStudentRequest, Student>();
             CreateMap<ImportStudentDto, Student>();
+            CreateMap<Student, ImportStudentSuccess>();
             //student grade mapping
             CreateMap<CreateStudentGradeRequest, StudentGradeEnrollment>();
             CreateMap<UpdateStudentGradeResponse, StudentGradeEnrollment>();

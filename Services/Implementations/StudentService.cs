@@ -50,11 +50,11 @@ namespace Services.Implementations
             return _mapper.Map<StudentDto>(student);
         }
 
-        public async Task<StudentDto> UpdateStudentAsync(UpdateStudentRequest request)
+        public async Task<StudentDto> UpdateStudentAsync(Guid id, UpdateStudentRequest request)
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
-            var student = await _studentRepository.FindAsync(request.Id);
+            var student = await _studentRepository.FindAsync(id);
             if (student == null)
                 throw new KeyNotFoundException("Student not found");
             
@@ -157,6 +157,51 @@ namespace Services.Implementations
                 
                 // Set total number of records processed
                 result.TotalProcessed = rows.Count();
+
+                // Check for duplicates in Excel file
+                var duplicateGroups = validStudentDtos
+                    .GroupBy(x => new { x.dto.FirstName, x.dto.LastName, x.dto.ParentPhoneNumber })
+                    .Where(g => g.Count() > 1);
+                
+                foreach (var duplicateGroup in duplicateGroups)
+                {
+                    var duplicates = duplicateGroup.ToList();
+                    // Keep the first record, mark the remaining records as errors
+                    for (int i = 1; i < duplicates.Count; i++)
+                    {
+                        result.FailedStudents.Add(new ImportStudentError
+                        {
+                            RowNumber = duplicates[i].rowNumber,
+                            FirstName = duplicates[i].dto.FirstName,
+                            LastName = duplicates[i].dto.LastName,
+                            ParentPhoneNumber = duplicates[i].dto.ParentPhoneNumber,
+                            ErrorMessage = "Duplicate student found in Excel file."
+                        });
+                        validStudentDtos.Remove(duplicates[i]);
+                    }
+                }
+
+                // Check for duplicates in database
+                foreach (var (studentDto, rowNumber) in validStudentDtos.ToList())
+                {
+                    var existingStudent = (await _studentRepository.FindByConditionAsync(s => 
+                        s.FirstName == studentDto.FirstName && 
+                        s.LastName == studentDto.LastName && 
+                        s.ParentPhoneNumber == studentDto.ParentPhoneNumber)).FirstOrDefault();
+                    
+                    if (existingStudent != null)
+                    {
+                        result.FailedStudents.Add(new ImportStudentError
+                        {
+                            RowNumber = rowNumber,
+                            FirstName = studentDto.FirstName,
+                            LastName = studentDto.LastName,
+                            ParentPhoneNumber = studentDto.ParentPhoneNumber,
+                            ErrorMessage = "Student already exists in database."
+                        });
+                        validStudentDtos.Remove((studentDto, rowNumber));
+                    }
+                }
 
                 // test each student
                 foreach (var (studentDto, rowNumber) in validStudentDtos)

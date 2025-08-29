@@ -9,9 +9,6 @@ namespace Services.Models.Student
 {
     public class UpdateStudentRequest
     {
-        [Required(ErrorMessage = "StudentId is required.")]
-        public Guid Id { get; set; }
-        
         public Guid? ParentId { get; set; }
 
         [Required(ErrorMessage = "First name is required.")]

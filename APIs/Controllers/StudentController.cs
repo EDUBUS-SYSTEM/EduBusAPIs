@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Implementations;
 using Services.Models.Student;
+using Microsoft.AspNetCore.Authorization;
+using Constants;
 
 namespace APIs.Controllers
 {
@@ -17,6 +19,31 @@ namespace APIs.Controllers
             _studentService = studentService;
         }
 
+        private bool IsAuthorizedToAccessStudent(Guid studentParentId)
+        {
+            var isAdmin = User.IsInRole(Roles.Admin);
+            if (isAdmin) return true;
+
+            var parentIdClaim = User.FindFirst("ParentId")?.Value;
+            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
+                return false;
+
+            return studentParentId == currentParentId;
+        }
+
+        private bool IsAuthorizedToAccessParent(Guid parentId)
+        {
+            var isAdmin = User.IsInRole(Roles.Admin);
+            if (isAdmin) return true;
+
+            var parentIdClaim = User.FindFirst("ParentId")?.Value;
+            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
+                return false;
+
+            return parentId == currentParentId;
+        }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost]
         public async Task<IActionResult> CreateStudent([FromBody] CreateStudentRequest request)
         {
@@ -40,12 +67,13 @@ namespace APIs.Controllers
             
         }
 
-        [HttpPut]
-        public async Task<IActionResult> UpdateStudent([FromBody] UpdateStudentRequest request)
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateStudent(Guid id, [FromBody] UpdateStudentRequest request)
         {
             try
             {
-                var student = await _studentService.UpdateStudentAsync(request);
+                var student = await _studentService.UpdateStudentAsync(id, request);
                 return Ok(student);
             }
             catch (ArgumentException ex)
@@ -62,6 +90,8 @@ namespace APIs.Controllers
             }
             
         }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpGet]
         public async Task<IActionResult> GetAllStudents()
         {
@@ -69,22 +99,49 @@ namespace APIs.Controllers
             return Ok(students);
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         public async Task<IActionResult> GetStudentById(Guid id)
         {
             var student = await _studentService.GetStudentByIdAsync(id);
             if (student == null)
                 return NotFound();
+
+            // Check authorization - only allow access if student has a parent and user is authorized
+            if (student.ParentId.HasValue)
+            {
+                if (!IsAuthorizedToAccessStudent(student.ParentId.Value))
+                {
+                    return Forbid();
+                }
+            }
+            else
+            {
+                // Student without parent - only admin can access
+                if (!User.IsInRole(Roles.Admin))
+                {
+                    return Forbid();
+                }
+            }
+
             return Ok(student);
         }
 
+        [Authorize]
         [HttpGet("parent/{parentId}")]
         public async Task<IActionResult> GetStudentsByParent(Guid parentId)
         {
+            // Check authorization
+            if (!IsAuthorizedToAccessParent(parentId))
+            {
+                return Forbid();
+            }
+
             var students = await _studentService.GetStudentsByParentAsync(parentId);
             return Ok(students);
         }
-        
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("import")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> ImportStudents(IFormFile file)
@@ -103,19 +160,21 @@ namespace APIs.Controllers
                 return Ok(new
                 {
                     TotalProcessed = result.TotalProcessed,
-                    SuccessUsers = result.SuccessfulStudents,
-                    FailedUsers = result.FailedStudents
+                    SuccessfulStudents = result.SuccessfulStudents,
+                    FailedStudents = result.FailedStudents
                 });
             }
             catch (Exception ex)
             {
                 return StatusCode(500, new
                 {
-                    Message = "An error occurred while importing parents.",
+                    Message = "An error occurred while importing students.",
                     Details = ex.Message
                 });
             }
         }
+
+        [Authorize(Roles = Roles.Admin)]
         [HttpGet("export")]
         public async Task<IActionResult> ExportStudents()
         {
