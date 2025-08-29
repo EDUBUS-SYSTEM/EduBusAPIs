@@ -2,7 +2,9 @@
 
 public partial class Student : BaseDomain
 {
-    public Guid ParentId { get; set; }
+    public Guid? ParentId { get; set; }
+
+    public string ParentPhoneNumber { get; set; } = string.Empty;
 
     public string FirstName { get; set; } = null!;
 
@@ -12,7 +14,7 @@ public partial class Student : BaseDomain
 
     public virtual ICollection<Image> Images { get; set; } = new List<Image>();
 
-    public virtual Parent Parent { get; set; } = null!;
+    public virtual Parent? Parent { get; set; }
 
     public virtual ICollection<StudentGradeEnrollment> StudentGradeEnrollments { get; set; } = new List<StudentGradeEnrollment>();
 

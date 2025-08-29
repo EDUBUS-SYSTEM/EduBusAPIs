@@ -12,25 +12,26 @@ namespace Data.Repos.SqlServer
 {
     public class UserAccountRepository : SqlRepository<UserAccount>, IUserAccountRepository
     {
-        private readonly EduBusSqlContext _context;
-        public UserAccountRepository(EduBusSqlContext context) : base(context) => _context = context;
+        public UserAccountRepository(DbContext dbContext) : base(dbContext)
+        {
+        }
 
         public async Task<UserAccount?> GetByEmailAsync(string email)
         {
-            return await _context.UserAccounts
+            return await _table
                 .Where(u => !u.IsDeleted && u.Email == email)
                 .FirstOrDefaultAsync();
         }
 
         public async Task<bool> IsEmailExistAsync(string email)
         {
-            return await _context.UserAccounts
+            return await _table
                 .AnyAsync(u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
         }
 
         public async Task<bool> IsPhoneNumberExistAsync(string phoneNumber)
         {
-            return await _context.UserAccounts
+            return await _table
                   .AnyAsync(u => u.PhoneNumber == phoneNumber);
         }
     }
