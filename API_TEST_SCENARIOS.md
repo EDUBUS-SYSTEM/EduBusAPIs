@@ -387,6 +387,142 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 - `404`: Health certificate not found
 - `500`: Server error
 
+## 4. Driver License Management
+
+### 4.1 Create Driver License
+
+**Endpoint:** `POST /api/DriverLicense`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Create a new driver license. Only administrators can create driver licenses.
+
+**Request Body:**
+
+```json
+{
+  "driverId": "12345678-1234-1234-1234-123456789012",
+  "licenseNumber": "DL123456789",
+  "dateOfIssue": "2023-01-15",
+  "issuedBy": "Department of Motor Vehicles"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "id": "87654321-4321-4321-4321-210987654321",
+  "driverId": "12345678-1234-1234-1234-123456789012",
+  "dateOfIssue": "2023-01-15T00:00:00",
+  "issuedBy": "Department of Motor Vehicles",
+  "licenseImageFileId": null,
+  "createdBy": "12345678-1234-1234-1234-123456789012",
+  "updatedBy": null,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": null
+}
+```
+
+### 4.2 Get Driver License by Driver ID
+
+**Endpoint:** `GET /api/DriverLicense/driver/{driverId}`
+**Authorization:** Bearer Token (All authenticated users)
+
+**Description:** Get driver license information. Drivers can view their own license, while administrators can view any driver's license.
+
+**Expected Response:**
+
+```json
+{
+  "id": "87654321-4321-4321-4321-210987654321",
+  "driverId": "12345678-1234-1234-1234-123456789012",
+  "dateOfIssue": "2023-01-15T00:00:00",
+  "issuedBy": "Department of Motor Vehicles",
+  "licenseImageFileId": "11111111-1111-1111-1111-111111111111",
+  "createdBy": "12345678-1234-1234-1234-123456789012",
+  "updatedBy": null,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": null
+}
+```
+
+**Error Responses:**
+
+- `403`: Forbidden - Driver trying to view another driver's license
+- `404`: Driver license not found
+
+### 4.3 Update Driver License
+
+**Endpoint:** `PUT /api/DriverLicense/{id}`
+**Authorization:** Bearer Token (All authenticated users)
+
+**Description:** Update driver license information. Drivers can update their own license, while administrators can update any driver's license.
+
+**Request Body:**
+
+```json
+{
+  "driverId": "12345678-1234-1234-1234-123456789012",
+  "licenseNumber": "DL987654321",
+  "dateOfIssue": "2023-06-15",
+  "issuedBy": "Department of Motor Vehicles"
+}
+```
+
+**Expected Response:** Returns updated driver license object
+
+**Error Responses:**
+
+- `400`: Validation errors or business rule violations
+- `403`: Forbidden - Driver trying to update another driver's license
+- `404`: Driver license not found
+
+### 4.4 Delete Driver License
+
+**Endpoint:** `DELETE /api/DriverLicense/{id}`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Delete a driver license. Only administrators can delete driver licenses.
+
+**Expected Response:** 204 No Content
+
+**Error Responses:**
+
+- `404`: Driver license not found
+
+### 4.5 Upload License Image
+
+**Endpoint:** `POST /api/DriverLicense/license-image/{driverLicenseId}`
+**Authorization:** Bearer Token (All authenticated users)
+**Content-Type:** multipart/form-data
+
+**Description:** Upload a license image for a driver license. Drivers can upload their own license image, while administrators can upload license images for any driver.
+
+**Form Data:**
+
+- `file`: [Select file - JPG, PNG, PDF, max 5MB]
+
+**Expected Response:**
+
+```json
+{
+  "fileId": "11111111-1111-1111-1111-111111111111",
+  "message": "License image uploaded successfully."
+}
+```
+
+**Error Responses:**
+
+- `400`: No file provided or invalid file
+- `403`: Forbidden - Driver trying to upload license image for another driver
+- `404`: Driver license not found
+- `500`: Server error
+
+---
+
+## 5. Parent Management
+
+=======
 ---
 
 ## 4. Driver License Management
@@ -587,7 +723,6 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 ## 6. File Management
 
 ### 6.1 Upload File (Admin Only)
-
 **Endpoint:** `POST /api/File/upload`
 **Authorization:** Bearer Token (Admin only)
 **Content-Type:** multipart/form-data
@@ -600,7 +735,6 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 - `fileType`: "UserPhoto" | "HealthCertificate" | "LicenseImage" | "Document" | "Image" | "UserAccount" | "Driver" | "Parent"
 
 **Response:**
-
 ```json
 {
   "fileId": "guid-here",
@@ -809,3 +943,127 @@ GET /api/File/template/UserAccount
 - Uploading health certificate for non-driver user
 - Accessing non-existent files
 - Importing duplicate data
+
+## 9. Vehicle Management
+### 9.1 Create Vehicle
+
+Endpoint: POST /api/Vehicle (Admin only)
+Request Body:
+```json
+{
+  "licensePlate": "43A-12345",
+  "capacity": 16,
+  "status": "active",
+  "adminId": "550e8400-e29b-41d4-a716-446655440001"
+}
+```
+
+Expected Response:
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "licensePlate": "43A-12345",
+    "capacity": 16,
+    "status": "active",
+    "adminId": "550e8400-e29b-41d4-a716-446655440001",
+    "createdAt": "2025-08-28T10:00:00Z",
+    "isDeleted": false
+  },
+  "error": null
+}
+```
+### 9.2 Get All Vehicles
+
+Endpoint: GET /api/Vehicle?page=1&perPage=20&sortBy=createdAt&sortOrder=desc (All roles)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "licensePlate": "43A-12345",
+      "capacity": 16,
+      "status": "active",
+      "adminId": "uuid",
+      "createdAt": "2025-08-28T10:00:00Z"
+    }
+  ],
+  "error": null
+}
+```
+### 9.3 Get Vehicle by Id
+
+Endpoint: GET /api/Vehicle/{vehicleId} (All roles)
+Expected Response: Vehicle details with decrypted licensePlate (if implemented).
+
+### 9.4 Update Vehicle
+
+Endpoint: PUT /api/Vehicle/{vehicleId} (Admin only)
+Request Body:
+```json
+{
+  "licensePlate": "43A-67890",
+  "capacity": 20,
+  "status": "maintenance",
+  "adminId": "550e8400-e29b-41d4-a716-446655440001"
+}
+```
+### 9.5 Partial Update Vehicle
+
+Endpoint: PATCH /api/Vehicle/{vehicleId} (Admin only)
+Request Body:
+```json
+{
+  "status": "retired"
+}
+```
+### 9.6 Delete Vehicle
+
+Endpoint: DELETE /api/Vehicle/{vehicleId} (Admin only)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": null,
+  "error": null
+}
+```
+### 9.7 Assign Driver to Vehicle
+
+Endpoint: POST /api/Vehicle/{vehicleId}/drivers (Admin only)
+Request Body:
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "isPrimaryDriver": true,
+  "startTimeUtc": "2025-08-28T08:00:00Z",
+  "endTimeUtc": "2025-12-31T23:59:59Z"
+}
+```
+### 9.8 Get Drivers of Vehicle
+
+Endpoint: GET /api/Vehicle/{vehicleId}/drivers?isActive=true (All roles)
+Expected Response:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "driverId": "uuid",
+      "vehicleId": "uuid",
+      "isPrimaryDriver": true,
+      "startTimeUtc": "2025-08-28T08:00:00Z",
+      "endTimeUtc": "2025-12-31T23:59:59Z",
+      "driver": {
+        "id": "uuid",
+        "fullName": "John Driver",
+        "phoneNumber": "0123456789"
+      }
+    }
+  ],
+  "error": null
+}
+```

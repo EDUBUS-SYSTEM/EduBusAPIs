@@ -1,10 +1,13 @@
 ﻿using AutoMapper;
 using Data.Models;
 using Services.Models.Driver;
+using Services.Models.DriverVehicle;
 using Services.Models.Parent;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
+using Services.Models.Vehicle;
+
 using Utils;
 
 namespace Services.MapperProfiles
@@ -48,6 +51,15 @@ namespace Services.MapperProfiles
             CreateMap<UserAccount, UserDto>();
             CreateMap<UserAccount, UserResponse>();
             CreateMap<UserUpdateRequest, UserAccount>();
+
+            //vehicle mapping
+            CreateMap<Vehicle, VehicleDto>();
+            CreateMap<VehicleCreateRequest, Vehicle>();
+            CreateMap<VehicleUpdateRequest, Vehicle>();
+
+            //DriverVehicle mapping
+            CreateMap<DriverVehicle, DriverAssignmentDto>();
+            CreateMap<Driver, DriverInfoDto>();
         }
     }
 }
