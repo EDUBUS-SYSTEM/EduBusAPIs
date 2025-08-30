@@ -15,12 +15,14 @@ namespace Services.Implementations
     {
         private readonly IUserAccountRepository _userRepo;
         private readonly IRefreshTokenRepository _refreshRepo;
+        private readonly IParentRepository _parentRepo;
         private readonly IConfiguration _config;
 
-        public AuthService(IUserAccountRepository userRepo, IRefreshTokenRepository refreshRepo, IConfiguration config)
+        public AuthService(IUserAccountRepository userRepo, IRefreshTokenRepository refreshRepo,IParentRepository parentRepo, IConfiguration config)
         {
             _userRepo = userRepo;
             _refreshRepo = refreshRepo;
+            _parentRepo = parentRepo;
             _config = config;
         }
 
@@ -109,11 +111,20 @@ namespace Services.Implementations
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Role, role)
+    };
+
+            if (role == Roles.Parent)
             {
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimTypes.Role, role)
-            };
+                var parent = _parentRepo.FindAsync(user.Id).Result;
+                if (parent != null)
+                {
+                    claims.Add(new Claim("ParentId", parent.Id.ToString()));
+                }
+            }
 
             var expires = DateTime.UtcNow.AddMinutes(ttlMinutes);
 
@@ -127,6 +138,7 @@ namespace Services.Implementations
 
             return (new JwtSecurityTokenHandler().WriteToken(token), expires);
         }
+
 
         private bool VerifyPassword(string plainPassword, byte[] hashedBytes)
         {
