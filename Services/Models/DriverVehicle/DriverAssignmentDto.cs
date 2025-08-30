@@ -17,5 +17,6 @@ namespace Services.Models.DriverVehicle
         public DriverInfoDto? Driver { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public Guid AssignedByAdminId { get; set; }
     }
 }

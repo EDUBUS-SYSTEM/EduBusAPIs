@@ -36,12 +36,12 @@ namespace Services.Implementations
             };
         }
 
-        public async Task<DriverAssignmentResponse?> AssignDriverAsync(Guid vehicleId, DriverAssignmentRequest dto)
+        public async Task<DriverAssignmentResponse?> AssignDriverAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId)
         {
             var vehicle = await _vehicleRepo.FindAsync(vehicleId);
             if (vehicle == null || vehicle.IsDeleted) return null;
 
-            if (dto.EndTimeUtc.HasValue && dto.EndTimeUtc < dto.StartTimeUtc)
+            if (dto.EndTimeUtc.HasValue && dto.EndTimeUtc <= dto.StartTimeUtc)
                 throw new InvalidOperationException("End time cannot be earlier than start time.");
 
             var alreadyAssigned = await _driverVehicleRepo.IsDriverAlreadyAssignedAsync(vehicleId, dto.DriverId, true);
@@ -59,10 +59,13 @@ namespace Services.Implementations
 
             var created = await _driverVehicleRepo.AssignDriverAsync(entity);
 
+            var dtoResult = _mapper.Map<DriverAssignmentDto>(created);
+            dtoResult.AssignedByAdminId = adminId; 
+
             return new DriverAssignmentResponse
             {
                 Success = true,
-                Data = _mapper.Map<DriverAssignmentDto>(created)
+                Data = dtoResult
             };
         }
 

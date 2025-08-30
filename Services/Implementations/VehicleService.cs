@@ -52,10 +52,17 @@ namespace Services.Implementations
             };
         }
 
-        public async Task<VehicleResponse> CreateAsync(VehicleCreateRequest dto)
+        public async Task<VehicleResponse> CreateAsync(VehicleCreateRequest dto, Guid adminId)
         {
-            var vehicle = _mapper.Map<Vehicle>(dto);
-            vehicle.HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate); 
+            var vehicle = new Vehicle
+            {
+                Id = Guid.NewGuid(),
+                HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate),
+                Capacity = (int)dto.Capacity,        
+                Status = dto.Status.ToString(),       
+                AdminId = adminId,
+                CreatedAt = DateTime.UtcNow
+            };
 
             await _vehicleRepo.AddAsync(vehicle);
 
@@ -75,9 +82,8 @@ namespace Services.Implementations
             if (vehicle == null || vehicle.IsDeleted) return null;
 
             vehicle.HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate);
-            vehicle.Capacity = dto.Capacity;
-            vehicle.Status = dto.Status;
-            vehicle.AdminId = dto.AdminId;
+            vehicle.Capacity = (int)dto.Capacity;    
+            vehicle.Status = dto.Status.ToString();  
             vehicle.UpdatedAt = DateTime.UtcNow;
 
             await _vehicleRepo.UpdateAsync(vehicle);
@@ -101,10 +107,10 @@ namespace Services.Implementations
                 vehicle.HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate);
 
             if (dto.Capacity.HasValue)
-                vehicle.Capacity = dto.Capacity.Value;
+                vehicle.Capacity = (int)dto.Capacity.Value;
 
-            if (!string.IsNullOrEmpty(dto.Status))
-                vehicle.Status = dto.Status;
+            if (dto.Status.HasValue)
+                vehicle.Status = dto.Status.Value.ToString();
 
             vehicle.UpdatedAt = DateTime.UtcNow;
             await _vehicleRepo.UpdateAsync(vehicle);

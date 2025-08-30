@@ -4,6 +4,7 @@ using Services.Contracts;
 using Services.Models.Vehicle;
 using Services.Models.DriverVehicle;
 using Constants;
+using System.Security.Claims;
 
 namespace APIs.Controllers
 {
@@ -61,7 +62,13 @@ namespace APIs.Controllers
         [HttpPost]
         public async Task<ActionResult<VehicleResponse>> CreateVehicle([FromBody] VehicleCreateRequest request)
         {
-            var result = await _vehicleService.CreateAsync(request);
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            var result = await _vehicleService.CreateAsync(request, adminId);
             return CreatedAtAction(nameof(GetVehicleById), new { vehicleId = result.Data!.Id }, result);
         }
 
@@ -127,9 +134,15 @@ namespace APIs.Controllers
         [HttpPost("{vehicleId}/drivers")]
         public async Task<ActionResult<DriverAssignmentResponse>> AssignDriver(Guid vehicleId, [FromBody] DriverAssignmentRequest request)
         {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
             try
             {
-                var result = await _driveVveicleService.AssignDriverAsync(vehicleId, request);
+                var result = await _driveVveicleService.AssignDriverAsync(vehicleId, request, adminId);
                 if (result == null)
                     return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
 
