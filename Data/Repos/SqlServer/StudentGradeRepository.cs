@@ -9,11 +9,10 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.SqlServer
 {
-    public class ParentRepository : SqlRepository<Parent>, IParentRepository
+    public class StudentGradeRepository : SqlRepository<StudentGradeEnrollment>, IStudentGradeRepository
     {
-        public ParentRepository(DbContext dbContext) : base(dbContext)
+        public StudentGradeRepository(DbContext dbContext) : base(dbContext)
         {
         }
-
     }
 }

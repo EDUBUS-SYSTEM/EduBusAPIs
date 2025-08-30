@@ -7,8 +7,7 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.Interfaces
 {
-    public interface IParentRepository: ISqlRepository<Parent>
+    public interface IStudentGradeRepository : ISqlRepository<StudentGradeEnrollment>
     {
-        
     }
 }

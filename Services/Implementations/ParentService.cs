@@ -1,5 +1,4 @@
 ﻿using AutoMapper;
-using Azure;
 using ClosedXML.Excel;
 using Data.Models;
 using Data.Repos.Interfaces;
@@ -14,13 +13,15 @@ namespace Services.Implementations
     {
         private readonly IParentRepository _parentRepository;
         private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IStudentRepository _studentRepository;
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         public ParentService(IParentRepository parentRepository, IUserAccountRepository userAccountRepository,
-            IMapper mapper, IEmailService emailService)
+            IStudentRepository studentRepository, IMapper mapper, IEmailService emailService)
         {
             _parentRepository = parentRepository;
             _userAccountRepository = userAccountRepository;
+            _studentRepository = studentRepository;
             _mapper = mapper;
             _emailService = emailService;
         }
@@ -40,6 +41,16 @@ namespace Services.Implementations
             var hashedPassword = SecurityHelper.HashPassword(rawPassword);
             parent.HashedPassword = hashedPassword;
             var createdParent = await _parentRepository.AddAsync(parent);
+
+            // After parent is created, link existing students by phone number
+            var studentsNeedingLink = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == dto.PhoneNumber);
+            foreach (var student in studentsNeedingLink)
+            {
+                student.ParentId = createdParent.Id;
+                student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
+                await _studentRepository.UpdateAsync(student);
+            }
+
             var response = _mapper.Map<CreateUserResponse>(createdParent);
             response.Password = rawPassword;
             var mailContent = CreateWelcomeEmailTemplate(createdParent.FirstName, createdParent.LastName, createdParent.Email, rawPassword );
@@ -229,8 +240,16 @@ namespace Services.Implementations
                         var hashedPassword = SecurityHelper.HashPassword(rawPassword);
                         parent.HashedPassword = hashedPassword;
 
-                        // Thêm vào database
                         var createdParent = await _parentRepository.AddAsync(parent);
+                        
+                        // After parent is created, link existing students by phone number
+                        var studentsNeedingLink = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == parentDto.PhoneNumber);
+                        foreach (var student in studentsNeedingLink)
+                        {
+                            student.ParentId = createdParent.Id;
+                            student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
+                            await _studentRepository.UpdateAsync(student);
+                        }
                         
                         var successResult = _mapper.Map<ImportUserSuccess>(createdParent);
                         successResult.RowNumber = rowNumber;
@@ -260,9 +279,27 @@ namespace Services.Implementations
                 throw;
             }
         }
+
+        public async Task<int> LinkStudentsByPhoneNumberAsync(string phoneNumber)
+        {
+            if (string.IsNullOrWhiteSpace(phoneNumber)) return 0;
+            var parent = (await _parentRepository.FindByConditionAsync(p => p.PhoneNumber == phoneNumber)).FirstOrDefault();
+            if (parent == null) return 0;
+            var students = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == phoneNumber);
+            int updated = 0;
+            foreach (var student in students)
+            {
+                student.ParentId = parent.Id;
+                student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
+                await _studentRepository.UpdateAsync(student);
+                updated++;
+            }
+            return updated;
+        }
+
         public async Task<byte[]> ExportParentsToExcelAsync()
         {
-            var parents = await _parentRepository.FindAllAsync();
+            var parents = await _parentRepository.FindAllAsync(p => p.Students);
             if (parents == null || !parents.Any())
             {
                 return Array.Empty<byte>();
@@ -279,6 +316,7 @@ namespace Services.Implementations
                 worksheet.Cell(1, 5).Value = "Gender";
                 worksheet.Cell(1, 6).Value = "Date of Birth";
                 worksheet.Cell(1, 7).Value = "Address";
+                worksheet.Cell(1, 8).Value = "Students Count";
 
                 int row = 2;
                 foreach (var p in parents)
@@ -290,6 +328,7 @@ namespace Services.Implementations
                     worksheet.Cell(row, 5).Value = p.Gender.ToString();
                     worksheet.Cell(row, 6).Value = p.DateOfBirth?.ToString("dd/MM/yyyy");
                     worksheet.Cell(row, 7).Value = p.Address;
+                    worksheet.Cell(row, 8).Value = p.Students?.Count ?? 0;
                     row++;
                 }
 
