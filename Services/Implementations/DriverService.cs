@@ -305,6 +305,18 @@ namespace Services.Implementations
             return driver?.HealthCertificateFileId;
         }
 
+        public async Task<IEnumerable<DriverResponse>> GetAllDriversAsync()
+        {
+            var drivers = await _driverRepository.FindAllAsync();
+            return _mapper.Map<IEnumerable<DriverResponse>>(drivers);
+        }
+
+        public async Task<DriverResponse?> GetDriverResponseByIdAsync(Guid driverId)
+        {
+            var driver = await _driverRepository.FindAsync(driverId);
+            return _mapper.Map<DriverResponse>(driver);
+        }
+
     }
 }
 
