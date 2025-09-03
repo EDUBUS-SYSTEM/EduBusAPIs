@@ -27,6 +27,7 @@ namespace Services.MapperProfiles
             // driver mapping
             CreateMap<CreateDriverRequest, Driver>();
             CreateMap<Driver, CreateUserResponse>();
+            CreateMap<Driver, DriverResponse>();
             CreateMap<ImportDriverDto, Driver>()
                .ForMember(dest => dest.DateOfBirth,
                opt => opt.MapFrom(src => DateHelper.ParseDate(src.DateOfBirthString)));

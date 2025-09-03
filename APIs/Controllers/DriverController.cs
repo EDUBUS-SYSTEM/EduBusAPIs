@@ -159,5 +159,39 @@ namespace APIs.Controllers
                 return StatusCode(500, "An error occurred while retrieving the health certificate.");
             }
         }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Services.Models.Driver.DriverResponse>>> GetAllDrivers()
+        {
+            try
+            {
+                var drivers = await _driverService.GetAllDriversAsync();
+                return Ok(drivers);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while retrieving drivers.");
+            }
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<Services.Models.Driver.DriverResponse>> GetDriverById(Guid id)
+        {
+            try
+            {
+                var driver = await _driverService.GetDriverResponseByIdAsync(id);
+                if (driver == null)
+                {
+                    return NotFound("Driver not found.");
+                }
+
+                return Ok(driver);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "An error occurred while retrieving the driver.");
+            }
+        }
     }
 }
