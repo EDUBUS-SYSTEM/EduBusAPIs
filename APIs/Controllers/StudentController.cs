@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
-using Services.Implementations;
 using Services.Models.Student;
 using Microsoft.AspNetCore.Authorization;
 using Constants;
 using System.Security.Claims;
+using Utils;
 
 namespace APIs.Controllers
 {
@@ -108,21 +107,10 @@ namespace APIs.Controllers
             if (student == null)
                 return NotFound();
 
-            // Check authorization - only allow access if student has a parent and user is authorized
-            if (student.ParentId.HasValue)
+            // Check authorization using the optimized helper method
+            if (!AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
             {
-                if (!IsAuthorizedToAccessStudent(student.ParentId.Value))
-                {
-                    return Forbid();
-                }
-            }
-            else
-            {
-                // Student without parent - only admin can access
-                if (!User.IsInRole(Roles.Admin))
-                {
-                    return Forbid();
-                }
+                return Forbid();
             }
 
             return Ok(student);
@@ -132,8 +120,8 @@ namespace APIs.Controllers
         [HttpGet("parent/{parentId}")]
         public async Task<IActionResult> GetStudentsByParent(Guid parentId)
         {
-            // Check authorization
-            if (!IsAuthorizedToAccessParent(parentId))
+            // Check authorization using the optimized helper method
+            if (!AuthorizationHelper.CanAccessParentData(Request.HttpContext, parentId))
             {
                 return Forbid();
             }
