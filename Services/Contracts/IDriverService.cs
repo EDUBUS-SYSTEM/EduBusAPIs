@@ -1,11 +1,6 @@
 ﻿using Services.Models.Driver;
-using Services.Models.Parent;
 using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Data.Models.Enums;
 
 namespace Services.Contracts
 {
@@ -18,5 +13,13 @@ namespace Services.Contracts
         Task<Guid?> GetHealthCertificateFileIdAsync(Guid driverId);
         Task<IEnumerable<DriverResponse>> GetAllDriversAsync();
         Task<DriverResponse?> GetDriverResponseByIdAsync(Guid driverId);
+        
+        Task<DriverResponse> UpdateDriverStatusAsync(Guid driverId, DriverStatus status, string? note);
+        Task<DriverResponse> SuspendDriverAsync(Guid driverId, string reason, DateTime? untilDate);
+        Task<DriverResponse> ReactivateDriverAsync(Guid driverId);
+        Task<IEnumerable<DriverResponse>> GetDriversByStatusAsync(DriverStatus status);
+        
+        Task<bool> IsDriverAvailableAsync(Guid driverId, DateTime startTime, DateTime endTime);
+        Task<IEnumerable<DriverResponse>> GetAvailableDriversAsync(DateTime startTime, DateTime endTime);
     }
 }

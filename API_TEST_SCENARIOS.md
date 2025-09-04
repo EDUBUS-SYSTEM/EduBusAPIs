@@ -522,8 +522,7 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 
 ## 5. Parent Management
 
-=======
----
+## =======
 
 ## 4. Driver License Management
 
@@ -723,6 +722,7 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 ## 6. File Management
 
 ### 6.1 Upload File (Admin Only)
+
 **Endpoint:** `POST /api/File/upload`
 **Authorization:** Bearer Token (Admin only)
 **Content-Type:** multipart/form-data
@@ -735,6 +735,7 @@ GET /api/UserAccount/12345678-1234-1234-1234-123456789012
 - `fileType`: "UserPhoto" | "HealthCertificate" | "LicenseImage" | "Document" | "Image" | "UserAccount" | "Driver" | "Parent"
 
 **Response:**
+
 ```json
 {
   "fileId": "guid-here",
@@ -945,10 +946,12 @@ GET /api/File/template/UserAccount
 - Importing duplicate data
 
 ## 9. Vehicle Management
+
 ### 9.1 Create Vehicle
 
 Endpoint: POST /api/Vehicle (Admin only)
 Request Body:
+
 ```json
 {
   "licensePlate": "43A-12345",
@@ -959,6 +962,7 @@ Request Body:
 ```
 
 Expected Response:
+
 ```json
 {
   "success": true,
@@ -974,10 +978,12 @@ Expected Response:
   "error": null
 }
 ```
+
 ### 9.2 Get All Vehicles
 
 Endpoint: GET /api/Vehicle?page=1&perPage=20&sortBy=createdAt&sortOrder=desc (All roles)
 Expected Response:
+
 ```json
 {
   "success": true,
@@ -994,6 +1000,7 @@ Expected Response:
   "error": null
 }
 ```
+
 ### 9.3 Get Vehicle by Id
 
 Endpoint: GET /api/Vehicle/{vehicleId} (All roles)
@@ -1003,6 +1010,7 @@ Expected Response: Vehicle details with decrypted licensePlate (if implemented).
 
 Endpoint: PUT /api/Vehicle/{vehicleId} (Admin only)
 Request Body:
+
 ```json
 {
   "licensePlate": "43A-67890",
@@ -1011,19 +1019,23 @@ Request Body:
   "adminId": "550e8400-e29b-41d4-a716-446655440001"
 }
 ```
+
 ### 9.5 Partial Update Vehicle
 
 Endpoint: PATCH /api/Vehicle/{vehicleId} (Admin only)
 Request Body:
+
 ```json
 {
   "status": "retired"
 }
 ```
+
 ### 9.6 Delete Vehicle
 
 Endpoint: DELETE /api/Vehicle/{vehicleId} (Admin only)
 Expected Response:
+
 ```json
 {
   "success": true,
@@ -1031,10 +1043,12 @@ Expected Response:
   "error": null
 }
 ```
+
 ### 9.7 Assign Driver to Vehicle
 
 Endpoint: POST /api/Vehicle/{vehicleId}/drivers (Admin only)
 Request Body:
+
 ```json
 {
   "driverId": "550e8400-e29b-41d4-a716-446655440002",
@@ -1043,10 +1057,12 @@ Request Body:
   "endTimeUtc": "2025-12-31T23:59:59Z"
 }
 ```
+
 ### 9.8 Get Drivers of Vehicle
 
 Endpoint: GET /api/Vehicle/{vehicleId}/drivers?isActive=true (All roles)
 Expected Response:
+
 ```json
 {
   "success": true,
@@ -1067,3 +1083,897 @@ Expected Response:
   "error": null
 }
 ```
+
+---
+
+## 10. Driver Leave Management
+
+### 10.1 Create Leave Request
+
+**Endpoint:** `POST /api/DriverLeave`
+**Authorization:** Bearer Token (Driver only)
+
+**Request Body:**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 1,
+  "startDate": "2024-01-15T00:00:00Z",
+  "endDate": "2024-01-17T00:00:00Z",
+  "reason": "Family emergency"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "driverId": "550e8400-e29b-41d4-a716-446655440002",
+    "driverName": "John Driver",
+    "driverEmail": "john.driver@edubus.com",
+    "leaveType": 1,
+    "startDate": "2024-01-15T00:00:00Z",
+    "endDate": "2024-01-17T00:00:00Z",
+    "reason": "Family emergency",
+    "status": 0,
+    "requestedAt": "2024-01-10T10:30:00Z",
+    "totalDays": 3,
+    "autoReplacementEnabled": true
+  },
+  "error": null
+}
+```
+
+### 10.2 Get Driver Leave Requests
+
+**Endpoint:** `GET /api/DriverLeave/driver/{driverId}?fromDate=2024-01-01&toDate=2024-12-31`
+**Authorization:** Bearer Token (Driver or Admin)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "driverId": "550e8400-e29b-41d4-a716-446655440002",
+      "driverName": "John Driver",
+      "leaveType": 1,
+      "startDate": "2024-01-15T00:00:00Z",
+      "endDate": "2024-01-17T00:00:00Z",
+      "status": 0,
+      "totalDays": 3
+    }
+  ],
+  "error": null
+}
+```
+
+### 10.3 Get Pending Leave Requests (Admin)
+
+**Endpoint:** `GET /api/DriverLeave/pending`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "driverName": "John Driver",
+      "leaveType": 1,
+      "startDate": "2024-01-15T00:00:00Z",
+      "endDate": "2024-01-17T00:00:00Z",
+      "reason": "Family emergency",
+      "requestedAt": "2024-01-10T10:30:00Z",
+      "totalDays": 3
+    }
+  ],
+  "error": null
+}
+```
+
+### 10.4 Approve Leave Request
+
+**Endpoint:** `PUT /api/DriverLeave/{leaveId}/approve`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "approvalNote": "Approved for family emergency"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "status": 1,
+    "approvedByAdminId": "550e8400-e29b-41d4-a716-446655440001",
+    "approvedAt": "2024-01-11T09:00:00Z",
+    "approvalNote": "Approved for family emergency"
+  },
+  "error": null
+}
+```
+
+### 10.5 Reject Leave Request
+
+**Endpoint:** `PUT /api/DriverLeave/{leaveId}/reject`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "rejectionReason": "Insufficient notice period"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "status": 2,
+    "approvedByAdminId": "550e8400-e29b-41d4-a716-446655440001",
+    "approvedAt": "2024-01-11T09:00:00Z",
+    "approvalNote": "Insufficient notice period"
+  },
+  "error": null
+}
+```
+
+### 10.6 Generate Replacement Suggestions
+
+**Endpoint:** `POST /api/DriverLeave/{leaveId}/suggestions`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "leaveId": "uuid",
+    "suggestions": [
+      {
+        "suggestionId": "uuid",
+        "driverId": "550e8400-e29b-41d4-a716-446655440003",
+        "driverName": "Jane Driver",
+        "vehicleId": "550e8400-e29b-41d4-a716-446655440004",
+        "vehiclePlate": "43A-67890",
+        "confidenceScore": 0.85,
+        "reason": "Available during requested period"
+      }
+    ],
+    "generatedAt": "2024-01-11T10:00:00Z"
+  },
+  "error": null
+}
+```
+
+### 10.7 Accept Replacement Suggestion
+
+**Endpoint:** `PUT /api/DriverLeave/{leaveId}/suggestions/{suggestionId}/accept`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "leaveId": "uuid",
+    "suggestionId": "uuid",
+    "acceptedAt": "2024-01-11T10:30:00Z",
+    "replacementDriverId": "550e8400-e29b-41d4-a716-446655440003",
+    "replacementVehicleId": "550e8400-e29b-41d4-a716-446655440004"
+  },
+  "error": null
+}
+```
+
+### 10.8 Detect Conflicts
+
+**Endpoint:** `GET /api/DriverLeave/{leaveId}/conflicts`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "conflictId": "uuid",
+      "conflictType": 1,
+      "severity": 2,
+      "description": "Overlapping with existing route assignment",
+      "affectedEntityId": "550e8400-e29b-41d4-a716-446655440005",
+      "affectedEntityType": "Route"
+    }
+  ],
+  "error": null
+}
+```
+
+---
+
+## 11. Driver Working Hours Management
+
+### 11.1 Create Working Hours
+
+**Endpoint:** `POST /api/DriverWorkingHours`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "dayOfWeek": 1,
+  "startTime": "08:00:00",
+  "endTime": "17:00:00",
+  "isAvailable": true
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "driverId": "550e8400-e29b-41d4-a716-446655440002",
+    "driverName": "John Driver",
+    "dayOfWeek": 1,
+    "startTime": "08:00:00",
+    "endTime": "17:00:00",
+    "isAvailable": true,
+    "createdAt": "2024-01-10T10:30:00Z"
+  },
+  "error": null
+}
+```
+
+### 11.2 Get Driver Working Hours
+
+**Endpoint:** `GET /api/DriverWorkingHours/driver/{driverId}`
+**Authorization:** Bearer Token (Driver or Admin)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "driverId": "550e8400-e29b-41d4-a716-446655440002",
+      "driverName": "John Driver",
+      "dayOfWeek": 1,
+      "startTime": "08:00:00",
+      "endTime": "17:00:00",
+      "isAvailable": true
+    }
+  ],
+  "error": null
+}
+```
+
+### 11.3 Update Working Hours
+
+**Endpoint:** `PUT /api/DriverWorkingHours/{id}`
+**Authorization:** Bearer Token (Driver or Admin)
+
+**Request Body:**
+
+```json
+{
+  "startTime": "09:00:00",
+  "endTime": "18:00:00",
+  "isAvailable": true
+}
+```
+
+### 11.4 Check Driver Availability
+
+**Endpoint:** `GET /api/Driver/available?startTime=2024-01-15T08:00:00Z&endTime=2024-01-15T17:00:00Z`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "firstName": "John",
+      "lastName": "Driver",
+      "email": "john.driver@edubus.com",
+      "phoneNumber": "0123456789"
+    }
+  ],
+  "error": null
+}
+```
+
+---
+
+## 12. Enhanced Vehicle Assignment Management
+
+### 12.1 Enhanced Driver Assignment
+
+**Endpoint:** `POST /api/Vehicle/{vehicleId}/drivers/enhanced`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "isPrimaryDriver": true,
+  "startTimeUtc": "2024-01-15T08:00:00Z",
+  "endTimeUtc": "2024-12-31T23:59:59Z",
+  "assignmentReason": "Regular route assignment",
+  "requireApproval": true,
+  "additionalNotes": "Driver has experience with this route",
+  "isEmergencyAssignment": false,
+  "priorityLevel": 1
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "assignmentId": "uuid",
+    "driverId": "550e8400-e29b-41d4-a716-446655440002",
+    "driverName": "John Driver",
+    "vehicleId": "550e8400-e29b-41d4-a716-446655440004",
+    "vehiclePlate": "43A-67890",
+    "isPrimaryDriver": true,
+    "startTimeUtc": "2024-01-15T08:00:00Z",
+    "endTimeUtc": "2024-12-31T23:59:59Z",
+    "assignmentReason": "Regular route assignment",
+    "requireApproval": true,
+    "additionalNotes": "Driver has experience with this route",
+    "isEmergencyAssignment": false,
+    "priorityLevel": 1,
+    "assignedByAdminId": "550e8400-e29b-41d4-a716-446655440001"
+  },
+  "error": null
+}
+```
+
+### 12.2 Detect Assignment Conflicts
+
+**Endpoint:** `GET /api/Vehicle/{vehicleId}/conflicts?startTime=2024-01-15T08:00:00Z&endTime=2024-01-15T17:00:00Z`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "conflictId": "uuid",
+      "conflictType": "TimeOverlap",
+      "severity": "High",
+      "description": "Driver already assigned to another vehicle during this time",
+      "conflictingAssignmentId": "uuid",
+      "conflictingDriverId": "550e8400-e29b-41d4-a716-446655440002",
+      "conflictingVehicleId": "550e8400-e29b-41d4-a716-446655440005"
+    }
+  ],
+  "error": null
+}
+```
+
+### 12.3 Suggest Replacement for Assignment
+
+**Endpoint:** `POST /api/Vehicle/{vehicleId}/drivers/{assignmentId}/suggest-replacement`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "suggestionId": "uuid",
+    "originalDriverId": "550e8400-e29b-41d4-a716-446655440002",
+    "suggestedDriverId": "550e8400-e29b-41d4-a716-446655440003",
+    "suggestedDriverName": "Jane Driver",
+    "confidenceScore": 0.9,
+    "reason": "Available during requested period and has similar experience",
+    "generatedAt": "2024-01-11T10:00:00Z"
+  },
+  "error": null
+}
+```
+
+### 12.4 Approve Assignment
+
+**Endpoint:** `PUT /api/Vehicle/{vehicleId}/drivers/{assignmentId}/approve`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "note": "Approved after conflict resolution"
+}
+```
+
+### 12.5 Reject Assignment
+
+**Endpoint:** `PUT /api/Vehicle/{vehicleId}/drivers/{assignmentId}/reject`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "reason": "Driver not available during requested period"
+}
+```
+
+---
+
+## 13. Notification System
+
+### 13.1 Get User Notifications
+
+**Endpoint:** `GET /api/notification?page=1&pageSize=20&type=DriverLeaveRequest`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "type": 1,
+      "title": "New Leave Request",
+      "message": "New leave request from John Driver for Sick Leave from 2024-01-15 to 2024-01-17",
+      "priority": 2,
+      "status": 0,
+      "isRead": false,
+      "isAcknowledged": false,
+      "requiresAction": true,
+      "expiresAt": "2024-01-20T23:59:59Z",
+      "createdAt": "2024-01-10T10:30:00Z",
+      "metadata": {
+        "leaveRequestId": "uuid",
+        "driverId": "550e8400-e29b-41d4-a716-446655440002",
+        "driverName": "John Driver",
+        "leaveType": "SickLeave",
+        "startDate": "2024-01-15T00:00:00Z",
+        "endDate": "2024-01-17T00:00:00Z"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "totalCount": 5,
+    "totalPages": 1
+  },
+  "error": null
+}
+```
+
+### 13.2 Get Unread Count
+
+**Endpoint:** `GET /api/notification/unread-count`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "unreadCount": 3
+  },
+  "error": null
+}
+```
+
+### 13.3 Mark Notification as Read
+
+**Endpoint:** `PUT /api/notification/{notificationId}/read`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "isRead": true,
+    "readAt": "2024-01-11T09:00:00Z"
+  },
+  "error": null
+}
+```
+
+### 13.4 Acknowledge Notification
+
+**Endpoint:** `PUT /api/notification/{notificationId}/acknowledge`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "isAcknowledged": true,
+    "acknowledgedAt": "2024-01-11T09:00:00Z"
+  },
+  "error": null
+}
+```
+
+### 13.5 Mark All as Read
+
+**Endpoint:** `PUT /api/notification/mark-all-read`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "updatedCount": 5,
+    "updatedAt": "2024-01-11T09:00:00Z"
+  },
+  "error": null
+}
+```
+
+### 13.6 Get Admin Notifications
+
+**Endpoint:** `GET /api/notification/admin?page=1&pageSize=20`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "type": 1,
+      "title": "New Leave Request",
+      "message": "New leave request from John Driver for Sick Leave from 2024-01-15 to 2024-01-17",
+      "priority": 2,
+      "status": 0,
+      "isRead": false,
+      "requiresAction": true,
+      "recipientType": 1,
+      "createdAt": "2024-01-10T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "totalCount": 10,
+    "totalPages": 1
+  },
+  "error": null
+}
+```
+
+### 13.7 Get Action Required Notifications
+
+**Endpoint:** `GET /api/notification/action-required`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "uuid",
+      "type": 1,
+      "title": "New Leave Request",
+      "message": "New leave request from John Driver for Sick Leave from 2024-01-15 to 2024-01-17",
+      "priority": 2,
+      "requiresAction": true,
+      "createdAt": "2024-01-10T10:30:00Z"
+    }
+  ],
+  "error": null
+}
+```
+
+### 13.8 Create Admin Notification
+
+**Endpoint:** `POST /api/notification/admin`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "type": 4,
+  "title": "System Maintenance",
+  "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
+  "priority": 3,
+  "requiresAction": false,
+  "expiresAt": "2024-01-15T04:00:00Z",
+  "metadata": {
+    "maintenanceType": "Database",
+    "affectedServices": ["API", "Database"],
+    "estimatedDuration": "2 hours"
+  }
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid",
+    "type": 4,
+    "title": "System Maintenance",
+    "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
+    "priority": 3,
+    "status": 0,
+    "requiresAction": false,
+    "expiresAt": "2024-01-15T04:00:00Z",
+    "createdAt": "2024-01-10T10:30:00Z"
+  },
+  "error": null
+}
+```
+
+### 13.9 Delete Notification
+
+**Endpoint:** `DELETE /api/notification/{notificationId}`
+**Authorization:** Bearer Token (All roles)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "message": "Notification deleted successfully"
+  },
+  "error": null
+}
+```
+
+---
+
+## 14. Real-Time Notifications (SignalR)
+
+### 14.1 Connect to Notification Hub
+
+**WebSocket Endpoint:** `/notificationHub`
+**Authorization:** Bearer Token required
+
+**Connection URL:**
+
+```
+wss://localhost:7061/notificationHub?access_token={jwt_token}
+```
+
+**JavaScript Client Example:**
+
+```javascript
+const connection = new signalR.HubConnectionBuilder()
+  .withUrl("/notificationHub", {
+    accessTokenFactory: () => localStorage.getItem("accessToken"),
+  })
+  .build();
+
+connection.start().then(() => {
+  console.log("Connected to Notification Hub");
+});
+```
+
+### 14.2 Listen for Notifications
+
+**Client-side Event Handlers:**
+
+```javascript
+// Receive new notification
+connection.on("ReceiveNotification", (notification) => {
+  console.log("New notification:", notification);
+  // Update UI with new notification
+});
+
+// Receive notification count update
+connection.on("UpdateNotificationCount", (count) => {
+  console.log("Unread count:", count);
+  // Update notification badge
+});
+
+// Receive admin-specific notifications
+connection.on("ReceiveAdminNotification", (notification) => {
+  console.log("Admin notification:", notification);
+  // Show admin-specific UI
+});
+```
+
+### 14.3 Test Real-Time Notifications
+
+**Demo Page:** `https://localhost:7061/notification-demo.html`
+
+**Features:**
+
+- Real-time connection status monitoring
+- Interactive notification testing
+- Connection logs and debugging
+- JWT token authentication
+- Test notification sending
+
+---
+
+## 15. Background Services
+
+### 15.1 Auto-Replacement Suggestion Service
+
+**Service:** `AutoReplacementSuggestionService`
+**Frequency:** Every 15 minutes
+**Purpose:** Automatically generates replacement suggestions for pending leave requests
+
+**Process:**
+
+1. Finds pending leave requests with auto-replacement enabled
+2. Generates replacement suggestions using existing service
+3. Updates leave request with suggestion data
+4. Creates admin notifications for review
+5. Handles cases with no available replacements
+
+### 15.2 Notification Cleanup Service
+
+**Service:** `NotificationCleanupService`
+**Frequency:** Every 6 hours
+**Purpose:** Cleans up expired notifications
+
+**Process:**
+
+1. Finds notifications past their expiration date
+2. Marks them as expired status
+3. Maintains database performance
+
+---
+
+## 16. Enhanced Test Scenarios
+
+### Scenario 1: Complete Driver Leave Workflow
+
+1. **Driver creates leave request**
+
+   - POST /api/DriverLeave
+   - Verify notification sent to admin
+
+2. **Admin reviews pending requests**
+
+   - GET /api/DriverLeave/pending
+   - GET /api/notification/admin
+
+3. **System generates replacement suggestions**
+
+   - Background service runs automatically
+   - POST /api/DriverLeave/{leaveId}/suggestions
+
+4. **Admin approves/rejects with replacement**
+
+   - PUT /api/DriverLeave/{leaveId}/approve
+   - PUT /api/DriverLeave/{leaveId}/suggestions/{suggestionId}/accept
+
+5. **Verify notifications sent to driver**
+   - GET /api/notification (as driver)
+
+### Scenario 2: Vehicle Assignment with Conflict Detection
+
+1. **Admin assigns driver to vehicle**
+
+   - POST /api/Vehicle/{vehicleId}/drivers/enhanced
+
+2. **System detects conflicts**
+
+   - GET /api/Vehicle/{vehicleId}/conflicts
+
+3. **Admin resolves conflicts**
+   - POST /api/Vehicle/{vehicleId}/drivers/{assignmentId}/suggest-replacement
+   - PUT /api/Vehicle/{vehicleId}/drivers/{assignmentId}/approve
+
+### Scenario 3: Real-Time Notification Testing
+
+1. **Connect to SignalR hub**
+
+   - Access /notification-demo.html
+   - Enter JWT token and connect
+
+2. **Send test notifications**
+
+   - Use demo interface to send notifications
+   - Verify real-time delivery
+
+3. **Test notification management**
+   - Mark as read, acknowledge, delete
+   - Verify count updates in real-time
+
+### Scenario 4: Working Hours Management
+
+1. **Set driver working hours**
+
+   - POST /api/DriverWorkingHours
+
+2. **Check driver availability**
+
+   - GET /api/Driver/available
+
+3. **Verify availability affects assignments**
+   - Try to assign unavailable driver
+   - Verify conflict detection
+
+---
+
+## 17. Error Scenarios to Test
+
+### 17.1 Driver Leave Errors
+
+- **Invalid date ranges**: End date before start date
+- **Overlapping leave requests**: Multiple requests for same period
+- **Insufficient notice**: Leave request too close to start date
+- **No available replacements**: System cannot find suitable drivers
+
+### 17.2 Vehicle Assignment Errors
+
+- **Driver already assigned**: Assign same driver to multiple vehicles
+- **Time conflicts**: Overlapping assignment periods
+- **Invalid vehicle status**: Assign to inactive vehicle
+- **Driver not available**: Assign during driver's off hours
+
+### 17.3 Notification Errors
+
+- **Expired notifications**: Access notifications past expiration
+- **Invalid notification types**: Use non-existent notification types
+- **Unauthorized access**: Access other users' notifications
+- **Real-time connection failures**: Network issues with SignalR
+
+### 17.4 Background Service Errors
+
+- **Service failures**: Background services stop running
+- **Database connection issues**: Services cannot access database
+- **Notification delivery failures**: Real-time notifications fail to send
+- **Suggestion generation failures**: Auto-replacement service errors

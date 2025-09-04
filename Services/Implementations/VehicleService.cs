@@ -59,7 +59,7 @@ namespace Services.Implementations
                 Id = Guid.NewGuid(),
                 HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate),
                 Capacity = (int)dto.Capacity,        
-                Status = dto.Status.ToString(),       
+                Status = dto.Status,       
                 AdminId = adminId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -83,7 +83,7 @@ namespace Services.Implementations
 
             vehicle.HashedLicensePlate = SecurityHelper.EncryptToBytes(dto.LicensePlate);
             vehicle.Capacity = (int)dto.Capacity;    
-            vehicle.Status = dto.Status.ToString();  
+            vehicle.Status = dto.Status;  
             vehicle.UpdatedAt = DateTime.UtcNow;
 
             await _vehicleRepo.UpdateAsync(vehicle);
@@ -110,7 +110,7 @@ namespace Services.Implementations
                 vehicle.Capacity = (int)dto.Capacity.Value;
 
             if (dto.Status.HasValue)
-                vehicle.Status = dto.Status.Value.ToString();
+                vehicle.Status = dto.Status.Value;
 
             vehicle.UpdatedAt = DateTime.UtcNow;
             await _vehicleRepo.UpdateAsync(vehicle);

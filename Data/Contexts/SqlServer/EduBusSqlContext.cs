@@ -50,6 +50,10 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        public virtual DbSet<DriverLeaveRequest> DriverLeaveRequests { get; set; }
+        public virtual DbSet<DriverLeaveConflict> DriverLeaveConflicts { get; set; }
+        public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
+
 
 //        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 //#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -84,6 +88,9 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne<UserAccount>()
                     .WithOne()
                     .HasForeignKey<Driver>(e => e.Id);
+                
+                entity.Property(e => e.Status)
+                      .HasConversion<int>();
             });
 
             modelBuilder.Entity<DriverLicense>(entity =>
@@ -118,9 +125,95 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
 
-                entity.HasOne(d => d.Driver).WithMany(p => p.DriverVehicles).HasForeignKey(d => d.DriverId);
+                entity.HasOne(d => d.Driver).WithMany(p => p.DriverVehicles).HasForeignKey(d => d.DriverId)
+                      .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(d => d.Vehicle).WithOne(p => p.DriverVehicle).HasForeignKey<DriverVehicle>(d => d.VehicleId);
+                entity.HasOne(d => d.Vehicle).WithMany(p => p.DriverVehicles).HasForeignKey(d => d.VehicleId);
+
+                // Relations to Admin for assignment/approval
+                entity.HasOne(d => d.AssignedByAdmin)
+                      .WithMany(a => a.AssignedDriverVehicles)
+                      .HasForeignKey(d => d.AssignedByAdminId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.ApprovedByAdmin)
+                      .WithMany(a => a.ApprovedDriverVehicles)
+                      .HasForeignKey(d => d.ApprovedByAdminId)
+                      .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<DriverWorkingHours>(entity =>
+            {
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.UpdatedAt)
+                      .HasPrecision(3);
+
+                entity.HasOne(d => d.Driver)
+                      .WithMany() // no collection on Driver
+                      .HasForeignKey(d => d.DriverId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<DriverLeaveRequest>(entity =>
+            {
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.UpdatedAt)
+                      .HasPrecision(3);
+
+                entity.HasOne(e => e.Driver)
+                      .WithMany(d => d.LeaveRequests)
+                      .HasForeignKey(e => e.DriverId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.ApprovedByAdmin)
+                      .WithMany(a => a.ApprovedLeaveRequests)
+                      .HasForeignKey(e => e.ApprovedByAdminId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Optional suggested replacements
+                entity.HasOne(e => e.SuggestedReplacementDriver)
+                      .WithMany()
+                      .HasForeignKey(e => e.SuggestedReplacementDriverId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(e => e.SuggestedReplacementVehicle)
+                      .WithMany()
+                      .HasForeignKey(e => e.SuggestedReplacementVehicleId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<DriverLeaveConflict>(entity =>
+            {
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.UpdatedAt)
+                      .HasPrecision(3);
+
+                entity.HasOne(e => e.LeaveRequest)
+                      .WithMany(r => r.Conflicts)
+                      .HasForeignKey(e => e.LeaveRequestId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.SuggestedDriver)
+                      .WithMany()
+                      .HasForeignKey(e => e.SuggestedDriverId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.SuggestedVehicle)
+                      .WithMany()
+                      .HasForeignKey(e => e.SuggestedVehicleId)
+                      .OnDelete(DeleteBehavior.SetNull);
+
+                // Ignore Mongo Trip navigation on SQL side
+                entity.Ignore(e => e.Trip);
             });
 
             modelBuilder.Entity<Grade>(entity =>
@@ -352,7 +445,8 @@ namespace Data.Contexts.SqlServer
                     .HasDefaultValueSql("(sysutcdatetime())");
                 entity.Property(e => e.HashedLicensePlate).HasMaxLength(256);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.Status).HasMaxLength(50);
+                entity.Property(e => e.Status)
+                      .HasConversion<int>();
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
 

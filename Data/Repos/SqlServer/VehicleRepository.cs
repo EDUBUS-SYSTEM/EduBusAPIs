@@ -28,7 +28,7 @@ namespace Data.Repos.SqlServer
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(status))
-                query = query.Where(v => v.Status == status);
+                query = query.Where(v => v.Status.Equals(status));
 
             if (minCapacity.HasValue)
                 query = query.Where(v => v.Capacity >= minCapacity.Value);

@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-time Notifications Demo</title>
+    <script src="https://unpkg.com/@microsoft/signalr@latest/dist/browser/signalr.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .status {
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-weight: bold;
+      }
+      .connected {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .disconnected {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      .notification {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 15px;
+        margin: 10px 0;
+        background-color: #f9f9f9;
+      }
+      .notification.unread {
+        border-left: 4px solid #007bff;
+        background-color: #e3f2fd;
+      }
+      .notification.high-priority {
+        border-left: 4px solid #dc3545;
+        background-color: #f8d7da;
+      }
+      .notification-count {
+        background-color: #dc3545;
+        color: white;
+        border-radius: 50%;
+        padding: 2px 6px;
+        font-size: 12px;
+        margin-left: 5px;
+      }
+      .controls {
+        margin: 20px 0;
+      }
+      button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+      }
+      input,
+      select {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 5px;
+      }
+      .log {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        height: 200px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 Real-time Notifications Demo</h1>
+
+      <div id="connectionStatus" class="status disconnected">
+        Status: Disconnected
+      </div>
+
+      <div class="controls">
+        <input
+          type="text"
+          id="apiUrl"
+          placeholder="API Base URL"
+          value="http://localhost:5223"
+        />
+        <input type="text" id="accessToken" placeholder="JWT Access Token" />
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="clearNotifications()">Clear Notifications</button>
+      </div>
+
+      <div class="controls">
+        <h3>Test Notifications:</h3>
+        <select id="notificationType">
+          <option value="DriverLeaveRequest">Driver Leave Request</option>
+          <option value="ReplacementSuggestion">Replacement Suggestion</option>
+          <option value="LeaveApproval">Leave Approval</option>
+          <option value="ConflictDetected">Conflict Detected</option>
+          <option value="SystemAlert">System Alert</option>
+        </select>
+        <input
+          type="text"
+          id="testMessage"
+          placeholder="Test message"
+          value="This is a test notification"
+        />
+        <button onclick="sendTestNotification()">Send Test Notification</button>
+      </div>
+
+      <div>
+        <h3>
+          Notifications
+          <span
+            id="notificationBadge"
+            class="notification-count"
+            style="display: none"
+            >0</span
+          >
+        </h3>
+        <div id="notifications"></div>
+      </div>
+
+      <div>
+        <h3>Connection Log</h3>
+        <div id="log" class="log"></div>
+      </div>
+    </div>
+
+    <script>
+      let notificationHub = null;
+      let notificationCount = 0;
+
+      // Initialize NotificationHubClient
+      class NotificationHubClient {
+        constructor() {
+          this.connection = null;
+          this.isConnected = false;
+          this.eventHandlers = {
+            onNotificationReceived: null,
+            onNotificationCountUpdated: null,
+            onConnected: null,
+            onDisconnected: null,
+            onError: null,
+          };
+        }
+
+        async initialize(baseUrl, accessToken) {
+          try {
+            this.connection = new signalR.HubConnectionBuilder()
+              .withUrl(`${baseUrl}/notificationHub`, {
+                accessTokenFactory: () => accessToken,
+                transport:
+                  signalR.HttpTransportType.WebSockets |
+                  signalR.HttpTransportType.LongPolling,
+                skipNegotiation: false,
+              })
+              .withAutomaticReconnect([0, 2000, 10000, 30000])
+              .configureLogging(signalR.LogLevel.Information)
+              .build();
+
+            this.setupEventHandlers();
+            await this.start();
+
+            log("NotificationHub connected successfully");
+          } catch (error) {
+            log("Error initializing NotificationHub: " + error.message);
+            this.handleError(error);
+          }
+        }
+
+        setupEventHandlers() {
+          this.connection.onclose((error) => {
+            this.isConnected = false;
+            log(
+              "NotificationHub connection closed: " +
+                (error ? error.message : "No error")
+            );
+            updateConnectionStatus(false);
+            if (this.eventHandlers.onDisconnected) {
+              this.eventHandlers.onDisconnected(error);
+            }
+          });
+
+          this.connection.onreconnecting((error) => {
+            log(
+              "NotificationHub reconnecting: " +
+                (error ? error.message : "No error")
+            );
+          });
+
+          this.connection.onreconnected((connectionId) => {
+            this.isConnected = true;
+            log("NotificationHub reconnected: " + connectionId);
+            updateConnectionStatus(true);
+            if (this.eventHandlers.onConnected) {
+              this.eventHandlers.onConnected(connectionId);
+            }
+          });
+
+          this.connection.on("ReceiveNotification", (notification) => {
+            log("Received notification: " + JSON.stringify(notification));
+            if (this.eventHandlers.onNotificationReceived) {
+              this.eventHandlers.onNotificationReceived(notification);
+            }
+          });
+
+          this.connection.on("UpdateNotificationCount", (count) => {
+            log("Notification count updated: " + count);
+            if (this.eventHandlers.onNotificationCountUpdated) {
+              this.eventHandlers.onNotificationCountUpdated(count);
+            }
+          });
+        }
+
+        async start() {
+          try {
+            await this.connection.start();
+            this.isConnected = true;
+            updateConnectionStatus(true);
+
+            if (this.eventHandlers.onConnected) {
+              this.eventHandlers.onConnected();
+            }
+          } catch (error) {
+            log("Error starting NotificationHub: " + error.message);
+            this.handleError(error);
+          }
+        }
+
+        async stop() {
+          if (this.connection) {
+            await this.connection.stop();
+            this.isConnected = false;
+            updateConnectionStatus(false);
+          }
+        }
+
+        setEventHandlers(handlers) {
+          this.eventHandlers = { ...this.eventHandlers, ...handlers };
+        }
+
+        handleError(error) {
+          log("NotificationHub error: " + error.message);
+          if (this.eventHandlers.onError) {
+            this.eventHandlers.onError(error);
+          }
+        }
+      }
+
+      // Utility functions
+      function log(message) {
+        const logElement = document.getElementById("log");
+        const timestamp = new Date().toLocaleTimeString();
+        logElement.innerHTML += `[${timestamp}] ${message}\n`;
+        logElement.scrollTop = logElement.scrollHeight;
+      }
+
+      function updateConnectionStatus(connected) {
+        const statusElement = document.getElementById("connectionStatus");
+        if (connected) {
+          statusElement.textContent = "Status: Connected";
+          statusElement.className = "status connected";
+        } else {
+          statusElement.textContent = "Status: Disconnected";
+          statusElement.className = "status disconnected";
+        }
+      }
+
+      function updateNotificationBadge(count) {
+        const badge = document.getElementById("notificationBadge");
+        if (count > 0) {
+          badge.textContent = count;
+          badge.style.display = "inline";
+        } else {
+          badge.style.display = "none";
+        }
+      }
+
+      function addNotification(notification) {
+        const notificationsContainer = document.getElementById("notifications");
+        const notificationElement = document.createElement("div");
+        notificationElement.className = "notification unread";
+
+        if (notification.priority >= 3) {
+          notificationElement.classList.add("high-priority");
+        }
+
+        notificationElement.innerHTML = `
+                <h4>${notification.title}</h4>
+                <p>${notification.message}</p>
+                <small>
+                    Type: ${notification.notificationType} | 
+                    Priority: ${notification.priority} | 
+                    Time: ${new Date(notification.timeStamp).toLocaleString()}
+                </small>
+            `;
+
+        notificationsContainer.insertBefore(
+          notificationElement,
+          notificationsContainer.firstChild
+        );
+        notificationCount++;
+        updateNotificationBadge(notificationCount);
+      }
+
+      // Event handlers
+      function connect() {
+        const apiUrl = document.getElementById("apiUrl").value;
+        const accessToken = document.getElementById("accessToken").value;
+
+        if (!apiUrl || !accessToken) {
+          alert("Please enter API URL and Access Token");
+          return;
+        }
+
+        notificationHub = new NotificationHubClient();
+
+        notificationHub.setEventHandlers({
+          onNotificationReceived: (notification) => {
+            addNotification(notification);
+          },
+
+          onNotificationCountUpdated: (count) => {
+            updateNotificationBadge(count);
+          },
+
+          onConnected: () => {
+            log("Connected to notification hub");
+          },
+
+          onDisconnected: (error) => {
+            log("Disconnected from notification hub");
+          },
+
+          onError: (error) => {
+            log("Error: " + error.message);
+          },
+        });
+
+        notificationHub.initialize(apiUrl, accessToken);
+      }
+
+      function disconnect() {
+        if (notificationHub) {
+          notificationHub.stop();
+        }
+      }
+
+      function clearNotifications() {
+        document.getElementById("notifications").innerHTML = "";
+        notificationCount = 0;
+        updateNotificationBadge(0);
+      }
+
+      async function sendTestNotification() {
+        const notificationType =
+          document.getElementById("notificationType").value;
+        const message = document.getElementById("testMessage").value;
+
+        if (!notificationHub || !notificationHub.isConnected) {
+          alert("Please connect to the notification hub first");
+          return;
+        }
+
+        // This would typically be called from your backend API
+        // For demo purposes, we'll simulate a notification
+        const testNotification = {
+          id: generateGuid(),
+          title: `Test ${notificationType}`,
+          message: message,
+          notificationType: notificationType,
+          priority: Math.floor(Math.random() * 4) + 1,
+          timeStamp: new Date().toISOString(),
+          status: "Unread",
+        };
+
+        addNotification(testNotification);
+        log("Test notification created: " + JSON.stringify(testNotification));
+      }
+
+      function generateGuid() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+          /[xy]/g,
+          function (c) {
+            var r = (Math.random() * 16) | 0,
+              v = c == "x" ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          }
+        );
+      }
+
+      // Initialize
+      log("Real-time Notifications Demo loaded");
+      log("Enter your API URL and JWT token, then click Connect");
+    </script>
+  </body>
+</html>

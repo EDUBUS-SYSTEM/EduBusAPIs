@@ -1,4 +1,6 @@
-﻿namespace Data.Models;
+﻿using Data.Models.Enums;
+
+namespace Data.Models;
 
 public partial class Vehicle : BaseDomain
 {
@@ -6,11 +8,11 @@ public partial class Vehicle : BaseDomain
 
     public int Capacity { get; set; }
 
-    public string Status { get; set; } = null!;
+    public VehicleStatus Status { get; set; } = VehicleStatus.Active;
+    public string? StatusNote { get; set; }
 
     public Guid AdminId { get; set; }
 
     public virtual Admin Admin { get; set; } = null!;
-
-    public virtual DriverVehicle? DriverVehicle { get; set; }
+    public virtual ICollection<DriverVehicle> DriverVehicles { get; set; } = new List<DriverVehicle>();
 }

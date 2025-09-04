@@ -15,6 +15,7 @@ namespace Data.Repos.Interfaces
         Task<IEnumerable<T>> FindByFilterAsync(FilterDefinition<T> filter);
         Task<IEnumerable<T>> FindByFilterAsync(FilterDefinition<T> filter, SortDefinition<T> sort);
         Task<IEnumerable<T>> FindByFilterAsync(FilterDefinition<T> filter, int skip, int limit);
+        Task<IEnumerable<T>> FindByFilterAsync(FilterDefinition<T> filter, SortDefinition<T> sort, int skip, int limit);
         Task<long> GetCountAsync();
         Task<bool> ExistsAsync(Guid id);
         Task<T?> FindOneAndUpdateAsync(FilterDefinition<T> filter, UpdateDefinition<T> update);

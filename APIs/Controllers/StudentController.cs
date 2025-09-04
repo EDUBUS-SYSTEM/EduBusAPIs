@@ -5,6 +5,7 @@ using Services.Implementations;
 using Services.Models.Student;
 using Microsoft.AspNetCore.Authorization;
 using Constants;
+using System.Security.Claims;
 
 namespace APIs.Controllers
 {
@@ -24,7 +25,7 @@ namespace APIs.Controllers
             var isAdmin = User.IsInRole(Roles.Admin);
             if (isAdmin) return true;
 
-            var parentIdClaim = User.FindFirst("ParentId")?.Value;
+            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
                 return false;
 
@@ -36,7 +37,7 @@ namespace APIs.Controllers
             var isAdmin = User.IsInRole(Roles.Admin);
             if (isAdmin) return true;
 
-            var parentIdClaim = User.FindFirst("ParentId")?.Value;
+            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
                 return false;
 

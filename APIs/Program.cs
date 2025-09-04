@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Services.MapperProfiles;
+using APIs.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,12 @@ builder.Configuration
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
+// Add SignalR with CORS support
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+});
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -51,7 +58,9 @@ builder.Services.AddCors(options =>
                 "http://localhost:3000",     // React development
                 "http://localhost:3001",     // React alternative port
                 "https://localhost:3000",    // React HTTPS
-                "https://localhost:3001"     // React HTTPS alternative
+                "https://localhost:3001",    // React HTTPS alternative
+                "http://localhost:5223",     // API HTTP
+                "https://localhost:7061"     // API HTTPS
             )
             .AllowAnyMethod()
             .AllowAnyHeader()
@@ -129,6 +138,9 @@ builder.Services.AddScoped<IDriverVehicleRepository, DriverVehicleRepository>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<IGradeRepository, GradeRepository>();
 builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
+builder.Services.AddScoped<IDriverLeaveRepository, DriverLeaveRepository>();
+builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRepository>();
+builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
@@ -144,7 +156,17 @@ builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<IDriverVehicleService, DriverVehicleService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<IStudentGradeService, StudentGradeService>();
+builder.Services.AddScoped<IDriverLeaveService, DriverLeaveService>();
+builder.Services.AddScoped<IDriverWorkingHoursService, DriverWorkingHoursService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// SignalR Hub Service
+builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
+
+// Background Services
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
+builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestionService>();
+builder.Services.AddHostedService<Services.Backgrounds.NotificationCleanupService>();
 
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
@@ -192,6 +214,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Enable static files
+app.UseStaticFiles();
+
 // Use CORS - Choose one policy based on your needs
 if (app.Environment.IsDevelopment())
 {
@@ -204,6 +229,14 @@ else
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map SignalR Hub with CORS support
+app.MapHub<NotificationHub>("/notificationHub", options =>
+{
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                        Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+});
+
 app.MapControllers();
 
 // Map Health Check endpoints

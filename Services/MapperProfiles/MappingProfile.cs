@@ -2,6 +2,7 @@
 using Data.Models;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
+using Services.Models.Notification;
 using Services.Models.Parent;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
@@ -28,6 +29,8 @@ namespace Services.MapperProfiles
             CreateMap<CreateDriverRequest, Driver>();
             CreateMap<Driver, CreateUserResponse>();
             CreateMap<Driver, DriverResponse>();
+            CreateMap<Driver, DriverStatusResponse>()
+                .ForMember(dest => dest.FullName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"));
             CreateMap<ImportDriverDto, Driver>()
                .ForMember(dest => dest.DateOfBirth,
                opt => opt.MapFrom(src => DateHelper.ParseDate(src.DateOfBirthString)));
@@ -43,6 +46,7 @@ namespace Services.MapperProfiles
             CreateMap<UpdateStudentRequest, Student>();
             CreateMap<ImportStudentDto, Student>();
             CreateMap<Student, ImportStudentSuccess>();
+            
             //student grade mapping
             CreateMap<CreateStudentGradeRequest, StudentGradeEnrollment>();
             CreateMap<UpdateStudentGradeResponse, StudentGradeEnrollment>();
@@ -61,6 +65,46 @@ namespace Services.MapperProfiles
             //DriverVehicle mapping
             CreateMap<DriverVehicle, DriverAssignmentDto>();
             CreateMap<Driver, DriverInfoDto>();
+            
+            // Driver Leave mapping
+            CreateMap<CreateLeaveRequestDto, DriverLeaveRequest>();
+            CreateMap<DriverLeaveRequest, DriverLeaveResponse>()
+                .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"))
+                .ForMember(dest => dest.DriverEmail, opt => opt.MapFrom(src => src.Driver.Email))
+                .ForMember(dest => dest.TotalDays, opt => opt.MapFrom(src => (src.EndDate - src.StartDate).Days + 1));
+            CreateMap<ApproveLeaveRequestDto, DriverLeaveRequest>();
+            CreateMap<RejectLeaveRequestDto, DriverLeaveRequest>();
+            CreateMap<UpdateLeaveRequestDto, DriverLeaveRequest>();
+            
+            // Driver Leave Conflict mapping
+            CreateMap<DriverLeaveConflict, DriverLeaveConflictDto>();
+            
+            // Driver Working Hours mapping
+            CreateMap<CreateWorkingHoursDto, DriverWorkingHours>();
+            CreateMap<UpdateWorkingHoursDto, DriverWorkingHours>();
+            CreateMap<DriverWorkingHours, DriverWorkingHoursResponse>()
+                .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"));
+            
+            // Driver Vehicle Assignment mapping
+            CreateMap<EnhancedDriverAssignmentRequest, DriverVehicle>();
+            CreateMap<UpdateAssignmentRequest, DriverVehicle>();
+            CreateMap<DriverVehicle, EnhancedDriverAssignmentResponse>()
+                .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"))
+                .ForMember(dest => dest.VehiclePlate, opt => opt.MapFrom(src => 
+                    src.Vehicle != null ? Utils.SecurityHelper.DecryptFromBytes(src.Vehicle.HashedLicensePlate) : string.Empty))
+                .ForMember(dest => dest.AssignmentId, opt => opt.MapFrom(src => src.Id));
+            
+            // Assignment Conflict mapping
+            CreateMap<DriverVehicle, AssignmentConflictDto>();
+            
+            // Driver Assignment Summary mapping
+            CreateMap<Driver, DriverAssignmentSummaryDto>()
+                .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"))
+                .ForMember(dest => dest.DriverEmail, opt => opt.MapFrom(src => src.Email));
+            
+            // Notification mapping
+            CreateMap<CreateNotificationDto, Notification>();
+            CreateMap<Notification, NotificationResponse>();
         }
     }
 }
