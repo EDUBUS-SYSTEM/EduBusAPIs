@@ -117,6 +117,15 @@ namespace Data.Repos.MongoDB
             return await _collection.Find(combinedFilter).Skip(skip).Limit(limit).ToListAsync();
         }
 
+        public virtual async Task<IEnumerable<T>> FindByFilterAsync(FilterDefinition<T> filter, SortDefinition<T> sort, int skip, int limit)
+        {
+            var combinedFilter = Builders<T>.Filter.And(
+                filter,
+                Builders<T>.Filter.Eq(x => x.IsDeleted, false)
+            );
+            return await _collection.Find(combinedFilter).Sort(sort).Skip(skip).Limit(limit).ToListAsync();
+        }
+
         public virtual async Task<long> GetCountAsync()
         {
             var filter = Builders<T>.Filter.Eq(x => x.IsDeleted, false);

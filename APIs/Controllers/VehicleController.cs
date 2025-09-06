@@ -5,6 +5,7 @@ using Services.Models.Vehicle;
 using Services.Models.DriverVehicle;
 using Constants;
 using System.Security.Claims;
+using Services.Models.Driver;
 
 namespace APIs.Controllers
 {
@@ -153,5 +154,221 @@ namespace APIs.Controllers
                 return Conflict(new { success = false, error = ex.Message });
             }
         }
+
+        #region Enhanced Driver-Vehicle Assignment
+
+        /// <summary>
+        /// Enhanced driver assignment with validation - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{vehicleId}/drivers/assign-enhanced")]
+        public async Task<ActionResult<DriverAssignmentResponse>> AssignDriverWithValidation(Guid vehicleId, [FromBody] DriverAssignmentRequest request)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.AssignDriverWithValidationAsync(vehicleId, request, adminId);
+                if (result == null)
+                    return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
+
+                return CreatedAtAction(nameof(GetDriversByVehicle), new { vehicleId = vehicleId }, result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Update driver assignment - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPut("assignments/{assignmentId}")]
+        public async Task<ActionResult<DriverAssignmentResponse>> UpdateAssignment(Guid assignmentId, [FromBody] UpdateAssignmentRequest request)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.UpdateAssignmentAsync(assignmentId, request, adminId);
+                if (result == null)
+                    return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Cancel driver assignment - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpDelete("assignments/{assignmentId}")]
+        public async Task<ActionResult<DriverAssignmentResponse>> CancelAssignment(Guid assignmentId, [FromQuery] string reason)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.CancelAssignmentAsync(assignmentId, reason, adminId);
+                if (result == null)
+                    return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Detect assignment conflicts for a vehicle - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet("{vehicleId}/conflicts")]
+        public async Task<ActionResult<IEnumerable<AssignmentConflictDto>>> DetectConflicts(
+            Guid vehicleId, 
+            [FromQuery] DateTime startTime, 
+            [FromQuery] DateTime endTime)
+        {
+            try
+            {
+                var conflicts = await _driveVveicleService.DetectAssignmentConflictsAsync(vehicleId, startTime, endTime);
+                return Ok(conflicts);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while detecting conflicts." });
+            }
+        }
+
+        /// <summary>
+        /// Suggest replacement for assignment - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("assignments/{assignmentId}/suggest")]
+        public async Task<ActionResult<ReplacementSuggestionResponse>> SuggestReplacement(Guid assignmentId)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.SuggestReplacementAsync(assignmentId, adminId);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { success = false, error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while generating suggestions." });
+            }
+        }
+
+        /// <summary>
+        /// Accept replacement suggestion - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPut("assignments/{assignmentId}/accept-suggestion/{suggestionId}")]
+        public async Task<ActionResult<object>> AcceptReplacementSuggestion(Guid assignmentId, Guid suggestionId)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.AcceptReplacementSuggestionAsync(assignmentId, suggestionId, adminId);
+                return Ok(new { success = result, message = "Replacement suggestion accepted." });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { success = false, error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while accepting suggestion." });
+            }
+        }
+
+        /// <summary>
+        /// Approve assignment - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPut("assignments/{assignmentId}/approve")]
+        public async Task<ActionResult<DriverAssignmentResponse>> ApproveAssignment(Guid assignmentId, [FromQuery] string? note)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.ApproveAssignmentAsync(assignmentId, adminId, note);
+                if (result == null)
+                    return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Reject assignment - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPut("assignments/{assignmentId}/reject")]
+        public async Task<ActionResult<DriverAssignmentResponse>> RejectAssignment(Guid assignmentId, [FromQuery] string reason)
+        {
+            var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (adminIdClaim == null)
+                return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
+
+            Guid adminId = Guid.Parse(adminIdClaim.Value);
+
+            try
+            {
+                var result = await _driveVveicleService.RejectAssignmentAsync(assignmentId, adminId, reason);
+                if (result == null)
+                    return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
+
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+        }
+
+        #endregion
     }
 }

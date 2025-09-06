@@ -12,6 +12,7 @@ namespace Utils
     public interface IDatabaseFactory
     {
         T GetRepository<T>() where T : class;
+        T GetRepositoryByType<T>(DatabaseType databaseType) where T : class;
         DatabaseType GetDefaultDatabaseType();
         bool IsDatabaseEnabled(DatabaseType databaseType);
     }
