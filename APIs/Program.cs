@@ -19,6 +19,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Services.MapperProfiles;
 using APIs.Hubs;
+using Data.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -125,7 +126,6 @@ builder.Services.AddSingleton<EduBusMongoContext>();
 
 // Repository Registration
 builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
-builder.Services.AddScoped(typeof(IMongoRepository<>), typeof(MongoRepository<>));
 
 // Repository Registration for SqlServer
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
@@ -144,6 +144,8 @@ builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepo
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
+builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
+builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();

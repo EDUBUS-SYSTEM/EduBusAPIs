@@ -38,6 +38,22 @@ namespace Services.Implementations
 
         public async Task<DriverLeaveResponse> CreateLeaveRequestAsync(CreateLeaveRequestDto dto)
         {
+            var today = DateTime.Today;
+            if (dto.StartDate < today)
+            {
+                throw new InvalidOperationException("Leave start date cannot be in the past.");
+            }
+            
+            if (dto.EndDate < today)
+            {
+                throw new InvalidOperationException("Leave end date cannot be in the past.");
+            }
+            
+            if (dto.EndDate < dto.StartDate)
+            {
+                throw new InvalidOperationException("Leave end date cannot be before start date.");
+            }
+            
             var entity = _mapper.Map<DriverLeaveRequest>(dto);
             entity.Id = Guid.NewGuid();
             entity.RequestedAt = DateTime.UtcNow;
@@ -108,6 +124,17 @@ namespace Services.Implementations
         {
             var entity = await _leaveRepo.FindAsync(leaveId);
             if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
+            
+            if (dto.EffectiveFrom.HasValue && dto.EffectiveFrom.Value != entity.StartDate)
+            {
+                throw new InvalidOperationException("EffectiveFrom date must match the leave request start date.");
+            }
+            
+            if (dto.EffectiveTo.HasValue && dto.EffectiveTo.Value != entity.EndDate)
+            {
+                throw new InvalidOperationException("EffectiveTo date must match the leave request end date.");
+            }
+            
             entity.Status = dto.IsApproved ? LeaveStatus.Approved : LeaveStatus.Rejected;
             entity.ApprovedAt = DateTime.UtcNow;
             entity.ApprovedByAdminId = adminId;
@@ -156,6 +183,31 @@ namespace Services.Implementations
         {
             var entity = await _leaveRepo.FindAsync(leaveId);
             if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
+            
+            if (dto.SuggestedAlternativeStartDate.HasValue && dto.SuggestedAlternativeEndDate.HasValue)
+            {
+                var today = DateTime.Today;
+                
+                if (dto.SuggestedAlternativeStartDate.Value < today)
+                {
+                    throw new InvalidOperationException("Suggested alternative start date cannot be in the past.");
+                }
+                
+                if (dto.SuggestedAlternativeEndDate.Value < today)
+                {
+                    throw new InvalidOperationException("Suggested alternative end date cannot be in the past.");
+                }
+                
+                if (dto.SuggestedAlternativeEndDate.Value < dto.SuggestedAlternativeStartDate.Value)
+                {
+                    throw new InvalidOperationException("Suggested alternative end date cannot be before suggested start date.");
+                }
+            }
+            else if (dto.SuggestedAlternativeStartDate.HasValue || dto.SuggestedAlternativeEndDate.HasValue)
+            {
+                throw new InvalidOperationException("Both suggested alternative start date and end date must be provided together.");
+            }
+            
             entity.Status = LeaveStatus.Rejected;
             entity.ApprovedAt = DateTime.UtcNow;
             entity.ApprovedByAdminId = adminId;

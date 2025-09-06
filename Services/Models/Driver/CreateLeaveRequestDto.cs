@@ -5,7 +5,6 @@ namespace Services.Models.Driver
 {
     public class CreateLeaveRequestDto
     {
-        [Required(ErrorMessage = "Driver ID is required.")]
         public Guid DriverId { get; set; }
         
         [Required(ErrorMessage = "Leave type is required.")]

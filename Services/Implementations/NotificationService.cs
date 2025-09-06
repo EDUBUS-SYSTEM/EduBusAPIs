@@ -37,6 +37,45 @@ namespace Services.Implementations
             return _databaseFactory.GetRepositoryByType<IMongoRepository<Notification>>(DatabaseType.MongoDb);
         }
 
+        private Dictionary<string, object> ConvertMetadataForMongoDB(Dictionary<string, object> metadata)
+        {
+            var convertedMetadata = new Dictionary<string, object>();
+            
+            foreach (var kvp in metadata)
+            {
+                var value = kvp.Value;
+                
+                if (value is System.Text.Json.JsonElement jsonElement)
+                {
+                    convertedMetadata[kvp.Key] = ConvertJsonElement(jsonElement);
+                }
+                else
+                {
+                    convertedMetadata[kvp.Key] = value;
+                }
+            }
+            
+            return convertedMetadata;
+        }
+
+        private object ConvertJsonElement(System.Text.Json.JsonElement jsonElement)
+        {
+            return jsonElement.ValueKind switch
+            {
+                System.Text.Json.JsonValueKind.String => jsonElement.GetString()!,
+                System.Text.Json.JsonValueKind.Number => jsonElement.TryGetInt32(out var intValue) ? intValue : jsonElement.GetDouble(),
+                System.Text.Json.JsonValueKind.True => true,
+                System.Text.Json.JsonValueKind.False => false,
+                System.Text.Json.JsonValueKind.Null => null!,
+                System.Text.Json.JsonValueKind.Array => jsonElement.EnumerateArray().Select(ConvertJsonElement).ToArray(),
+                System.Text.Json.JsonValueKind.Object => jsonElement.EnumerateObject().ToDictionary(
+                    prop => prop.Name, 
+                    prop => ConvertJsonElement(prop.Value)
+                ),
+                _ => jsonElement.ToString()
+            };
+        }
+
         public async Task<NotificationResponse> CreateNotificationAsync(CreateNotificationDto dto)
         {
             try
@@ -45,6 +84,11 @@ namespace Services.Implementations
                 notification.Id = Guid.NewGuid();
                 notification.TimeStamp = DateTime.UtcNow;
                 notification.Status = NotificationStatus.Unread;
+
+                if (notification.Metadata != null)
+                {
+                    notification.Metadata = ConvertMetadataForMongoDB(notification.Metadata);
+                }
 
                 var repository = GetRepository();
                 var created = await repository.AddAsync(notification);

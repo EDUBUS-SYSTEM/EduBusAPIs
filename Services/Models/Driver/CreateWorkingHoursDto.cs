@@ -8,6 +8,7 @@ namespace Services.Models.Driver
         public Guid DriverId { get; set; }
         
         [Required]
+        [Range(0, 6, ErrorMessage = "DayOfWeek must be between 0 (Sunday) and 6 (Saturday).")]
         public DayOfWeek DayOfWeek { get; set; }
         
         [Required]

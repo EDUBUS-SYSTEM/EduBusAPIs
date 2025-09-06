@@ -1718,25 +1718,34 @@ Expected Response:
 }
 ```
 
-### 13.8 Create Admin Notification
+### 13.8 Create Notification
 
-**Endpoint:** `POST /api/notification/admin`
+**Endpoint:** `POST /api/notification`
 **Authorization:** Bearer Token (Admin only)
+
+**Description:** Create a notification for a specific user. Only administrators can create notifications.
 
 **Request Body:**
 
 ```json
 {
-  "type": 4,
-  "title": "System Maintenance",
-  "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
-  "priority": 3,
-  "requiresAction": false,
-  "expiresAt": "2024-01-15T04:00:00Z",
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Leave Request Approved",
+  "message": "Your leave request for 2024-01-15 to 2024-01-17 has been approved.",
+  "notificationType": 3,
+  "recipientType": 2,
+  "priority": 2,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440003",
+  "relatedEntityType": "DriverLeaveRequest",
+  "actionRequired": false,
+  "actionUrl": "/driver/leaves/550e8400-e29b-41d4-a716-446655440003",
+  "expiresAt": "2024-01-20T23:59:59Z",
   "metadata": {
-    "maintenanceType": "Database",
-    "affectedServices": ["API", "Database"],
-    "estimatedDuration": "2 hours"
+    "leaveRequestId": "550e8400-e29b-41d4-a716-446655440003",
+    "leaveType": "SickLeave",
+    "startDate": "2024-01-15T00:00:00Z",
+    "endDate": "2024-01-17T00:00:00Z",
+    "approvedBy": "Admin User"
   }
 }
 ```
@@ -1745,23 +1754,357 @@ Expected Response:
 
 ```json
 {
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "type": 4,
-    "title": "System Maintenance",
-    "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
-    "priority": 3,
-    "status": 0,
-    "requiresAction": false,
-    "expiresAt": "2024-01-15T04:00:00Z",
-    "createdAt": "2024-01-10T10:30:00Z"
-  },
-  "error": null
+  "id": "uuid",
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Leave Request Approved",
+  "message": "Your leave request for 2024-01-15 to 2024-01-17 has been approved.",
+  "notificationType": 3,
+  "recipientType": 2,
+  "priority": 2,
+  "status": 0,
+  "isRead": false,
+  "isAcknowledged": false,
+  "actionRequired": false,
+  "actionUrl": "/driver/leaves/550e8400-e29b-41d4-a716-446655440003",
+  "expiresAt": "2024-01-20T23:59:59Z",
+  "createdAt": "2024-01-10T10:30:00Z",
+  "metadata": {
+    "leaveRequestId": "550e8400-e29b-41d4-a716-446655440003",
+    "leaveType": "SickLeave",
+    "startDate": "2024-01-15T00:00:00Z",
+    "endDate": "2024-01-17T00:00:00Z",
+    "approvedBy": "Admin User"
+  }
 }
 ```
 
-### 13.9 Delete Notification
+**Error Responses:**
+
+- `400`: Validation errors (invalid userId, missing required fields)
+- `403`: Forbidden - Non-admin user attempting to create notification
+- `404`: User not found
+- `500`: Server error
+
+### 13.9 Create Admin Notification
+
+**Endpoint:** `POST /api/notification/admin`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Create a notification for all administrators. Only administrators can create admin notifications.
+
+**Request Body:**
+
+```json
+{
+  "title": "System Maintenance",
+  "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
+  "notificationType": 7,
+  "priority": 3,
+  "relatedEntityId": null,
+  "relatedEntityType": "System",
+  "actionRequired": false,
+  "actionUrl": "/admin/maintenance",
+  "expiresAt": "2024-01-15T04:00:00Z",
+  "metadata": {
+    "maintenanceType": "Database",
+    "affectedServices": ["API", "Database"],
+    "estimatedDuration": "2 hours",
+    "scheduledBy": "System Administrator"
+  }
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "id": "uuid",
+  "title": "System Maintenance",
+  "message": "Scheduled maintenance will occur on 2024-01-15 from 02:00 to 04:00",
+  "notificationType": 7,
+  "recipientType": 1,
+  "priority": 3,
+  "status": 0,
+  "isRead": false,
+  "isAcknowledged": false,
+  "actionRequired": false,
+  "actionUrl": "/admin/maintenance",
+  "expiresAt": "2024-01-15T04:00:00Z",
+  "createdAt": "2024-01-10T10:30:00Z",
+  "metadata": {
+    "maintenanceType": "Database",
+    "affectedServices": ["API", "Database"],
+    "estimatedDuration": "2 hours",
+    "scheduledBy": "System Administrator"
+  }
+}
+```
+
+**Error Responses:**
+
+- `400`: Validation errors (missing required fields)
+- `403`: Forbidden - Non-admin user attempting to create admin notification
+- `500`: Server error
+
+### 13.10 Additional Notification Test Scenarios
+
+#### 13.10.1 Create Emergency Notification
+
+**Endpoint:** `POST /api/notification`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Emergency Route Change",
+  "message": "Route 43A-12345 has been temporarily changed due to road construction. Please follow the alternative route.",
+  "notificationType": 10,
+  "recipientType": 2,
+  "priority": 1,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440004",
+  "relatedEntityType": "Route",
+  "actionRequired": true,
+  "actionUrl": "/driver/routes/550e8400-e29b-41d4-a716-446655440004",
+  "expiresAt": "2024-01-15T18:00:00Z",
+  "metadata": {
+    "routeId": "550e8400-e29b-41d4-a716-446655440004",
+    "licensePlate": "43A-12345",
+    "reason": "Road Construction",
+    "alternativeRoute": "Route 43A-67890",
+    "estimatedDuration": "2 hours"
+  }
+}
+```
+
+#### 13.10.2 Create Replacement Suggestion Notification
+
+**Endpoint:** `POST /api/notification`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "title": "Replacement Driver Suggestion",
+  "message": "A replacement driver suggestion has been generated for John Driver's leave request.",
+  "notificationType": 2,
+  "recipientType": 1,
+  "priority": 2,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440003",
+  "relatedEntityType": "DriverLeaveRequest",
+  "actionRequired": true,
+  "actionUrl": "/admin/leaves/550e8400-e29b-41d4-a716-446655440003/suggestions",
+  "expiresAt": "2024-01-12T23:59:59Z",
+  "metadata": {
+    "leaveRequestId": "550e8400-e29b-41d4-a716-446655440003",
+    "originalDriverId": "550e8400-e29b-41d4-a716-446655440002",
+    "originalDriverName": "John Driver",
+    "suggestedDriverId": "550e8400-e29b-41d4-a716-446655440005",
+    "suggestedDriverName": "Jane Driver",
+    "confidenceScore": 0.85
+  }
+}
+```
+
+#### 13.10.3 Create Schedule Change Notification
+
+**Endpoint:** `POST /api/notification`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Schedule Change Notification",
+  "message": "Your schedule for tomorrow has been updated. Please check the new times.",
+  "notificationType": 9,
+  "recipientType": 2,
+  "priority": 2,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440006",
+  "relatedEntityType": "Schedule",
+  "actionRequired": true,
+  "actionUrl": "/driver/schedule/550e8400-e29b-41d4-a716-446655440006",
+  "expiresAt": "2024-01-16T23:59:59Z",
+  "metadata": {
+    "scheduleId": "550e8400-e29b-41d4-a716-446655440006",
+    "oldStartTime": "08:00:00",
+    "newStartTime": "08:30:00",
+    "oldEndTime": "17:00:00",
+    "newEndTime": "17:30:00",
+    "reason": "Traffic optimization",
+    "effectiveDate": "2024-01-15T00:00:00Z"
+  }
+}
+```
+
+#### 13.10.4 Create Maintenance Reminder Notification
+
+**Endpoint:** `POST /api/notification/admin`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "title": "Vehicle Maintenance Reminder",
+  "message": "Vehicle 43A-12345 is due for maintenance on 2024-01-20. Please schedule maintenance appointment.",
+  "notificationType": 8,
+  "priority": 2,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440004",
+  "relatedEntityType": "Vehicle",
+  "actionRequired": true,
+  "actionUrl": "/admin/vehicles/550e8400-e29b-41d4-a716-446655440004/maintenance",
+  "expiresAt": "2024-01-20T23:59:59Z",
+  "metadata": {
+    "vehicleId": "550e8400-e29b-41d4-a716-446655440004",
+    "licensePlate": "43A-12345",
+    "maintenanceType": "Regular Service",
+    "dueDate": "2024-01-20T00:00:00Z",
+    "lastMaintenanceDate": "2023-10-20T00:00:00Z",
+    "mileage": 15000
+  }
+}
+```
+
+#### 13.10.5 Test Scenarios for Notification Creation
+
+**Scenario 1: Create notification with minimal required fields**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Simple Notification",
+  "message": "This is a simple notification",
+  "notificationType": 7,
+  "recipientType": 2
+}
+```
+
+**Scenario 2: Create notification with all optional fields**
+
+```json
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440002",
+  "title": "Complete Notification",
+  "message": "This notification includes all possible fields",
+  "notificationType": 1,
+  "recipientType": 2,
+  "priority": 1,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440003",
+  "relatedEntityType": "DriverLeaveRequest",
+  "actionRequired": true,
+  "actionUrl": "/driver/leaves/550e8400-e29b-41d4-a716-446655440003",
+  "expiresAt": "2024-01-20T23:59:59Z",
+  "metadata": {
+    "customField1": "value1",
+    "customField2": "value2",
+    "nestedObject": {
+      "nestedField": "nestedValue"
+    }
+  }
+}
+```
+
+**Scenario 3: Test validation errors**
+
+- **Missing userId**: Should return 400 Bad Request
+- **Invalid notificationType**: Should return 400 Bad Request
+- **Invalid recipientType**: Should return 400 Bad Request
+- **Non-admin user**: Should return 403 Forbidden
+- **Non-existent userId**: Should return 404 Not Found
+
+#### 13.10.8 Working cURL Example
+
+**Create Replacement Suggestion Notification:**
+
+```bash
+curl -X 'POST' \
+  'http://localhost:5223/api/Notification' \
+  -H 'accept: text/plain' \
+  -H 'Authorization: Bearer {your_jwt_token}' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "title": "Replacement Driver Suggestion",
+  "message": "A replacement driver suggestion has been generated for John Driver'\''s leave request.",
+  "notificationType": 2,
+  "recipientType": 1,
+  "priority": 2,
+  "relatedEntityId": "550e8400-e29b-41d4-a716-446655440003",
+  "relatedEntityType": "DriverLeaveRequest",
+  "actionRequired": true,
+  "actionUrl": "/admin/leaves/550e8400-e29b-41d4-a716-446655440003/suggestions",
+  "expiresAt": "2024-01-12T23:59:59Z",
+  "metadata": {
+    "leaveRequestId": "550e8400-e29b-41d4-a716-446655440003",
+    "originalDriverId": "550e8400-e29b-41d4-a716-446655440002",
+    "originalDriverName": "John Driver",
+    "suggestedDriverId": "550e8400-e29b-41d4-a716-446655440005",
+    "suggestedDriverName": "Jane Driver",
+    "confidenceScore": 0.85
+  }
+}'
+```
+
+**Expected Response:**
+
+```json
+{
+  "id": "uuid",
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "title": "Replacement Driver Suggestion",
+  "message": "A replacement driver suggestion has been generated for John Driver's leave request.",
+  "notificationType": 2,
+  "recipientType": 1,
+  "priority": 2,
+  "status": 0,
+  "isRead": false,
+  "isAcknowledged": false,
+  "actionRequired": true,
+  "actionUrl": "/admin/leaves/550e8400-e29b-41d4-a716-446655440003/suggestions",
+  "expiresAt": "2024-01-12T23:59:59Z",
+  "createdAt": "2024-01-10T10:30:00Z",
+  "metadata": {
+    "leaveRequestId": "550e8400-e29b-41d4-a716-446655440003",
+    "originalDriverId": "550e8400-e29b-41d4-a716-446655440002",
+    "originalDriverName": "John Driver",
+    "suggestedDriverId": "550e8400-e29b-41d4-a716-446655440005",
+    "suggestedDriverName": "Jane Driver",
+    "confidenceScore": 0.85
+  }
+}
+```
+
+#### 13.10.9 Notification Type Reference
+
+| Type ID | Notification Type     | Description                     | Typical Use Case                       |
+| ------- | --------------------- | ------------------------------- | -------------------------------------- |
+| 1       | DriverLeaveRequest    | Driver requests leave           | New leave request submitted            |
+| 2       | ReplacementSuggestion | System suggests replacement     | Auto-generated replacement suggestions |
+| 3       | LeaveApproval         | Leave request approved/rejected | Admin approves/rejects leave           |
+| 4       | ConflictDetected      | System detects conflicts        | Overlapping assignments detected       |
+| 5       | ReplacementAccepted   | Replacement suggestion accepted | Admin accepts replacement              |
+| 6       | ReplacementRejected   | Replacement suggestion rejected | Admin rejects replacement              |
+| 7       | SystemAlert           | General system alert            | System maintenance, errors             |
+| 8       | MaintenanceReminder   | Maintenance due reminder        | Vehicle/driver maintenance due         |
+| 9       | ScheduleChange        | Schedule updated                | Route/schedule changes                 |
+| 10      | EmergencyNotification | Emergency situation             | Urgent notifications                   |
+
+#### 13.10.10 Recipient Type Reference
+
+| Type ID | Recipient Type | Description        | Target Audience              |
+| ------- | -------------- | ------------------ | ---------------------------- |
+| 1       | Admin          | Administrator only | System administrators        |
+| 2       | Driver         | Driver only        | Bus drivers                  |
+| 3       | Parent         | Parent only        | Student parents              |
+| 4       | All            | All users          | Broadcast to all users       |
+| 5       | SpecificUser   | Specific user      | Individual user notification |
+
+### 13.11 Delete Notification
 
 **Endpoint:** `DELETE /api/notification/{notificationId}`
 **Authorization:** Bearer Token (All roles)
@@ -1932,7 +2275,34 @@ connection.on("ReceiveAdminNotification", (notification) => {
    - Mark as read, acknowledge, delete
    - Verify count updates in real-time
 
-### Scenario 4: Working Hours Management
+### Scenario 4: Notification Creation Testing
+
+1. **Create user-specific notification**
+
+   - POST /api/notification
+   - Test with different notification types
+   - Verify real-time delivery to target user
+
+2. **Create admin notification**
+
+   - POST /api/notification/admin
+   - Test with system alerts and maintenance reminders
+   - Verify delivery to all admins
+
+3. **Test notification validation**
+
+   - Test with missing required fields
+   - Test with invalid enum values
+   - Test with non-admin users
+   - Verify proper error responses
+
+4. **Test notification metadata**
+
+   - Test with complex metadata objects
+   - Test with nested JSON structures
+   - Verify metadata is properly stored and returned
+
+### Scenario 5: Working Hours Management
 
 1. **Set driver working hours**
 

@@ -19,6 +19,11 @@ namespace Services.Implementations
 
         public async Task<DriverWorkingHoursResponse> CreateWorkingHoursAsync(CreateWorkingHoursDto dto)
         {
+            if (dto.EndTime <= dto.StartTime)
+            {
+                throw new InvalidOperationException("EndTime must be greater than StartTime.");
+            }
+
             var entity = _mapper.Map<DriverWorkingHours>(dto);
             entity.Id = Guid.NewGuid();
             var created = await _repo.AddAsync(entity);
@@ -28,6 +33,15 @@ namespace Services.Implementations
         public async Task<DriverWorkingHoursResponse> UpdateWorkingHoursAsync(Guid workingHoursId, UpdateWorkingHoursDto dto)
         {
             var entity = await _repo.FindAsync(workingHoursId) ?? throw new InvalidOperationException("Working hours not found");
+            
+            var finalStartTime = dto.StartTime.HasValue ? dto.StartTime.Value : entity.StartTime;
+            var finalEndTime = dto.EndTime.HasValue ? dto.EndTime.Value : entity.EndTime;
+            
+            if (finalEndTime <= finalStartTime)
+            {
+                throw new InvalidOperationException("EndTime must be greater than StartTime.");
+            }
+            
             if (dto.StartTime.HasValue) entity.StartTime = dto.StartTime.Value;
             if (dto.EndTime.HasValue) entity.EndTime = dto.EndTime.Value;
             if (dto.IsAvailable.HasValue) entity.IsAvailable = dto.IsAvailable.Value;

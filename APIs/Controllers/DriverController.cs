@@ -349,6 +349,8 @@ namespace APIs.Controllers
                     return Forbid();
                 }
 
+                request.DriverId = id;
+                
                 var leave = await _driverLeaveService.CreateLeaveRequestAsync(request);
                 return CreatedAtAction(nameof(GetDriverLeaves), new { id = id }, leave);
             }
