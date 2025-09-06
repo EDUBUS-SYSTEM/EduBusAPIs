@@ -5,6 +5,7 @@ using Constants;
 using Microsoft.AspNetCore.Authorization;
 using Services.Models.UserAccount;
 using Utils;
+using Services.Models.UserAccount.AccountManagement;
 
 namespace APIs.Controllers
 {
@@ -29,7 +30,8 @@ namespace APIs.Controllers
         [HttpGet]
         public async Task<ActionResult<UserListResponse>> GetUsers(
             [FromQuery] string? status,
-            [FromQuery] string? sortBy,
+			[FromQuery] string? search,
+			[FromQuery] string? sortBy,
             [FromQuery] string? sortOrder,
             [FromQuery] int page = 1,
             [FromQuery] int perPage = 20)
@@ -39,7 +41,7 @@ namespace APIs.Controllers
                 if (page < 1) page = 1;
                 if (perPage < 1 || perPage > 100) perPage = 20;
 
-                var result = await _userService.GetUsersAsync(status, page, perPage, sortBy, sortOrder);
+                var result = await _userService.GetUsersAsync(status, search, page, perPage, sortBy, sortOrder);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -273,5 +275,145 @@ namespace APIs.Controllers
                 return StatusCode(500, "An error occurred while retrieving the user photo.");
             }
         }
-    }
+
+		/// <summary>
+		/// Lock a user account - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpPost("{userId}/lock")]
+		public async Task<ActionResult<BasicSuccessResponse>> LockUser(Guid userId, [FromBody] LockUserRequest request)
+		{
+			try
+			{
+				var currentUserId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!currentUserId.HasValue)
+					return Unauthorized();
+
+				var result = await _userService.LockUserAsync(userId, request.LockedUntil, request.Reason, currentUserId.Value);
+				return Ok(result);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new ErrorResponse
+				{
+					Message = ex.Message,
+					StatusCode = 400
+				});
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new ErrorResponse
+				{
+					Message = "An error occurred while locking the user",
+					Details = ex.Message,
+					StatusCode = 500
+				});
+			}
+		}
+
+		/// <summary>
+		/// Unlock a user account - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpPost("{userId}/unlock")]
+		public async Task<ActionResult<BasicSuccessResponse>> UnlockUser(Guid userId)
+		{
+			try
+			{
+				var currentUserId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!currentUserId.HasValue)
+					return Unauthorized();
+
+				var result = await _userService.UnlockUserAsync(userId, currentUserId.Value);
+				return Ok(result);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new ErrorResponse
+				{
+					Message = ex.Message,
+					StatusCode = 400
+				});
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new ErrorResponse
+				{
+					Message = "An error occurred while unlocking the user",
+					Details = ex.Message,
+					StatusCode = 500
+				});
+			}
+		}
+        
+		/// <summary>
+		/// Lock multiple user accounts - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpPost("lock-multiple")]
+		public async Task<ActionResult<BasicSuccessResponse>> LockMultipleUsers([FromBody] LockMultipleUsersRequest request)
+		{
+			try
+			{
+				var currentUserId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!currentUserId.HasValue)
+					return Unauthorized();
+
+				var result = await _userService.LockMultipleUsersAsync(request.UserIds, request.LockedUntil, request.Reason, currentUserId.Value);
+				return Ok(result);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new ErrorResponse
+				{
+					Message = ex.Message,
+					StatusCode = 400
+				});
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new ErrorResponse
+				{
+					Message = "An error occurred while locking users",
+					Details = ex.Message,
+					StatusCode = 500
+				});
+			}
+		}
+
+		/// <summary>
+		/// Unlock multiple user accounts - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpPost("unlock-multiple")]
+		public async Task<ActionResult<BasicSuccessResponse>> UnlockMultipleUsers([FromBody] UnlockMultipleUsersRequest request)
+		{
+			try
+			{
+				var currentUserId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!currentUserId.HasValue)
+					return Unauthorized();
+
+				var result = await _userService.UnlockMultipleUsersAsync(request.UserIds, currentUserId.Value);
+				return Ok(result);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new ErrorResponse
+				{
+					Message = ex.Message,
+					StatusCode = 400
+				});
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new ErrorResponse
+				{
+					Message = "An error occurred while unlocking users",
+					Details = ex.Message,
+					StatusCode = 500
+				});
+			}
+		}
+	}
 }

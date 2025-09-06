@@ -34,5 +34,58 @@ namespace Data.Repos.SqlServer
             return await _table
                   .AnyAsync(u => u.PhoneNumber == phoneNumber);
         }
-    }
+
+		// Lock/Unlock users
+		public async Task<int> LockUserAsync(Guid userId, DateTime? lockedUntil, string? reason, Guid lockedBy)
+		{
+			return await _table
+				.Where(u => u.Id == userId && !u.IsDeleted)
+				.ExecuteUpdateAsync(setters => setters
+					.SetProperty(u => u.LockedUntil, lockedUntil)
+					.SetProperty(u => u.LockReason, reason)
+					.SetProperty(u => u.LockedAt, DateTime.UtcNow)
+					.SetProperty(u => u.LockedBy, lockedBy)
+					.SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+		}
+
+		public async Task<int> UnlockUserAsync(Guid userId, Guid unlockedBy)
+		{
+			return await _table
+				.Where(u => u.Id == userId && !u.IsDeleted)
+				.ExecuteUpdateAsync(setters => setters
+					.SetProperty(u => u.LockedUntil, (DateTime?)null)
+					.SetProperty(u => u.LockReason, (string?)null)
+					.SetProperty(u => u.LockedAt, (DateTime?)null)
+					.SetProperty(u => u.LockedBy, (Guid?)null)
+					.SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+		}
+
+		public async Task<int> LockUsersAsync(List<Guid> userIds, DateTime? lockedUntil, string? reason, Guid lockedBy)
+		{
+			if (!userIds.Any()) return 0;
+
+			return await _table
+				.Where(u => userIds.Contains(u.Id) && !u.IsDeleted)
+				.ExecuteUpdateAsync(setters => setters
+					.SetProperty(u => u.LockedUntil, lockedUntil)
+					.SetProperty(u => u.LockReason, reason)
+					.SetProperty(u => u.LockedAt, DateTime.UtcNow)
+					.SetProperty(u => u.LockedBy, lockedBy)
+					.SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+		}
+
+		public async Task<int> UnlockUsersAsync(List<Guid> userIds, Guid unlockedBy)
+		{
+			if (!userIds.Any()) return 0;
+
+			return await _table
+				.Where(u => userIds.Contains(u.Id) && !u.IsDeleted)
+				.ExecuteUpdateAsync(setters => setters
+					.SetProperty(u => u.LockedUntil, (DateTime?)null)
+					.SetProperty(u => u.LockReason, (string?)null)
+					.SetProperty(u => u.LockedAt, (DateTime?)null)
+					.SetProperty(u => u.LockedBy, (Guid?)null)
+					.SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+		}
+	}
 }

@@ -18,4 +18,9 @@ public partial class UserAccount : BaseDomain
     public Gender Gender { get; set; }
     
     public Guid? UserPhotoFileId { get; set; }
+
+	public DateTime? LockedUntil { get; set; }
+	public string? LockReason { get; set; }
+	public DateTime? LockedAt { get; set; }
+	public Guid? LockedBy { get; set; }
 }
