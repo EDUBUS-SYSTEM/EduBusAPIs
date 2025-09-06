@@ -19,26 +19,42 @@ namespace Services.Implementations
             _mapper = mapper;
         }
 
-        public async Task<UserListResponse> GetUsersAsync(string? status, int page, int perPage, string? sortBy, string? sortOrder)
+        public async Task<UserListResponse> GetUsersAsync(string? status, string? search, int page, int perPage, string? sortBy, string? sortOrder)
         {
             // Build query
             var query = _repository.GetQueryable().Where(u => !u.IsDeleted);
 
-            // Apply status filter
-            if (!string.IsNullOrEmpty(status))
-            {
-                if (status.ToLower() == "active")
-                {
-                    query = query.Where(u => !u.IsDeleted);
-                }
-                else if (status.ToLower() == "inactive")
-                {
-                    query = query.Where(u => u.IsDeleted);
-                }
-            }
+			if (!string.IsNullOrEmpty(search))
+			{
+				query = query.Where(u =>
+					u.FirstName.Contains(search) ||
+					u.LastName.Contains(search) ||
+					u.Email.Contains(search));
+			}
 
-            // Get total count before pagination
-            var totalCount = await query.CountAsync();
+			// Apply status filter
+			if (!string.IsNullOrEmpty(status))
+			{
+				if (status.ToLower() == "active")
+				{
+					query = query.Where(u => !u.IsDeleted);
+				}
+				else if (status.ToLower() == "inactive")
+				{
+					query = query.Where(u => u.IsDeleted);
+				}
+				else if (status.ToLower() == "islocked")
+				{
+					query = query.Where(u => !u.IsDeleted && u.LockedUntil.HasValue && u.LockedUntil.Value > DateTime.UtcNow);
+				}
+				else if (status.ToLower() == "isnotlocked")
+				{
+					query = query.Where(u => !u.IsDeleted && (!u.LockedUntil.HasValue || u.LockedUntil.Value <= DateTime.UtcNow));
+				}
+			}
+
+			// Get total count before pagination
+			var totalCount = await query.CountAsync();
 
             // Apply sorting
             if (!string.IsNullOrEmpty(sortBy))
@@ -173,5 +189,81 @@ namespace Services.Implementations
                 Data = new { Message = "User deleted successfully" }
             };
         }
-    }
+
+		public async Task<BasicSuccessResponse> LockUserAsync(Guid userId, DateTime? lockedUntil, string? reason, Guid lockedBy)
+		{
+			// Convert to UTC if the datetime is provided
+			DateTime utcLockedUntil = lockedUntil.HasValue
+            ? (lockedUntil.Value.Kind == DateTimeKind.Utc
+	            ? lockedUntil.Value
+	            : lockedUntil.Value.ToUniversalTime())
+            : DateTime.UtcNow.AddYears(100);
+
+			var affectedRows = await _repository.LockUserAsync(userId, utcLockedUntil, reason, lockedBy);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("User not found or already locked");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = "User locked successfully", AffectedRows = affectedRows }
+			};
+		}
+
+		public async Task<BasicSuccessResponse> UnlockUserAsync(Guid userId, Guid unlockedBy)
+		{
+			var affectedRows = await _repository.UnlockUserAsync(userId, unlockedBy);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("User not found or already unlocked");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = "User unlocked successfully", AffectedRows = affectedRows }
+			};
+		}
+
+		public async Task<BasicSuccessResponse> LockMultipleUsersAsync(List<Guid> userIds, DateTime? lockedUntil, string? reason, Guid lockedBy)
+		{
+			if (!userIds.Any())
+				throw new InvalidOperationException("No user IDs provided");
+
+			// Convert to UTC if the datetime is provided
+			DateTime utcLockedUntil = lockedUntil.HasValue
+		    ? (lockedUntil.Value.Kind == DateTimeKind.Utc
+			    ? lockedUntil.Value
+			    : lockedUntil.Value.ToUniversalTime())
+		    : DateTime.UtcNow.AddYears(100);
+
+			var affectedRows = await _repository.LockUsersAsync(userIds, utcLockedUntil, reason, lockedBy);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("No users were found or updated");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = $"{affectedRows} users locked successfully", AffectedRows = affectedRows }
+			};
+		}
+
+		public async Task<BasicSuccessResponse> UnlockMultipleUsersAsync(List<Guid> userIds, Guid unlockedBy)
+		{
+			if (!userIds.Any())
+				throw new InvalidOperationException("No user IDs provided");
+
+			var affectedRows = await _repository.UnlockUsersAsync(userIds, unlockedBy);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("No users were found or updated");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = $"{affectedRows} users unlocked successfully", AffectedRows = affectedRows }
+			};
+		}
+	}
 }

@@ -25,5 +25,12 @@ namespace Services.Models.UserAccount
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public bool IsDeleted { get; set; }
-    }
+		public string Role { get; set; } = string.Empty;
+
+		// Lock information
+		public DateTime? LockedUntil { get; set; }
+		public string? LockReason { get; set; }
+		public DateTime? LockedAt { get; set; }
+		public Guid? LockedBy { get; set; }
+	}
 }

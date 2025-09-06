@@ -32,7 +32,31 @@ namespace Services.Implementations
             if (!VerifyPassword(request.Password, user.HashedPassword))
                 return null;
 
-            var role = user switch
+			// Check if account is locked
+			if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.UtcNow)
+			{
+				return new AuthResponse
+				{
+					Token = null!, // No token for locked accounts
+					RefreshToken = null!,
+					FullName = $"{user.FirstName} {user.LastName}",
+					ExpiresAtUtc = DateTime.UtcNow,
+					IsLocked = true,
+					LockedUntil = user.LockedUntil,
+					LockReason = user.LockReason,
+					LockMessage = user.LockedUntil.HasValue
+						? $"Account is locked until {user.LockedUntil.Value:yyyy-MM-dd HH:mm:ss} UTC"
+						: "Account is permanently locked"
+				};
+			}
+
+			// If lock has expired, auto-unlock
+			if (user.LockedUntil.HasValue && user.LockedUntil.Value <= DateTime.UtcNow)
+			{
+				await _userRepo.UnlockUserAsync(user.Id, user.Id); // Self-unlock for expired locks
+			}
+
+			var role = user switch
             {
                 Admin => Roles.Admin,
                 Driver => Roles.Driver,

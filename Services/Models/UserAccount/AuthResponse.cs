@@ -13,5 +13,11 @@ namespace Services.Models.UserAccount
         public string FullName { get; set; } = null!;
         public string Role { get; set; } = null!;
         public DateTime ExpiresAtUtc { get; set; }
-    }
+
+		// Lock information
+		public bool IsLocked { get; set; }
+		public DateTime? LockedUntil { get; set; }
+		public string? LockReason { get; set; }
+		public string? LockMessage { get; set; }
+	}
 }
