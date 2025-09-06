@@ -12,5 +12,6 @@ namespace Data.Repos.Interfaces
         Task<UserAccount?> GetByEmailAsync(string email);
         Task<bool> IsEmailExistAsync(string email);
         Task<bool> IsPhoneNumberExistAsync(string phoneNumber);
+        Task<IEnumerable<Admin>> GetAdminUsersAsync();
     }
 }

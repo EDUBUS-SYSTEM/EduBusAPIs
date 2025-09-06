@@ -3,6 +3,7 @@ using Services.Contracts;
 using Services.Models.Student;
 using Microsoft.AspNetCore.Authorization;
 using Constants;
+using System.Security.Claims;
 using Utils;
 
 namespace APIs.Controllers
@@ -16,6 +17,30 @@ namespace APIs.Controllers
         public StudentController(IStudentService studentService)
         {
             _studentService = studentService;
+        }
+
+        private bool IsAuthorizedToAccessStudent(Guid studentParentId)
+        {
+            var isAdmin = User.IsInRole(Roles.Admin);
+            if (isAdmin) return true;
+
+            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
+                return false;
+
+            return studentParentId == currentParentId;
+        }
+
+        private bool IsAuthorizedToAccessParent(Guid parentId)
+        {
+            var isAdmin = User.IsInRole(Roles.Admin);
+            if (isAdmin) return true;
+
+            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
+                return false;
+
+            return parentId == currentParentId;
         }
 
         [Authorize(Roles = Roles.Admin)]

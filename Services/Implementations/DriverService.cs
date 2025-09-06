@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ClosedXML.Excel;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
@@ -13,11 +14,15 @@ namespace Services.Implementations
     {
         private readonly IDriverRepository _driverRepository;
         private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IDriverVehicleRepository _driverVehicleRepository;
+        private readonly IDriverWorkingHoursRepository _driverWorkingHoursRepository;
         private readonly IMapper _mapper;
-        public DriverService(IDriverRepository driverRepository, IUserAccountRepository userAccountRepository, IMapper mapper)
+        public DriverService(IDriverRepository driverRepository, IUserAccountRepository userAccountRepository, IDriverVehicleRepository driverVehicleRepository, IDriverWorkingHoursRepository driverWorkingHoursRepository, IMapper mapper)
         {
             _driverRepository = driverRepository;
             _userAccountRepository = userAccountRepository;
+            _driverVehicleRepository = driverVehicleRepository;
+            _driverWorkingHoursRepository = driverWorkingHoursRepository;
             _mapper = mapper;
         }
         public async Task<CreateUserResponse> CreateDriverAsync(CreateDriverRequest dto)
@@ -317,6 +322,58 @@ namespace Services.Implementations
             return _mapper.Map<DriverResponse>(driver);
         }
 
+        public async Task<DriverResponse> UpdateDriverStatusAsync(Guid driverId, DriverStatus status, string? note)
+        {
+            var driver = await _driverRepository.FindAsync(driverId) ?? throw new InvalidOperationException("Driver not found");
+            driver.Status = status;
+            driver.StatusNote = note;
+            driver.UpdatedAt = DateTime.UtcNow;
+            var updated = await _driverRepository.UpdateAsync(driver);
+            return _mapper.Map<DriverResponse>(updated!);
+        }
+
+        public async Task<DriverResponse> SuspendDriverAsync(Guid driverId, string reason, DateTime? untilDate)
+        {
+            var note = untilDate.HasValue ? $"Suspended until {untilDate.Value:O}. Reason: {reason}" : $"Suspended. Reason: {reason}";
+            return await UpdateDriverStatusAsync(driverId, DriverStatus.Suspended, note);
+        }
+
+        public async Task<DriverResponse> ReactivateDriverAsync(Guid driverId)
+        {
+            return await UpdateDriverStatusAsync(driverId, DriverStatus.Active, null);
+        }
+
+        public async Task<IEnumerable<DriverResponse>> GetDriversByStatusAsync(DriverStatus status)
+        {
+            var list = await _driverRepository.FindByConditionAsync(d => d.Status == status && !d.IsDeleted);
+            return list.Select(_mapper.Map<DriverResponse>);
+        }
+
+        public async Task<bool> IsDriverAvailableAsync(Guid driverId, DateTime startTime, DateTime endTime)
+        {
+            // Check working hours (simple day and time window)
+            var day = startTime.DayOfWeek;
+            var wh = await _driverWorkingHoursRepository.GetByDriverAndDayAsync(driverId, day);
+            var withinWorkingHours = wh != null && wh.IsAvailable && wh.StartTime <= startTime.TimeOfDay && endTime.TimeOfDay <= wh.EndTime;
+            if (!withinWorkingHours) return false;
+            // Check overlapping assignments
+            var hasConflict = await _driverVehicleRepository.HasTimeConflictAsync(driverId, startTime, endTime);
+            return !hasConflict;
+        }
+
+        public async Task<IEnumerable<DriverResponse>> GetAvailableDriversAsync(DateTime startTime, DateTime endTime)
+        {
+            var allDrivers = await _driverRepository.FindAllAsync();
+            var available = new List<DriverResponse>();
+            foreach (var d in allDrivers)
+            {
+                if (await IsDriverAvailableAsync(d.Id, startTime, endTime))
+                {
+                    available.Add(_mapper.Map<DriverResponse>(d));
+                }
+            }
+            return available;
+        }
     }
 }
 

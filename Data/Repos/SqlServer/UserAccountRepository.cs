@@ -34,5 +34,13 @@ namespace Data.Repos.SqlServer
             return await _table
                   .AnyAsync(u => u.PhoneNumber == phoneNumber);
         }
+
+        public async Task<IEnumerable<Admin>> GetAdminUsersAsync()
+        {
+            return await _table
+                .OfType<Admin>()
+                .Where(a => !a.IsDeleted)
+                .ToListAsync();
+        }
     }
 }

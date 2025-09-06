@@ -2,6 +2,7 @@
 using Data.Models;
 using Data.Repos.Interfaces;
 using Services.Contracts;
+using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 
 namespace Services.Implementations
@@ -10,16 +11,19 @@ namespace Services.Implementations
     {
         private readonly IDriverVehicleRepository _driverVehicleRepo;
         private readonly IVehicleRepository _vehicleRepo;
+        private readonly IDriverRepository _driverRepo;
         private readonly IMapper _mapper;
 
         public DriverVehicleService(
             IDriverVehicleRepository driverVehicleRepo,
             IVehicleRepository vehicleRepo,
-            IMapper mapper)
+            IMapper mapper,
+            IDriverRepository driverRepo)
         {
             _driverVehicleRepo = driverVehicleRepo;
             _vehicleRepo = vehicleRepo;
             _mapper = mapper;
+            _driverRepo = driverRepo;
         }
 
         public async Task<VehicleDriversResponse?> GetDriversByVehicleAsync(Guid vehicleId, bool? isActive)
@@ -54,7 +58,8 @@ namespace Services.Implementations
                 VehicleId = vehicleId,
                 IsPrimaryDriver = dto.IsPrimaryDriver,
                 StartTimeUtc = dto.StartTimeUtc,
-                EndTimeUtc = dto.EndTimeUtc
+                EndTimeUtc = dto.EndTimeUtc,
+                AssignedByAdminId = adminId
             };
 
             var created = await _driverVehicleRepo.AssignDriverAsync(entity);
@@ -69,5 +74,116 @@ namespace Services.Implementations
             };
         }
 
+        public async Task<DriverAssignmentResponse?> AssignDriverWithValidationAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId)
+        {
+            // extra validations: overlapping windows
+            var timeConflict = await _driverVehicleRepo.HasTimeConflictAsync(dto.DriverId, dto.StartTimeUtc, dto.EndTimeUtc);
+            if (timeConflict) throw new InvalidOperationException("Driver has conflicting assignment in the selected time window.");
+            var vehicleConflict = await _driverVehicleRepo.HasVehicleTimeConflictAsync(vehicleId, dto.StartTimeUtc, dto.EndTimeUtc);
+            if (vehicleConflict) throw new InvalidOperationException("Vehicle is already assigned in the selected time window.");
+            return await AssignDriverAsync(vehicleId, dto, adminId);
+        }
+
+        public async Task<DriverAssignmentResponse?> UpdateAssignmentAsync(Guid assignmentId, UpdateAssignmentRequest dto, Guid adminId)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
+            if (assignment == null || assignment.IsDeleted) return null;
+            if (dto.IsPrimaryDriver.HasValue) assignment.IsPrimaryDriver = dto.IsPrimaryDriver.Value;
+            if (dto.StartTimeUtc.HasValue) assignment.StartTimeUtc = dto.StartTimeUtc.Value;
+            if (dto.EndTimeUtc.HasValue) assignment.EndTimeUtc = dto.EndTimeUtc.Value;
+            if (!string.IsNullOrWhiteSpace(dto.AssignmentReason)) assignment.AssignmentReason = dto.AssignmentReason;
+            assignment.UpdatedAt = DateTime.UtcNow;
+            var updated = await _driverVehicleRepo.UpdateAsync(assignment);
+            return new DriverAssignmentResponse { Success = true, Data = _mapper.Map<DriverAssignmentDto>(updated!) };
+        }
+
+        public async Task<DriverAssignmentResponse?> CancelAssignmentAsync(Guid assignmentId, string reason, Guid adminId)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
+            if (assignment == null || assignment.IsDeleted) return null;
+            assignment.EndTimeUtc = assignment.EndTimeUtc ?? DateTime.UtcNow;
+            assignment.ApprovalNote = reason;
+            var updated = await _driverVehicleRepo.UpdateAsync(assignment);
+            return new DriverAssignmentResponse { Success = true, Data = _mapper.Map<DriverAssignmentDto>(updated!) };
+        }
+
+        public async Task<IEnumerable<AssignmentConflictDto>> DetectAssignmentConflictsAsync(Guid vehicleId, DateTime startTime, DateTime endTime)
+        {
+            var conflicts = new List<AssignmentConflictDto>();
+            var vehicleConflict = await _driverVehicleRepo.HasVehicleTimeConflictAsync(vehicleId, startTime, endTime);
+            if (vehicleConflict)
+            {
+                conflicts.Add(new AssignmentConflictDto
+                {
+                    ConflictId = Guid.NewGuid(),
+                    ConflictType = "VehicleTimeConflict",
+                    Description = "Vehicle has overlapping assignment in this time window",
+                    Severity = Data.Models.Enums.ConflictSeverity.Medium,
+                    ConflictTime = DateTime.UtcNow,
+                    IsResolvable = true
+                });
+            }
+            return conflicts;
+        }
+
+        public async Task<ReplacementSuggestionResponse> SuggestReplacementAsync(Guid assignmentId, Guid adminId)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId) ?? throw new InvalidOperationException("Assignment not found");
+            var drivers = await _driverVehicleRepo.FindAvailableDriversAsync(assignment.StartTimeUtc, assignment.EndTimeUtc ?? assignment.StartTimeUtc.AddHours(4));
+            var vehicles = await _driverVehicleRepo.FindAvailableVehiclesAsync(assignment.StartTimeUtc, assignment.EndTimeUtc ?? assignment.StartTimeUtc.AddHours(4));
+            var suggestions = new List<ReplacementSuggestionDto>();
+            foreach (var d in drivers.Take(3))
+            {
+                var v = vehicles.FirstOrDefault();
+                if (v == null) break;
+                suggestions.Add(new ReplacementSuggestionDto
+                {
+                    Id = Guid.NewGuid(),
+                    DriverId = d.Id,
+                    DriverName = $"{d.FirstName} {d.LastName}",
+                    DriverEmail = d.Email,
+                    DriverPhone = d.PhoneNumber,
+                    VehicleId = v.Id,
+                    VehiclePlate = Utils.SecurityHelper.DecryptFromBytes(v.HashedLicensePlate),
+                    VehicleCapacity = v.Capacity,
+                    Score = 50,
+                    Reason = "Available in time window",
+                    GeneratedAt = DateTime.UtcNow,
+                    HasValidLicense = d.DriverLicense != null,
+                    HasHealthCertificate = d.HealthCertificateFileId.HasValue,
+                    YearsOfExperience = d.DriverLicense != null ? (int)Math.Max(0, (DateTime.UtcNow - d.DriverLicense.DateOfIssue).TotalDays / 365) : 0,
+                    IsAvailable = true
+                });
+            }
+            return new ReplacementSuggestionResponse { Success = true, Suggestions = suggestions, TotalSuggestions = suggestions.Count, Message = "Suggestions generated" };
+        }
+
+        public Task<bool> AcceptReplacementSuggestionAsync(Guid assignmentId, Guid suggestionId, Guid adminId)
+        {
+            // MVP: acknowledge only
+            return Task.FromResult(true);
+        }
+
+        public async Task<DriverAssignmentResponse?> ApproveAssignmentAsync(Guid assignmentId, Guid adminId, string? note)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
+            if (assignment == null) return null;
+            assignment.ApprovedByAdminId = adminId;
+            assignment.ApprovedAt = DateTime.UtcNow;
+            assignment.ApprovalNote = note;
+            var updated = await _driverVehicleRepo.UpdateAsync(assignment);
+            return new DriverAssignmentResponse { Success = true, Data = _mapper.Map<DriverAssignmentDto>(updated!) };
+        }
+
+        public async Task<DriverAssignmentResponse?> RejectAssignmentAsync(Guid assignmentId, Guid adminId, string reason)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
+            if (assignment == null) return null;
+            assignment.ApprovedByAdminId = adminId;
+            assignment.ApprovedAt = DateTime.UtcNow;
+            assignment.ApprovalNote = $"Rejected: {reason}";
+            var updated = await _driverVehicleRepo.UpdateAsync(assignment);
+            return new DriverAssignmentResponse { Success = true, Data = _mapper.Map<DriverAssignmentDto>(updated!) };
+        }
     }
 }

@@ -1,0 +1,70 @@
+using Data.Contexts.SqlServer;
+using Data.Models;
+using Data.Models.Enums;
+using Data.Repos.Interfaces;
+using Microsoft.EntityFrameworkCore;
+
+namespace Data.Repos.SqlServer
+{
+    public class DriverLeaveRepository : SqlRepository<DriverLeaveRequest>, IDriverLeaveRepository
+    {
+        private readonly EduBusSqlContext _context;
+
+        public DriverLeaveRepository(EduBusSqlContext context) : base(context)
+        {
+            _context = context;
+        }
+
+        public async Task<IEnumerable<DriverLeaveRequest>> GetByDriverIdAsync(Guid driverId, DateTime? fromDate, DateTime? toDate)
+        {
+            var query = _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Where(l => l.DriverId == driverId && !l.IsDeleted)
+                .AsQueryable();
+
+            if (fromDate.HasValue)
+                query = query.Where(l => l.EndDate >= fromDate.Value);
+            if (toDate.HasValue)
+                query = query.Where(l => l.StartDate <= toDate.Value);
+
+            return await query.ToListAsync();
+        }
+
+        public async Task<IEnumerable<DriverLeaveRequest>> GetPendingLeavesAsync()
+        {
+            return await _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Where(l => l.Status == LeaveStatus.Pending && !l.IsDeleted)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<DriverLeaveRequest>> GetLeavesByStatusAsync(LeaveStatus status)
+        {
+            return await _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Where(l => l.Status == status && !l.IsDeleted)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDateRangeAsync(DateTime startDate, DateTime endDate)
+        {
+            return await _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Where(l => !l.IsDeleted && l.StartDate <= endDate && l.EndDate >= startDate)
+                .ToListAsync();
+        }
+
+        public async Task<bool> HasOverlappingLeaveAsync(Guid driverId, DateTime startDate, DateTime endDate)
+        {
+            return await _context.DriverLeaveRequests
+                .AnyAsync(l => l.DriverId == driverId && !l.IsDeleted && l.StartDate <= endDate && l.EndDate >= startDate);
+        }
+
+        public async Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDriverAndDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate)
+        {
+            return await _context.DriverLeaveRequests
+                .Where(l => l.DriverId == driverId && !l.IsDeleted && l.StartDate <= endDate && l.EndDate >= startDate)
+                .ToListAsync();
+        }
+    }
+}
