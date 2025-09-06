@@ -128,6 +128,7 @@ namespace Services.Implementations
             return (new JwtSecurityTokenHandler().WriteToken(token), expires);
         }
 
+
         private bool VerifyPassword(string plainPassword, byte[] hashedBytes)
         {
             var hashString = Encoding.UTF8.GetString(hashedBytes);
