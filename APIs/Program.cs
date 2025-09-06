@@ -20,6 +20,7 @@ using System.Text;
 using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
+using Services.Models.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +32,11 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
     .AddUserSecrets<Program>(optional: true)   
-    .AddEnvironmentVariables();                
+    .AddEnvironmentVariables();
+
+// Configure settings with reload on change
+builder.Services.Configure<LeaveRequestSettings>(
+    builder.Configuration.GetSection("LeaveRequestSettings"));                
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -161,6 +166,7 @@ builder.Services.AddScoped<IStudentGradeService, StudentGradeService>();
 builder.Services.AddScoped<IDriverLeaveService, DriverLeaveService>();
 builder.Services.AddScoped<IDriverWorkingHoursService, DriverWorkingHoursService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();

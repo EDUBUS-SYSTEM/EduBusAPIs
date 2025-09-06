@@ -2347,3 +2347,612 @@ connection.on("ReceiveAdminNotification", (notification) => {
 - **Database connection issues**: Services cannot access database
 - **Notification delivery failures**: Real-time notifications fail to send
 - **Suggestion generation failures**: Auto-replacement service errors
+
+---
+
+## 18. Configuration Management
+
+### 18.1 Get Leave Request Settings
+
+**Endpoint:** `GET /api/Configuration/leave-request-settings`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Get current leave request configuration settings.
+
+**Expected Response:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 12,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 2
+}
+```
+
+### 18.2 Update Leave Request Settings
+
+**Endpoint:** `PUT /api/Configuration/leave-request-settings`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Update leave request configuration settings.
+
+**Request Body:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 24,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 4
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 24,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 4
+}
+```
+
+**Error Responses:**
+
+- `400`: Validation errors (invalid values, negative hours)
+- `403`: Forbidden - Non-admin user attempting to update settings
+- `500`: Server error
+
+### 18.3 Test Scenarios for Leave Request Settings
+
+#### 18.3.1 Test Valid Settings Update
+
+```json
+{
+  "minimumAdvanceNoticeHours": 48,
+  "allowEmergencyLeaveRequests": false,
+  "emergencyLeaveAdvanceNoticeHours": 6
+}
+```
+
+#### 18.3.2 Test Invalid Settings
+
+- **Negative hours**: Should return 400 Bad Request
+- **Emergency hours > minimum hours**: Should return 400 Bad Request
+- **Non-admin user**: Should return 403 Forbidden
+
+---
+
+## 19. Enhanced Leave Request Validation
+
+### 19.1 Test Leave Request with Advance Notice Validation
+
+#### 19.1.1 Regular Leave Request (12+ hours advance notice)
+
+**Endpoint:** `POST /api/Driver/{id}/leaves`
+**Authorization:** Bearer Token (Driver only)
+
+**Request Body (Valid - 24 hours advance):**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 1,
+  "startDate": "2024-01-16T08:00:00Z",
+  "endDate": "2024-01-18T17:00:00Z",
+  "reason": "Annual leave"
+}
+```
+
+**Expected Response:** Success (200 OK)
+
+#### 19.1.2 Regular Leave Request (Insufficient advance notice)
+
+**Request Body (Invalid - 6 hours advance):**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 1,
+  "startDate": "2024-01-15T18:00:00Z",
+  "endDate": "2024-01-17T17:00:00Z",
+  "reason": "Annual leave"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "error": "Leave start date must be at least 12 hours in advance for regular leave requests. Current time: 2024-01-15 12:00:00, Required start time: 2024-01-16 00:00:00"
+}
+```
+
+#### 19.1.3 Emergency Leave Request (2+ hours advance notice)
+
+**Request Body (Valid - 4 hours advance):**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 4,
+  "startDate": "2024-01-15T16:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Family emergency"
+}
+```
+
+**Expected Response:** Success (200 OK)
+
+#### 19.1.4 Emergency Leave Request (Insufficient advance notice)
+
+**Request Body (Invalid - 1 hour advance):**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 4,
+  "startDate": "2024-01-15T13:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Family emergency"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "error": "Leave start date must be at least 2 hours in advance for emergency leave requests. Current time: 2024-01-15 12:00:00, Required start time: 2024-01-15 14:00:00"
+}
+```
+
+#### 19.1.5 Sick Leave Request (Emergency type - 2+ hours advance notice)
+
+**Request Body (Valid - 3 hours advance):**
+
+```json
+{
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 2,
+  "startDate": "2024-01-15T15:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Sudden illness"
+}
+```
+
+**Expected Response:** Success (200 OK)
+
+### 19.2 Test Scenarios for Different Leave Types
+
+| Leave Type | Type ID | Advance Notice Required | Test Case            |
+| ---------- | ------- | ----------------------- | -------------------- |
+| Annual     | 1       | 12+ hours               | Regular validation   |
+| Sick       | 2       | 2+ hours (emergency)    | Emergency validation |
+| Personal   | 3       | 12+ hours               | Regular validation   |
+| Emergency  | 4       | 2+ hours (emergency)    | Emergency validation |
+| Training   | 5       | 12+ hours               | Regular validation   |
+| Other      | 6       | 12+ hours               | Regular validation   |
+
+### 19.3 Test Configuration Changes Impact
+
+#### 19.3.1 Change Minimum Advance Notice
+
+1. **Update settings to 24 hours:**
+
+   ```json
+   {
+     "minimumAdvanceNoticeHours": 24,
+     "allowEmergencyLeaveRequests": true,
+     "emergencyLeaveAdvanceNoticeHours": 2
+   }
+   ```
+
+2. **Test leave request with 18 hours advance (should fail):**
+
+   ```json
+   {
+     "driverId": "550e8400-e29b-41d4-a716-446655440002",
+     "leaveType": 1,
+     "startDate": "2024-01-16T06:00:00Z",
+     "endDate": "2024-01-17T17:00:00Z",
+     "reason": "Annual leave"
+   }
+   ```
+
+3. **Expected Response:** Error - requires 24 hours advance notice
+
+#### 19.3.2 Disable Emergency Leave Requests
+
+1. **Update settings to disable emergency leaves:**
+
+   ```json
+   {
+     "minimumAdvanceNoticeHours": 12,
+     "allowEmergencyLeaveRequests": false,
+     "emergencyLeaveAdvanceNoticeHours": 2
+   }
+   ```
+
+2. **Test emergency leave request (should fail):**
+
+   ```json
+   {
+     "driverId": "550e8400-e29b-41d4-a716-446655440002",
+     "leaveType": 4,
+     "startDate": "2024-01-15T16:00:00Z",
+     "endDate": "2024-01-16T17:00:00Z",
+     "reason": "Family emergency"
+   }
+   ```
+
+3. **Expected Response:** Error - emergency leaves not allowed, requires 12 hours advance notice
+
+### 19.4 Error Scenarios for Leave Request Validation
+
+- **Past dates**: Start date in the past
+- **Insufficient advance notice**: Less than required hours
+- **Emergency leaves disabled**: Emergency/Sick leave when disabled
+- **Invalid date ranges**: End date before start date
+- **Configuration validation**: Invalid settings values
+
+---
+
+## 20. Complete Leave Request Workflow with Validation
+
+### Scenario: End-to-End Leave Request with Configuration
+
+1. **Admin configures leave request settings**
+
+   - PUT /api/Configuration/leave-request-settings
+   - Set minimum advance notice to 24 hours
+   - Enable emergency leave requests with 4 hours advance
+
+2. **Driver attempts regular leave with insufficient notice**
+
+   - POST /api/Driver/{id}/leaves
+   - Request leave for tomorrow (18 hours advance)
+   - Should fail with validation error
+
+3. **Driver requests emergency leave with sufficient notice**
+
+   - POST /api/Driver/{id}/leaves
+   - Request emergency leave for 6 hours from now
+   - Should succeed
+
+4. **Admin reviews and approves leave**
+
+   - GET /api/DriverLeave/pending
+   - PUT /api/DriverLeave/{leaveId}/approve
+
+5. **Verify notification sent to driver**
+
+   - GET /api/notification (as driver)
+   - Check for approval notification
+
+6. **Admin updates settings for different policy**
+
+   - PUT /api/Configuration/leave-request-settings
+   - Change to 48 hours minimum advance notice
+
+7. **Test new policy enforcement**
+   - Attempt leave request with 36 hours advance
+   - Should fail with new validation rules
+
+---
+
+## 21. Enhanced Leave Request Validation Test Scenarios
+
+### 21.1 Test Leave Request with New Configuration System
+
+#### 21.1.1 Test Regular Leave Request with Sufficient Advance Notice
+
+**Endpoint:** `POST /api/Driver/{id}/leaves`
+**Authorization:** Bearer Token (Driver only)
+
+**Request Body (Valid - 24 hours advance):**
+
+```json
+{
+  "leaveType": 1,
+  "startDate": "2024-01-16T08:00:00Z",
+  "endDate": "2024-01-18T17:00:00Z",
+  "reason": "Annual leave",
+  "autoReplacementEnabled": true
+}
+```
+
+**Expected Response:** `201 Created`
+
+```json
+{
+  "id": "uuid",
+  "driverId": "550e8400-e29b-41d4-a716-446655440002",
+  "leaveType": 1,
+  "startDate": "2024-01-16T08:00:00Z",
+  "endDate": "2024-01-18T17:00:00Z",
+  "reason": "Annual leave",
+  "status": 0,
+  "requestedAt": "2024-01-15T08:00:00Z",
+  "autoReplacementEnabled": true
+}
+```
+
+#### 21.1.2 Test Regular Leave Request with Insufficient Advance Notice
+
+**Request Body (Invalid - 6 hours advance):**
+
+```json
+{
+  "leaveType": 1,
+  "startDate": "2024-01-15T18:00:00Z",
+  "endDate": "2024-01-17T17:00:00Z",
+  "reason": "Annual leave",
+  "autoReplacementEnabled": true
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "error": "Leave start date must be at least 12 hours in advance for regular leave requests. Current time: 2024-01-15 12:00:00, Required start time: 2024-01-16 00:00:00"
+}
+```
+
+#### 21.1.3 Test Emergency Leave Request with Sufficient Advance Notice
+
+**Request Body (Valid - 4 hours advance):**
+
+```json
+{
+  "leaveType": 4,
+  "startDate": "2024-01-15T16:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Family emergency",
+  "autoReplacementEnabled": true
+}
+```
+
+**Expected Response:** `201 Created`
+
+#### 21.1.4 Test Sick Leave Request (Emergency Type)
+
+**Request Body (Valid - 3 hours advance):**
+
+```json
+{
+  "leaveType": 2,
+  "startDate": "2024-01-15T15:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Sudden illness",
+  "autoReplacementEnabled": true
+}
+```
+
+**Expected Response:** `201 Created`
+
+#### 21.1.5 Test Emergency Leave Request with Insufficient Advance Notice
+
+**Request Body (Invalid - 1 hour advance):**
+
+```json
+{
+  "leaveType": 4,
+  "startDate": "2024-01-15T13:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Family emergency",
+  "autoReplacementEnabled": true
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "error": "Leave start date must be at least 2 hours in advance for emergency leave requests. Current time: 2024-01-15 12:00:00, Required start time: 2024-01-15 14:00:00"
+}
+```
+
+### 21.2 Test Configuration Changes Impact
+
+#### 21.2.1 Test with Updated Minimum Advance Notice (24 hours)
+
+1. **Update settings:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 24,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 4
+}
+```
+
+2. **Test leave request with 18 hours advance (should fail):**
+
+```json
+{
+  "leaveType": 1,
+  "startDate": "2024-01-16T06:00:00Z",
+  "endDate": "2024-01-17T17:00:00Z",
+  "reason": "Annual leave"
+}
+```
+
+**Expected Response:** `400 Bad Request` - requires 24 hours advance notice
+
+#### 21.2.2 Test with Emergency Leave Requests Disabled
+
+1. **Update settings:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 12,
+  "allowEmergencyLeaveRequests": false,
+  "emergencyLeaveAdvanceNoticeHours": 2
+}
+```
+
+2. **Test emergency leave request (should fail):**
+
+```json
+{
+  "leaveType": 4,
+  "startDate": "2024-01-15T16:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Family emergency"
+}
+```
+
+**Expected Response:** `400 Bad Request` - emergency leaves not allowed, requires 12 hours advance notice
+
+### 21.3 Test Configuration Validation
+
+#### 21.3.1 Test Invalid Configuration Values
+
+**Request Body (Invalid - negative hours):**
+
+```json
+{
+  "minimumAdvanceNoticeHours": -1,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 2
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "message": "Minimum advance notice hours cannot be negative."
+}
+```
+
+#### 21.3.2 Test Emergency Hours Greater Than Minimum Hours
+
+**Request Body (Invalid - emergency > minimum):**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 12,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 24
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "message": "Emergency leave advance notice hours cannot be greater than minimum advance notice hours."
+}
+```
+
+### 21.4 Test Leave Request Validation Edge Cases
+
+#### 21.4.1 Test Past Date Validation
+
+**Request Body (Invalid - past date):**
+
+```json
+{
+  "leaveType": 1,
+  "startDate": "2024-01-14T08:00:00Z",
+  "endDate": "2024-01-16T17:00:00Z",
+  "reason": "Annual leave"
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "error": "Leave start date cannot be in the past. Start date: 2024-01-14, Current date: 2024-01-15"
+}
+```
+
+#### 21.4.2 Test End Date Before Start Date
+
+**Request Body (Invalid - end before start):**
+
+```json
+{
+  "leaveType": 1,
+  "startDate": "2024-01-16T08:00:00Z",
+  "endDate": "2024-01-15T17:00:00Z",
+  "reason": "Annual leave"
+}
+```
+
+**Expected Response:** `400 Bad Request`
+
+```json
+{
+  "error": "Leave end date cannot be before start date."
+}
+```
+
+### 21.5 Test Configuration API Endpoints
+
+#### 21.5.1 Get Current Configuration
+
+**Endpoint:** `GET /api/Configuration/leave-request-settings`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:** `200 OK`
+
+```json
+{
+  "minimumAdvanceNoticeHours": 12,
+  "allowEmergencyLeaveRequests": true,
+  "emergencyLeaveAdvanceNoticeHours": 2
+}
+```
+
+#### 21.5.2 Update Configuration
+
+**Endpoint:** `PUT /api/Configuration/leave-request-settings`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "minimumAdvanceNoticeHours": 48,
+  "allowEmergencyLeaveRequests": false,
+  "emergencyLeaveAdvanceNoticeHours": 6
+}
+```
+
+**Expected Response:** `200 OK`
+
+```json
+{
+  "minimumAdvanceNoticeHours": 48,
+  "allowEmergencyLeaveRequests": false,
+  "emergencyLeaveAdvanceNoticeHours": 6
+}
+```
+
+### 21.6 Test Leave Request with Different Leave Types
+
+| Leave Type | Type ID | Advance Notice Required | Test Case            |
+| ---------- | ------- | ----------------------- | -------------------- |
+| Annual     | 1       | 12+ hours               | Regular validation   |
+| Sick       | 2       | 2+ hours (emergency)    | Emergency validation |
+| Personal   | 3       | 12+ hours               | Regular validation   |
+| Emergency  | 4       | 2+ hours (emergency)    | Emergency validation |
+| Training   | 5       | 12+ hours               | Regular validation   |
+| Other      | 6       | 12+ hours               | Regular validation   |
+
+### 21.7 Test Real-Time Configuration Updates
+
+1. **Admin updates configuration**
+2. **Driver immediately attempts leave request**
+3. **Verify new validation rules are applied**
+4. **Test configuration persistence across application restarts**
+
+### 21.8 Test Error Logging and Monitoring
+
+1. **Verify detailed error logging for validation failures**
+2. **Check audit trail for configuration changes**
+3. **Monitor performance impact of validation logic**
+4. **Test error message clarity for end users**

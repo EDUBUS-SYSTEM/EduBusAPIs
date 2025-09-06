@@ -15,6 +15,7 @@ namespace Services.Implementations
         private readonly IDriverRepository _driverRepo;
         private readonly IDriverVehicleRepository _driverVehicleRepo;
         private readonly INotificationService _notificationService;
+        private readonly IConfigurationService _configurationService;
         private readonly IMapper _mapper;
         private readonly ILogger<DriverLeaveService> _logger;
 
@@ -24,6 +25,7 @@ namespace Services.Implementations
             IDriverRepository driverRepo,
             IDriverVehicleRepository driverVehicleRepo,
             INotificationService notificationService,
+            IConfigurationService configurationService,
             IMapper mapper,
             ILogger<DriverLeaveService> logger)
         {
@@ -32,21 +34,57 @@ namespace Services.Implementations
             _driverRepo = driverRepo;
             _driverVehicleRepo = driverVehicleRepo;
             _notificationService = notificationService;
+            _configurationService = configurationService;
             _mapper = mapper;
             _logger = logger;
         }
 
         public async Task<DriverLeaveResponse> CreateLeaveRequestAsync(CreateLeaveRequestDto dto)
         {
-            var today = DateTime.Today;
+            var settings = _configurationService.GetLeaveRequestSettings();
+            var now = DateTime.UtcNow;
+            var today = DateTime.UtcNow.Date;
+            var minimumAdvanceTime = now.AddHours(settings.MinimumAdvanceNoticeHours);
+            var emergencyAdvanceTime = now.AddHours(settings.EmergencyLeaveAdvanceNoticeHours);
+            
+            // Check if this is an emergency leave request
+            var isEmergencyLeave = dto.LeaveType == LeaveType.Emergency;
+            var isSickLeave = dto.LeaveType == LeaveType.Sick;
+            var isUrgentLeave = isEmergencyLeave || isSickLeave;
+            
+            // Determine required advance time based on leave type and settings
+            var requiredAdvanceTime = isEmergencyLeave && settings.AllowEmergencyLeaveRequests 
+                ? emergencyAdvanceTime 
+                : isSickLeave && settings.AllowEmergencyLeaveRequests
+                ? emergencyAdvanceTime
+                : minimumAdvanceTime;
+            
+            // Validate start date is not in the past
             if (dto.StartDate < today)
             {
-                throw new InvalidOperationException("Leave start date cannot be in the past.");
+                _logger.LogWarning("Leave request rejected: Start date {StartDate} is in the past. Current date: {CurrentDate}", 
+                    dto.StartDate, today);
+                throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {dto.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
             }
             
-            if (dto.EndDate < today)
+            // Validate advance notice requirement
+            if (dto.StartDate < requiredAdvanceTime)
             {
-                throw new InvalidOperationException("Leave end date cannot be in the past.");
+                var hoursRequired = isEmergencyLeave && settings.AllowEmergencyLeaveRequests 
+                    ? settings.EmergencyLeaveAdvanceNoticeHours 
+                    : isSickLeave && settings.AllowEmergencyLeaveRequests
+                    ? settings.EmergencyLeaveAdvanceNoticeHours
+                    : settings.MinimumAdvanceNoticeHours;
+                    
+                var leaveTypeText = isEmergencyLeave ? "emergency" : isSickLeave ? "sick" : "regular";
+                var errorMessage = $"Leave start date must be at least {hoursRequired} hours in advance for {leaveTypeText} leave requests. " +
+                    $"Current time: {now:yyyy-MM-dd HH:mm:ss}, Required start time: {requiredAdvanceTime:yyyy-MM-dd HH:mm:ss}";
+                
+                _logger.LogWarning("Leave request rejected: Insufficient advance notice. Driver: {DriverId}, LeaveType: {LeaveType}, " +
+                    "StartDate: {StartDate}, RequiredAdvanceTime: {RequiredAdvanceTime}, HoursRequired: {HoursRequired}", 
+                    dto.DriverId, dto.LeaveType, dto.StartDate, requiredAdvanceTime, hoursRequired);
+                
+                throw new InvalidOperationException(errorMessage);
             }
             
             if (dto.EndDate < dto.StartDate)
@@ -186,7 +224,7 @@ namespace Services.Implementations
             
             if (dto.SuggestedAlternativeStartDate.HasValue && dto.SuggestedAlternativeEndDate.HasValue)
             {
-                var today = DateTime.Today;
+                var today = DateTime.UtcNow.Date;
                 
                 if (dto.SuggestedAlternativeStartDate.Value < today)
                 {
