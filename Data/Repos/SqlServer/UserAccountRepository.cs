@@ -87,14 +87,13 @@ namespace Data.Repos.SqlServer
 					.SetProperty(u => u.LockedBy, (Guid?)null)
 					.SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
 		}
-	
 
-        public async Task<IEnumerable<Admin>> GetAdminUsersAsync()
-        {
-            return await _table
-                .OfType<Admin>()
-                .Where(a => !a.IsDeleted)
-                .ToListAsync();
-        }
-    }
+		public async Task<IEnumerable<Admin>> GetAdminUsersAsync()
+		{
+			return await _table
+				.OfType<Admin>()
+				.Where(a => !a.IsDeleted)
+				.ToListAsync();
+		}
+	}
 }

@@ -15,7 +15,7 @@ namespace Data.Repos.Interfaces
         Task<int> LockUserAsync(Guid userId, DateTime? lockedUntil, string? reason, Guid lockedBy);
         Task<int> UnlockUserAsync(Guid userId, Guid unlockedBy);
         Task<int> LockUsersAsync(List<Guid> userIds, DateTime? lockedUntil, string? reason, Guid lockedBy);
-		    Task<int> UnlockUsersAsync(List<Guid> userIds, Guid unlockedBy);
-        Task<IEnumerable<Admin>> GetAdminUsersAsync();
-    }
+		Task<int> UnlockUsersAsync(List<Guid> userIds, Guid unlockedBy);
+		Task<IEnumerable<Admin>> GetAdminUsersAsync();
+	}
 }
