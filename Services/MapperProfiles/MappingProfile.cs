@@ -52,10 +52,12 @@ namespace Services.MapperProfiles
             CreateMap<UpdateStudentGradeResponse, StudentGradeEnrollment>();
             CreateMap<StudentGradeEnrollment, StudentGradeDto>();
 
-            // user account mapping
-            CreateMap<UserAccount, UserDto>();
-            CreateMap<UserAccount, UserResponse>();
-            CreateMap<UserUpdateRequest, UserAccount>();
+			// user account mapping
+			CreateMap<UserAccount, UserDto>()
+				.ForMember(dest => dest.Role, opt => opt.MapFrom(src => GetUserRole(src)));
+			CreateMap<UserAccount, UserResponse>()
+				.ForMember(dest => dest.Role, opt => opt.MapFrom(src => GetUserRole(src)));
+			CreateMap<UserUpdateRequest, UserAccount>();
 
             //vehicle mapping
             CreateMap<Vehicle, VehicleDto>();
@@ -106,5 +108,17 @@ namespace Services.MapperProfiles
             CreateMap<CreateNotificationDto, Notification>();
             CreateMap<Notification, NotificationResponse>();
         }
-    }
+
+		private static string GetUserRole(UserAccount user)
+		{
+			return user switch
+			{
+				Admin => "admin",
+				Driver => "driver",
+				Parent => "parent",
+				_ => "unknown"
+			};
+		}
+
+	}
 }

@@ -19,17 +19,29 @@ namespace Services.Implementations
             _mapper = mapper;
         }
 
-        public async Task<UserListResponse> GetUsersAsync(string? status, string? search, int page, int perPage, string? sortBy, string? sortOrder)
+        public async Task<UserListResponse> GetUsersAsync(string? status, string? role, string? search, int page, int perPage, string? sortBy, string? sortOrder)
         {
             // Build query
             var query = _repository.GetQueryable().Where(u => !u.IsDeleted);
 
 			if (!string.IsNullOrEmpty(search))
 			{
+				search = search.ToLower();
+
 				query = query.Where(u =>
-					u.FirstName.Contains(search) ||
-					u.LastName.Contains(search) ||
-					u.Email.Contains(search));
+					(u.FirstName + " " + u.LastName).ToLower().Contains(search) ||
+					u.Email.ToLower().Contains(search));
+			}
+
+			if (!string.IsNullOrEmpty(role))
+			{
+				query = role.ToLower() switch
+				{
+					"admin" => query.OfType<Admin>(),
+					"driver" => query.OfType<Driver>(),
+					"parent" => query.OfType<Parent>(),
+					_ => query
+				};
 			}
 
 			// Apply status filter

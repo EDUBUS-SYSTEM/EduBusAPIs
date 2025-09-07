@@ -9,7 +9,7 @@ namespace Services.Contracts
 {
     public interface IUserService
     {
-        Task<UserListResponse> GetUsersAsync(string? status, string? search, int page, int perPage, string? sortBy, string? sortOrder);
+        Task<UserListResponse> GetUsersAsync(string? status, string? role, string? search, int page, int perPage, string? sortBy, string? sortOrder);
         Task<UserResponse?> GetUserByIdAsync(Guid userId);
         Task<UserResponse> UpdateUserAsync(Guid userId, UserUpdateRequest request);
         Task<UserResponse> PartialUpdateUserAsync(Guid userId, UserPartialUpdateRequest request);

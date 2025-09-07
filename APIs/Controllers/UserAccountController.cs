@@ -30,6 +30,7 @@ namespace APIs.Controllers
         [HttpGet]
         public async Task<ActionResult<UserListResponse>> GetUsers(
             [FromQuery] string? status,
+			[FromQuery] string? role,
 			[FromQuery] string? search,
 			[FromQuery] string? sortBy,
             [FromQuery] string? sortOrder,
@@ -41,7 +42,7 @@ namespace APIs.Controllers
                 if (page < 1) page = 1;
                 if (perPage < 1 || perPage > 100) perPage = 20;
 
-                var result = await _userService.GetUsersAsync(status, search, page, perPage, sortBy, sortOrder);
+                var result = await _userService.GetUsersAsync(status, role, search, page, perPage, sortBy, sortOrder);
                 return Ok(result);
             }
             catch (Exception ex)
