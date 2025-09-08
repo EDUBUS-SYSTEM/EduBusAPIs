@@ -11,7 +11,7 @@ namespace Services.Models.Student
         public int RowNumber { get; set; }
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
-        public string ParentPhoneNumber { get; set; } = null!;
+        public string ParentEmail { get; set; } = null!;
         public string ErrorMessage { get; set; } = string.Empty;
     }
 }

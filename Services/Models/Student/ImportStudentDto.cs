@@ -10,6 +10,6 @@ namespace Services.Models.Student
     {
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
-        public string ParentPhoneNumber {  get; set; } = null!;
+        public string ParentEmail { get; set; } = null!;
     }
 }

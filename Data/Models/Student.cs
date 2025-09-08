@@ -4,7 +4,7 @@ public partial class Student : BaseDomain
 {
     public Guid? ParentId { get; set; }
 
-    public string ParentPhoneNumber { get; set; } = string.Empty;
+    public string ParentEmail { get; set; } = string.Empty;
 
     public string FirstName { get; set; } = null!;
 

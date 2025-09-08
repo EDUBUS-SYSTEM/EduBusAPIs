@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Services.Models.Student
 {
-    public class CreateStudentRequest
+    public class CreateStudentRequest : IValidatableObject
     {
         public Guid? ParentId { get; set; }
 
@@ -19,18 +14,17 @@ namespace Services.Models.Student
         [StringLength(50, ErrorMessage = "Last name cannot exceed 50 characters.")]
         public string LastName { get; set; } = null!;
 
-        [StringLength(32, ErrorMessage = "Phone number cannot exceed 32 characters.")]
-        [RegularExpression(@"^[0-9+\-\s()]+$", ErrorMessage = "Invalid phone number format.")]
-        public string ParentPhoneNumber { get; set; } = string.Empty;
+        [StringLength(256)]
+        [EmailAddress(ErrorMessage = "Invalid email format.")]
+        public string ParentEmail { get; set; } = string.Empty;
 
-        // Custom validation
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {
-            if (!ParentId.HasValue && string.IsNullOrWhiteSpace(ParentPhoneNumber))
+            if (!ParentId.HasValue && string.IsNullOrWhiteSpace(ParentEmail))
             {
                 yield return new ValidationResult(
-                    "Either ParentId or ParentPhoneNumber must be provided.",
-                    new[] { nameof(ParentId), nameof(ParentPhoneNumber) });
+                    "Either ParentId or ParentEmail must be provided.",
+                    new[] { nameof(ParentId), nameof(ParentEmail) });
             }
         }
     }

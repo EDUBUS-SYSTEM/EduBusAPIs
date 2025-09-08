@@ -32,21 +32,57 @@ namespace Services.Implementations
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
-            // If ParentId provided, ensure it exists; else allow null and keep ParentPhoneNumber for later linking
+
+            // If ParentId is provided, ensure the parent exists
+            Parent? linkedParent = null;
             if (request.ParentId.HasValue)
             {
-                var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
-                if (!parent.Any())
-                {
+                var parents = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
+                linkedParent = parents.FirstOrDefault();
+                if (linkedParent == null)
                     throw new KeyNotFoundException("Parent not found");
-                }
             }
 
+            // Normalize and optionally validate email when not linking by ParentId
+            var normalizedEmail = EmailHelper.NormalizeEmail(request.ParentEmail);
+
+            if (!request.ParentId.HasValue)
+            {
+                if (string.IsNullOrEmpty(normalizedEmail))
+                    throw new ArgumentException("Either ParentId or ParentEmail must be provided.");
+                if (!EmailHelper.IsValidEmail(normalizedEmail))
+                    throw new ArgumentException("Invalid ParentEmail.");
+            }
+
+            // Map request -> entity
             var student = _mapper.Map<Student>(request);
             student.IsActive = true;
 
-            await _studentRepository.AddAsync(student);
+            // Always keep ParentEmail on Student:
+            // - If a ParentId is provided and request has a valid email, keep it.
+            // - If a ParentId is provided but request email is missing/invalid, use parent's Email as a fallback.
+            // - If no ParentId, we already validated and normalized above, so keep normalizedEmail.
+            if (request.ParentId.HasValue)
+            {
+                if (!string.IsNullOrEmpty(normalizedEmail) && EmailHelper.IsValidEmail(normalizedEmail))
+                {
+                    student.ParentEmail = normalizedEmail;
+                }
+                else
+                {
+                    // fallback to parent's email if available
+                    student.ParentEmail = EmailHelper.NormalizeEmail(linkedParent?.Email);
+                }
 
+                student.ParentId = request.ParentId;
+            }
+            else
+            {
+                student.ParentId = null;
+                student.ParentEmail = normalizedEmail;
+            }
+
+            await _studentRepository.AddAsync(student);
             return _mapper.Map<StudentDto>(student);
         }
 
@@ -54,23 +90,54 @@ namespace Services.Implementations
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
+
             var student = await _studentRepository.FindAsync(id);
             if (student == null)
                 throw new KeyNotFoundException("Student not found");
-            
-            // If ParentId provided, ensure it exists
+
+            // If ParentId is provided, ensure the parent exists
+            Parent? linkedParent = null;
             if (request.ParentId.HasValue)
             {
-                var parent = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
-                if (!parent.Any())
-                {
+                var parents = await _parentRepository.FindByConditionAsync(p => p.Id == request.ParentId.Value);
+                linkedParent = parents.FirstOrDefault();
+                if (linkedParent == null)
                     throw new KeyNotFoundException("Parent not found");
-                }
-                // Clear ParentPhoneNumber when linking to existing parent
-                request.ParentPhoneNumber = string.Empty;
             }
-            
+
+            // Normalize email coming from request (may be empty)
+            var normalizedEmail = EmailHelper.NormalizeEmail(request.ParentEmail);
+
+            // If not linking by ParentId and an email is provided, validate it
+            if (!request.ParentId.HasValue && !string.IsNullOrEmpty(normalizedEmail))
+            {
+                if (!EmailHelper.IsValidEmail(normalizedEmail))
+                    throw new ArgumentException("Invalid ParentEmail.");
+            }
+
+            // Map simple fields
             _mapper.Map(request, student);
+
+            // Always keep ParentEmail on Student using the precedence:
+            // 1) If request provides a valid email -> use it.
+            // 2) Else if ParentId is provided -> fallback to parent's Email.
+            // 3) Else -> clear if nothing valid is available.
+            if (!string.IsNullOrEmpty(normalizedEmail) && EmailHelper.IsValidEmail(normalizedEmail))
+            {
+                student.ParentEmail = normalizedEmail;
+            }
+            else if (request.ParentId.HasValue)
+            {
+                student.ParentEmail = EmailHelper.NormalizeEmail(linkedParent?.Email);
+            }
+            else
+            {
+                student.ParentEmail = string.Empty;
+            }
+
+            // Maintain ParentId as requested
+            student.ParentId = request.ParentId;
+
             await _studentRepository.UpdateAsync(student);
             return _mapper.Map<StudentDto>(student);
         }
@@ -97,210 +164,211 @@ namespace Services.Implementations
         {
             if (excelFileStream == null)
                 throw new ArgumentNullException(nameof(excelFileStream));
+
             var result = new ImportStudentResult();
             var validStudentDtos = new List<(ImportStudentDto dto, int rowNumber)>();
-            try
+
+            using var workbook = new XLWorkbook(excelFileStream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null)
+                throw new InvalidOperationException("Excel file does not contain any worksheets.");
+
+            var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1);
+            if (rows == null || !rows.Any())
+                throw new InvalidOperationException("Excel file does not contain any data rows.");
+
+            // Parse and validate rows
+            foreach (var row in rows)
             {
-                using var workbook = new XLWorkbook(excelFileStream);
-                var worksheet = workbook.Worksheets.FirstOrDefault();
-
-                if (worksheet == null)
-                    throw new InvalidOperationException("Excel file does not contain any worksheets.");
-
-                // Read data from Excel file (skip header row)
-                var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1);
-                if (rows == null || !rows.Any())
-                    throw new InvalidOperationException("Excel file does not contain any data rows.");
-                // Parse data from Excel to DTO
-                foreach (var row in rows)
+                var rowNumber = row.RowNumber();
+                try
                 {
-                    var rowNumber = row.RowNumber();
-                    try
+                    var studentDto = new ImportStudentDto
                     {
-                        var studentDto = new ImportStudentDto()
-                        {
-                            FirstName = row.Cell(1).GetString().Trim(),
-                            LastName = row.Cell(2).GetString().Trim(),
-                            ParentPhoneNumber = row.Cell(3).GetString().Trim(),
-                        };
+                        FirstName = row.Cell(1).GetString().Trim(),
+                        LastName = row.Cell(2).GetString().Trim(),
+                        ParentEmail = EmailHelper.NormalizeEmail(row.Cell(3).GetString())
+                    };
 
-                        // Validate basic data
-                        if (string.IsNullOrWhiteSpace(studentDto.FirstName) ||
-                            string.IsNullOrWhiteSpace(studentDto.LastName) ||
-                            string.IsNullOrWhiteSpace(studentDto.ParentPhoneNumber))
-
-                        {
-                            result.FailedStudents.Add(new ImportStudentError
-                            {
-                                RowNumber = rowNumber,
-                                FirstName = studentDto.FirstName,
-                                LastName = studentDto.LastName,
-                                ParentPhoneNumber = studentDto.ParentPhoneNumber,
-                                ErrorMessage = "All properties are required."
-                            });
-                            continue;
-                        }
-                        validStudentDtos.Add((studentDto, rowNumber));
-                    }
-                    catch (Exception ex)
-                    {
-                        result.FailedStudents.Add(new ImportStudentError
-                        {
-                            RowNumber = rowNumber,
-                            FirstName = "",
-                            LastName = "",
-                            ParentPhoneNumber = "",
-                            ErrorMessage = $"Error parsing data: {ex.Message}"
-                        });
-                    }
-                }
-                
-                // Set total number of records processed
-                result.TotalProcessed = rows.Count();
-
-                // Check for duplicates in Excel file
-                var duplicateGroups = validStudentDtos
-                    .GroupBy(x => new { x.dto.FirstName, x.dto.LastName, x.dto.ParentPhoneNumber })
-                    .Where(g => g.Count() > 1);
-                
-                foreach (var duplicateGroup in duplicateGroups)
-                {
-                    var duplicates = duplicateGroup.ToList();
-                    // Keep the first record, mark the remaining records as errors
-                    for (int i = 1; i < duplicates.Count; i++)
-                    {
-                        result.FailedStudents.Add(new ImportStudentError
-                        {
-                            RowNumber = duplicates[i].rowNumber,
-                            FirstName = duplicates[i].dto.FirstName,
-                            LastName = duplicates[i].dto.LastName,
-                            ParentPhoneNumber = duplicates[i].dto.ParentPhoneNumber,
-                            ErrorMessage = "Duplicate student found in Excel file."
-                        });
-                        validStudentDtos.Remove(duplicates[i]);
-                    }
-                }
-
-                // Check for duplicates in database
-                foreach (var (studentDto, rowNumber) in validStudentDtos.ToList())
-                {
-                    var existingStudent = (await _studentRepository.FindByConditionAsync(s => 
-                        s.FirstName == studentDto.FirstName && 
-                        s.LastName == studentDto.LastName && 
-                        s.ParentPhoneNumber == studentDto.ParentPhoneNumber)).FirstOrDefault();
-                    
-                    if (existingStudent != null)
+                    if (string.IsNullOrWhiteSpace(studentDto.FirstName) ||
+                        string.IsNullOrWhiteSpace(studentDto.LastName) ||
+                        string.IsNullOrWhiteSpace(studentDto.ParentEmail))
                     {
                         result.FailedStudents.Add(new ImportStudentError
                         {
                             RowNumber = rowNumber,
                             FirstName = studentDto.FirstName,
                             LastName = studentDto.LastName,
-                            ParentPhoneNumber = studentDto.ParentPhoneNumber,
-                            ErrorMessage = "Student already exists in database."
+                            ParentEmail = studentDto.ParentEmail,
+                            ErrorMessage = "All properties are required."
                         });
-                        validStudentDtos.Remove((studentDto, rowNumber));
+                        continue;
                     }
-                }
 
-                // test each student
-                foreach (var (studentDto, rowNumber) in validStudentDtos)
-                {
-                    try
-                    {
-                        // Try to find existing parent by phone number
-                        var parent = (await _parentRepository.FindByConditionAsync(p => p.PhoneNumber == studentDto.ParentPhoneNumber)).FirstOrDefault();
-                        
-                        // Map DTO to entity
-                        var student = _mapper.Map<Student>(studentDto);
-                        
-                        if (parent != null)
-                        {
-                            // Link to existing parent and clear ParentPhoneNumber to avoid duplication
-                            student.ParentId = parent.Id;
-                            student.ParentPhoneNumber = string.Empty;
-                        }
-                        else
-                        {
-                            // Keep ParentPhoneNumber for later linking when parent registers
-                            student.ParentId = null;
-                            student.ParentPhoneNumber = studentDto.ParentPhoneNumber;
-                        }
-                        
-                        student.IsActive = true;
-                        // add database
-                        var createdStudent = await _studentRepository.AddAsync(student);
-
-                        var successResult = _mapper.Map<ImportStudentSuccess>(createdStudent);
-                        successResult.RowNumber = rowNumber;
-                        result.SuccessfulStudents.Add(successResult);
-                    }
-                    catch (Exception ex)
+                    if (!EmailHelper.IsValidEmail(studentDto.ParentEmail))
                     {
                         result.FailedStudents.Add(new ImportStudentError
                         {
                             RowNumber = rowNumber,
                             FirstName = studentDto.FirstName,
                             LastName = studentDto.LastName,
-                            ParentPhoneNumber = studentDto.ParentPhoneNumber,
-                            ErrorMessage = $"Error creating student: {ex.Message}"
+                            ParentEmail = studentDto.ParentEmail,
+                            ErrorMessage = "Invalid email format."
                         });
+                        continue;
                     }
+
+                    validStudentDtos.Add((studentDto, rowNumber));
                 }
-                return result;
+                catch (Exception ex)
+                {
+                    result.FailedStudents.Add(new ImportStudentError
+                    {
+                        RowNumber = rowNumber,
+                        FirstName = "",
+                        LastName = "",
+                        ParentEmail = "",
+                        ErrorMessage = $"Error parsing data: {ex.Message}"
+                    });
+                }
             }
-            catch (Exception ex)
+
+            result.TotalProcessed = rows.Count();
+
+            // Remove in-file duplicates by (FirstName, LastName, ParentEmail)
+            var duplicateGroups = validStudentDtos
+                .GroupBy(x => new { x.dto.FirstName, x.dto.LastName, x.dto.ParentEmail })
+                .Where(g => g.Count() > 1);
+
+            foreach (var group in duplicateGroups)
             {
-                throw;
+                var items = group.ToList();
+                for (int i = 1; i < items.Count; i++)
+                {
+                    result.FailedStudents.Add(new ImportStudentError
+                    {
+                        RowNumber = items[i].rowNumber,
+                        FirstName = items[i].dto.FirstName,
+                        LastName = items[i].dto.LastName,
+                        ParentEmail = items[i].dto.ParentEmail,
+                        ErrorMessage = "Duplicate student found in Excel file."
+                    });
+                    validStudentDtos.Remove(items[i]);
+                }
             }
+
+            // Remove DB duplicates by (FirstName, LastName, ParentEmail)
+            foreach (var (dto, rowNumber) in validStudentDtos.ToList())
+            {
+                var existing = (await _studentRepository.FindByConditionAsync(s =>
+                    s.FirstName == dto.FirstName &&
+                    s.LastName == dto.LastName &&
+                    s.ParentEmail == dto.ParentEmail)).FirstOrDefault();
+
+                if (existing != null)
+                {
+                    result.FailedStudents.Add(new ImportStudentError
+                    {
+                        RowNumber = rowNumber,
+                        FirstName = dto.FirstName,
+                        LastName = dto.LastName,
+                        ParentEmail = dto.ParentEmail,
+                        ErrorMessage = "Student already exists in database."
+                    });
+                    validStudentDtos.Remove((dto, rowNumber));
+                }
+            }
+
+            // Insert rows
+            foreach (var (dto, rowNumber) in validStudentDtos)
+            {
+                try
+                {
+                    // Try to link Parent by email
+                    var parent = (await _parentRepository.FindByConditionAsync(p => p.Email == dto.ParentEmail))
+                                 .FirstOrDefault();
+
+                    var student = _mapper.Map<Student>(dto);
+
+                    if (parent != null)
+                    {
+                        student.ParentId = parent.Id;
+                    }
+                    else
+                    {
+                        student.ParentId = null;
+                    }
+
+                    // Always keep ParentEmail on Student (requested behavior)
+                    student.ParentEmail = dto.ParentEmail;
+                    student.IsActive = true;
+
+                    var created = await _studentRepository.AddAsync(student);
+
+                    var success = _mapper.Map<ImportStudentSuccess>(created);
+                    success.RowNumber = rowNumber;
+                    result.SuccessfulStudents.Add(success);
+                }
+                catch (Exception ex)
+                {
+                    result.FailedStudents.Add(new ImportStudentError
+                    {
+                        RowNumber = rowNumber,
+                        FirstName = dto.FirstName,
+                        LastName = dto.LastName,
+                        ParentEmail = dto.ParentEmail,
+                        ErrorMessage = $"Error creating student: {ex.Message}"
+                    });
+                }
+            }
+
+            return result;
         }
 
         public async Task<byte[]> ExportStudentsToExcelAsync()
         {
             var students = await _studentRepository.FindAllAsync();
             if (students == null || !students.Any())
-            {
                 return Array.Empty<byte>();
-            }
-            using (var workbook = new XLWorkbook())
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Students");
+
+            // Header
+            worksheet.Cell(1, 1).Value = "First Name";
+            worksheet.Cell(1, 2).Value = "Last Name";
+            worksheet.Cell(1, 3).Value = "Parent Name";
+            worksheet.Cell(1, 4).Value = "Parent Email";
+            worksheet.Cell(1, 5).Value = "Status";
+
+            int row = 2;
+            foreach (var st in students)
             {
-                var worksheet = workbook.Worksheets.Add("Students");
+                worksheet.Cell(row, 1).Value = st.FirstName;
+                worksheet.Cell(row, 2).Value = st.LastName;
 
-                // Header
-                worksheet.Cell(1, 1).Value = "First Name";
-                worksheet.Cell(1, 2).Value = "Last Name";
-                worksheet.Cell(1, 3).Value = "Parent Name";
-                worksheet.Cell(1, 4).Value = "Parent Phone Number";
-                worksheet.Cell(1, 5).Value = "Status";
-                int row = 2;
-                foreach (var st in students)
+                if (st.ParentId.HasValue && st.Parent != null)
                 {
-                    worksheet.Cell(row, 1).Value = st.FirstName;
-                    worksheet.Cell(row, 2).Value = st.LastName;
-                    
-                    if (st.ParentId.HasValue && st.Parent != null)
-                    {
-                        // Student is linked to parent
-                        worksheet.Cell(row, 3).Value = $"{st.Parent.FirstName} {st.Parent.LastName}";
-                        worksheet.Cell(row, 4).Value = st.Parent.PhoneNumber;
-                        worksheet.Cell(row, 5).Value = "Linked";
-                    }
-                    else
-                    {
-                        // Student is not linked to parent yet
-                        worksheet.Cell(row, 3).Value = "Not linked";
-                        worksheet.Cell(row, 4).Value = st.ParentPhoneNumber;
-                        worksheet.Cell(row, 5).Value = "Pending";
-                    }
-                    row++;
+                    // Student is linked to a parent
+                    worksheet.Cell(row, 3).Value = $"{st.Parent.FirstName} {st.Parent.LastName}";
+                    // You can choose either the parent's current email or the student's stored ParentEmail.
+                    // Here we show the parent's current email to reflect the authoritative account address.
+                    worksheet.Cell(row, 4).Value = st.Parent.Email;
+                    worksheet.Cell(row, 5).Value = "Linked";
                 }
-
-                using (var stream = new MemoryStream())
+                else
                 {
-                    workbook.SaveAs(stream);
-                    return stream.ToArray();
+                    // Student is not linked to a parent
+                    worksheet.Cell(row, 3).Value = "Not linked";
+                    worksheet.Cell(row, 4).Value = st.ParentEmail; // still kept on Student
+                    worksheet.Cell(row, 5).Value = "Pending";
                 }
+                row++;
             }
+
+            using var stream = new System.IO.MemoryStream();
+            workbook.SaveAs(stream);
+            return stream.ToArray();
         }
     }
 }

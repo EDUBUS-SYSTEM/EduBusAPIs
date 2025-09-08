@@ -23,6 +23,148 @@ namespace Data.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("Data.Models.DriverLeaveConflict", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("(newsequentialid())");
+
+                    b.Property<int>("AffectedStudents")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LeaveRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ReplacementReason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<double>("ReplacementScore")
+                        .HasColumnType("float");
+
+                    b.Property<string>("RouteName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SuggestedDriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SuggestedVehicleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("TripEndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("TripStartTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveRequestId");
+
+                    b.HasIndex("SuggestedDriverId");
+
+                    b.HasIndex("SuggestedVehicleId");
+
+                    b.ToTable("DriverLeaveConflicts");
+                });
+
+            modelBuilder.Entity("Data.Models.DriverLeaveRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("(newsequentialid())");
+
+                    b.Property<string>("ApprovalNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("AutoReplacementEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LeaveType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SuggestedReplacementDriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SuggestedReplacementVehicleId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("SuggestionGeneratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByAdminId");
+
+                    b.HasIndex("DriverId");
+
+                    b.HasIndex("SuggestedReplacementDriverId");
+
+                    b.HasIndex("SuggestedReplacementVehicleId");
+
+                    b.ToTable("DriverLeaveRequests");
+                });
+
             modelBuilder.Entity("Data.Models.DriverLicense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -98,6 +240,21 @@ namespace Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("(newsequentialid())");
 
+                    b.Property<string>("ApprovalNote")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ApprovedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AssignedByAdminId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AssignmentReason")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -120,6 +277,9 @@ namespace Data.Migrations
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
@@ -128,6 +288,10 @@ namespace Data.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByAdminId");
+
+                    b.HasIndex("AssignedByAdminId");
 
                     b.HasIndex(new[] { "DriverId" }, "IX_DriverVehicles_DriverId");
 
@@ -138,6 +302,48 @@ namespace Data.Migrations
                         .HasFilter("([IsPrimaryDriver]=(1) AND [EndTimeUtc] IS NULL)");
 
                     b.ToTable("DriverVehicles");
+                });
+
+            modelBuilder.Entity("Data.Models.DriverWorkingHours", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasDefaultValueSql("(newsequentialid())");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)")
+                        .HasDefaultValueSql("(sysutcdatetime())");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("DriverId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("time");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DriverId");
+
+                    b.ToTable("DriverWorkingHours");
                 });
 
             modelBuilder.Entity("Data.Models.Grade", b =>
@@ -312,6 +518,9 @@ namespace Data.Migrations
                         .HasColumnType("datetime2(3)")
                         .HasDefaultValueSql("(sysutcdatetime())");
 
+                    b.Property<Guid?>("CurrentPickupPointId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -332,8 +541,17 @@ namespace Data.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<Guid>("ParentId")
+                    b.Property<string>("ParentEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<Guid?>("ParentId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PickupPointAssignedAt")
+                        .HasPrecision(3)
+                        .HasColumnType("datetime2(3)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
@@ -341,9 +559,51 @@ namespace Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex(new[] { "CurrentPickupPointId" }, "IX_Students_CurrentPickupPointId");
+
+                    b.HasIndex(new[] { "ParentEmail" }, "IX_Students_ParentEmail");
+
                     b.HasIndex(new[] { "ParentId" }, "IX_Students_ParentId");
 
                     b.ToTable("Students");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440010"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            FirstName = "Nguyen",
+                            IsActive = true,
+                            IsDeleted = false,
+                            LastName = "Van An",
+                            ParentEmail = "parent@edubus.com",
+                            ParentId = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440011"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            FirstName = "Tran",
+                            IsActive = true,
+                            IsDeleted = false,
+                            LastName = "Thi Binh",
+                            ParentEmail = "parent@edubus.com",
+                            ParentId = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = new Guid("550e8400-e29b-41d4-a716-446655440012"),
+                            CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            FirstName = "Le",
+                            IsActive = true,
+                            IsDeleted = false,
+                            LastName = "Van Cuong",
+                            ParentEmail = "parent@edubus.com",
+                            ParentId = new Guid("550e8400-e29b-41d4-a716-446655440003"),
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                        });
                 });
 
             modelBuilder.Entity("Data.Models.StudentGradeEnrollment", b =>
@@ -390,24 +650,29 @@ namespace Data.Migrations
                     b.ToTable("StudentGradeEnrollments");
                 });
 
-            modelBuilder.Entity("Data.Models.StudentPickupPoint", b =>
+            modelBuilder.Entity("Data.Models.StudentPickupPointHistory", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier")
                         .HasDefaultValueSql("(newsequentialid())");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("EndTimeUtc")
+                    b.Property<DateTime>("AssignedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
 
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
+                    b.Property<string>("ChangeReason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ChangedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -417,7 +682,7 @@ namespace Data.Migrations
                     b.Property<Guid>("PickupPointId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<DateTime>("StartTimeUtc")
+                    b.Property<DateTime?>("RemovedAt")
                         .HasPrecision(3)
                         .HasColumnType("datetime2(3)");
 
@@ -429,15 +694,13 @@ namespace Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex(new[] { "PickupPointId" }, "IX_StudentPickupPoints_PickupPointId");
+                    b.HasIndex(new[] { "AssignedAt" }, "IX_StudentPickupPointHistory_AssignedAt");
 
-                    b.HasIndex(new[] { "StudentId" }, "IX_StudentPickupPoints_StudentId");
+                    b.HasIndex(new[] { "PickupPointId" }, "IX_StudentPickupPointHistory_PickupPointId");
 
-                    b.HasIndex(new[] { "StudentId" }, "UQ_StudentPickupPoints_Active")
-                        .IsUnique()
-                        .HasFilter("([IsActive]=(1) AND [EndTimeUtc] IS NULL)");
+                    b.HasIndex(new[] { "StudentId" }, "IX_StudentPickupPointHistory_StudentId");
 
-                    b.ToTable("StudentPickupPoints");
+                    b.ToTable("StudentPickupPointHistory");
                 });
 
             modelBuilder.Entity("Data.Models.Transaction", b =>
@@ -683,10 +946,11 @@ namespace Data.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusNote")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasPrecision(3)
@@ -733,6 +997,15 @@ namespace Data.Migrations
                     b.Property<Guid?>("HealthCertificateFileId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("LastActiveDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StatusNote")
+                        .HasColumnType("nvarchar(max)");
+
                     b.ToTable("Drivers", (string)null);
 
                     b.HasData(
@@ -749,7 +1022,8 @@ namespace Data.Migrations
                             IsDeleted = false,
                             LastName = "Van Driver",
                             PhoneNumber = "0901234568",
-                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc)
+                            UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, 0, DateTimeKind.Utc),
+                            Status = 1
                         });
                 });
 
@@ -777,6 +1051,63 @@ namespace Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Data.Models.DriverLeaveConflict", b =>
+                {
+                    b.HasOne("Data.Models.DriverLeaveRequest", "LeaveRequest")
+                        .WithMany("Conflicts")
+                        .HasForeignKey("LeaveRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Data.Models.Driver", "SuggestedDriver")
+                        .WithMany()
+                        .HasForeignKey("SuggestedDriverId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Data.Models.Vehicle", "SuggestedVehicle")
+                        .WithMany()
+                        .HasForeignKey("SuggestedVehicleId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("LeaveRequest");
+
+                    b.Navigation("SuggestedDriver");
+
+                    b.Navigation("SuggestedVehicle");
+                });
+
+            modelBuilder.Entity("Data.Models.DriverLeaveRequest", b =>
+                {
+                    b.HasOne("Data.Models.Admin", "ApprovedByAdmin")
+                        .WithMany("ApprovedLeaveRequests")
+                        .HasForeignKey("ApprovedByAdminId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Data.Models.Driver", "Driver")
+                        .WithMany("LeaveRequests")
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Data.Models.Driver", "SuggestedReplacementDriver")
+                        .WithMany()
+                        .HasForeignKey("SuggestedReplacementDriverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Data.Models.Vehicle", "SuggestedReplacementVehicle")
+                        .WithMany()
+                        .HasForeignKey("SuggestedReplacementVehicleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ApprovedByAdmin");
+
+                    b.Navigation("Driver");
+
+                    b.Navigation("SuggestedReplacementDriver");
+
+                    b.Navigation("SuggestedReplacementVehicle");
+                });
+
             modelBuilder.Entity("Data.Models.DriverLicense", b =>
                 {
                     b.HasOne("Data.Models.Driver", "Driver")
@@ -790,21 +1121,47 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.DriverVehicle", b =>
                 {
+                    b.HasOne("Data.Models.Admin", "ApprovedByAdmin")
+                        .WithMany("ApprovedDriverVehicles")
+                        .HasForeignKey("ApprovedByAdminId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Data.Models.Admin", "AssignedByAdmin")
+                        .WithMany("AssignedDriverVehicles")
+                        .HasForeignKey("AssignedByAdminId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("Data.Models.Driver", "Driver")
                         .WithMany("DriverVehicles")
                         .HasForeignKey("DriverId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("Data.Models.Vehicle", "Vehicle")
-                        .WithOne("DriverVehicle")
-                        .HasForeignKey("Data.Models.DriverVehicle", "VehicleId")
+                        .WithMany("DriverVehicles")
+                        .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("ApprovedByAdmin");
+
+                    b.Navigation("AssignedByAdmin");
 
                     b.Navigation("Driver");
 
                     b.Navigation("Vehicle");
+                });
+
+            modelBuilder.Entity("Data.Models.DriverWorkingHours", b =>
+                {
+                    b.HasOne("Data.Models.Driver", "Driver")
+                        .WithMany()
+                        .HasForeignKey("DriverId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Driver");
                 });
 
             modelBuilder.Entity("Data.Models.Image", b =>
@@ -831,10 +1188,17 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.Student", b =>
                 {
+                    b.HasOne("Data.Models.PickupPoint", "CurrentPickupPoint")
+                        .WithMany("Students")
+                        .HasForeignKey("CurrentPickupPointId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Data.Models.Parent", "Parent")
                         .WithMany("Students")
                         .HasForeignKey("ParentId")
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CurrentPickupPoint");
 
                     b.Navigation("Parent");
                 });
@@ -857,16 +1221,16 @@ namespace Data.Migrations
                     b.Navigation("Student");
                 });
 
-            modelBuilder.Entity("Data.Models.StudentPickupPoint", b =>
+            modelBuilder.Entity("Data.Models.StudentPickupPointHistory", b =>
                 {
                     b.HasOne("Data.Models.PickupPoint", "PickupPoint")
-                        .WithMany("StudentPickupPoints")
+                        .WithMany("StudentPickupPointHistory")
                         .HasForeignKey("PickupPointId")
                         .IsRequired();
 
                     b.HasOne("Data.Models.Student", "Student")
-                        .WithOne("StudentPickupPoint")
-                        .HasForeignKey("Data.Models.StudentPickupPoint", "StudentId")
+                        .WithMany("PickupPointHistory")
+                        .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
@@ -949,6 +1313,11 @@ namespace Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Data.Models.DriverLeaveRequest", b =>
+                {
+                    b.Navigation("Conflicts");
+                });
+
             modelBuilder.Entity("Data.Models.Grade", b =>
                 {
                     b.Navigation("StudentGradeEnrollments");
@@ -956,16 +1325,18 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.PickupPoint", b =>
                 {
-                    b.Navigation("StudentPickupPoints");
+                    b.Navigation("StudentPickupPointHistory");
+
+                    b.Navigation("Students");
                 });
 
             modelBuilder.Entity("Data.Models.Student", b =>
                 {
                     b.Navigation("Images");
 
-                    b.Navigation("StudentGradeEnrollments");
+                    b.Navigation("PickupPointHistory");
 
-                    b.Navigation("StudentPickupPoint");
+                    b.Navigation("StudentGradeEnrollments");
 
                     b.Navigation("TransportFeeItems");
                 });
@@ -977,11 +1348,17 @@ namespace Data.Migrations
 
             modelBuilder.Entity("Data.Models.Vehicle", b =>
                 {
-                    b.Navigation("DriverVehicle");
+                    b.Navigation("DriverVehicles");
                 });
 
             modelBuilder.Entity("Data.Models.Admin", b =>
                 {
+                    b.Navigation("ApprovedDriverVehicles");
+
+                    b.Navigation("ApprovedLeaveRequests");
+
+                    b.Navigation("AssignedDriverVehicles");
+
                     b.Navigation("UnitPrices");
 
                     b.Navigation("Vehicles");
@@ -992,6 +1369,8 @@ namespace Data.Migrations
                     b.Navigation("DriverLicense");
 
                     b.Navigation("DriverVehicles");
+
+                    b.Navigation("LeaveRequests");
                 });
 
             modelBuilder.Entity("Data.Models.Parent", b =>

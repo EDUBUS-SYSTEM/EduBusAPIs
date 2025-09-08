@@ -17,7 +17,7 @@ namespace Data.SeedConfiguration
             {
                 Id = student1Id,
                 ParentId = parentId,
-                ParentPhoneNumber = "0901234569",
+                ParentEmail = "parent@edubus.com",
                 FirstName = "Nguyen",
                 LastName = "Van An",
                 IsActive = true,
@@ -32,7 +32,7 @@ namespace Data.SeedConfiguration
             {
                 Id = student2Id,
                 ParentId = parentId,
-                ParentPhoneNumber = "0901234569",
+                ParentEmail = "parent@edubus.com",
                 FirstName = "Tran",
                 LastName = "Thi Binh",
                 IsActive = true,
@@ -47,7 +47,7 @@ namespace Data.SeedConfiguration
             {
                 Id = student3Id,
                 ParentId = parentId,
-                ParentPhoneNumber = "0901234569",
+                ParentEmail = "parent@edubus.com",
                 FirstName = "Le",
                 LastName = "Van Cuong",
                 IsActive = true,

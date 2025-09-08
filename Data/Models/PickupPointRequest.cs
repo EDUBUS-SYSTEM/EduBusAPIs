@@ -1,22 +1,25 @@
-using NetTopologySuite.Geometries;
+using Data.Models;
 
-namespace Data.Models;
-
-public partial class PickupPointRequest : BaseDomain
+public class PickupPointRequestDocument : BaseMongoDocument
 {
-    public string Description { get; set; } = string.Empty;
-    public string Location { get; set; } = string.Empty;
-    public string Reason { get; set; } = string.Empty;
-    public string Status { get; set; } = "Pending"; // Pending, Approved, Rejected
-    public string AdminNotes { get; set; } = string.Empty;
+    public Guid? ParentId { get; set; }
+    public string ParentEmail { get; set; } = "";
+    public List<Guid> StudentIds { get; set; } = new();
+
+    public string AddressText { get; set; } = "";
+    public double Latitude { get; set; }
+    public double Longitude { get; set; }
+    public double DistanceKm { get; set; }
+
+    public string Description { get; set; } = "";
+    public string Reason { get; set; } = "";
+
+    public string Status { get; set; } = "Pending";   // Pending, Approved, Rejected
+    public string AdminNotes { get; set; } = "";
     public DateTime? ReviewedAt { get; set; }
     public Guid? ReviewedByAdminId { get; set; }
-    public Guid RequestedByParentId { get; set; }
 
-    public Point Geog { get; set; }
-
-    // Navigation properties
-    public virtual Parent RequestedByParent { get; set; } = null!;
-    public virtual Admin? ReviewedByAdmin { get; set; }
+    // Quotation detail (snapshot at submission time)
+    public decimal UnitPriceVndPerKm { get; set; } = 50000m;
+    public decimal EstimatedPriceVnd { get; set; }
 }
-

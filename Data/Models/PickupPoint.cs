@@ -8,7 +8,7 @@ public partial class PickupPoint : BaseDomain
 
     public string Location { get; set; } = null!;
 
-    public Point? Geog { get; set; }
+    public Point Geog { get; set; }
 
     // Students currently assigned to this pickup point
     public virtual ICollection<Student> Students { get; set; } = new List<Student>();
