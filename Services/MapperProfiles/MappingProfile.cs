@@ -4,11 +4,13 @@ using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
+using Services.Models.RouteSchedule;
+using Services.Models.Schedule;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
+using Services.Models.Trip;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
-
 using Utils;
 
 namespace Services.MapperProfiles
@@ -105,6 +107,23 @@ namespace Services.MapperProfiles
             // Notification mapping
             CreateMap<CreateNotificationDto, Notification>();
             CreateMap<Notification, NotificationResponse>();
-        }
+
+			// Schedule mappings
+			CreateMap<Schedule, ScheduleDto>();
+			CreateMap<CreateScheduleDto, Schedule>();
+			CreateMap<UpdateScheduleDto, Schedule>();
+
+			// Trip mappings
+			CreateMap<Trip, TripDto>();
+			CreateMap<CreateTripDto, Trip>();
+			CreateMap<UpdateTripDto, Trip>();
+			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();
+			CreateMap<TripStop, TripStopDto>();
+
+			// RouteSchedule mappings
+			CreateMap<RouteSchedule, RouteScheduleDto>();
+			CreateMap<CreateRouteScheduleDto, RouteSchedule>();
+			CreateMap<UpdateRouteScheduleDto, RouteSchedule>();
+		}
     }
 }
