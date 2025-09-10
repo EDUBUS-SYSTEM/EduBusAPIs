@@ -30,30 +30,40 @@ namespace Services.Implementations
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
-            var isExistingEmail = await _userAccountRepository.IsEmailExistAsync(dto.Email);
-            if (isExistingEmail)
+
+            if (await _userAccountRepository.IsEmailExistAsync(dto.Email))
                 throw new InvalidOperationException("Email already exists.");
-            var isExistingPhone = await _userAccountRepository.IsPhoneNumberExistAsync(dto.PhoneNumber);
-            if (isExistingPhone)
+            if (await _userAccountRepository.IsPhoneNumberExistAsync(dto.PhoneNumber))
                 throw new InvalidOperationException("Phone number already exists.");
+
             var parent = _mapper.Map<Parent>(dto);
+
             var rawPassword = SecurityHelper.GenerateRandomPassword();
             var hashedPassword = SecurityHelper.HashPassword(rawPassword);
             parent.HashedPassword = hashedPassword;
+
             var createdParent = await _parentRepository.AddAsync(parent);
 
-            // After parent is created, link existing students by phone number
-            var studentsNeedingLink = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == dto.PhoneNumber);
+            // 🔑 Link students theo email
+            var studentsNeedingLink = await _studentRepository.FindByConditionAsync(
+                s => s.ParentId == null && s.ParentEmail == dto.Email);
+
             foreach (var student in studentsNeedingLink)
             {
                 student.ParentId = createdParent.Id;
-                student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
+                student.ParentEmail = string.Empty; // clear sau khi link
                 await _studentRepository.UpdateAsync(student);
             }
 
             var response = _mapper.Map<CreateUserResponse>(createdParent);
             response.Password = rawPassword;
-            var mailContent = CreateWelcomeEmailTemplate(createdParent.FirstName, createdParent.LastName, createdParent.Email, rawPassword );
+
+            var mailContent = CreateWelcomeEmailTemplate(
+                createdParent.FirstName,
+                createdParent.LastName,
+                createdParent.Email,
+                rawPassword);
+
             await SendWelcomeEmailAsync(createdParent.Email, mailContent.subject, mailContent.body);
             return response;
         }
@@ -62,204 +72,43 @@ namespace Services.Implementations
         {
             if (excelFileStream == null)
                 throw new ArgumentNullException(nameof(excelFileStream));
+
             var result = new ImportUsersResult();
             var validParentDtos = new List<(ImportParentDto dto, int rowNumber)>();
-            try
+
+            using var workbook = new XLWorkbook(excelFileStream);
+            var worksheet = workbook.Worksheets.FirstOrDefault();
+            if (worksheet == null)
+                throw new InvalidOperationException("Excel file does not contain any worksheets.");
+
+            var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1);
+            if (rows == null || !rows.Any())
+                throw new InvalidOperationException("Excel file does not contain any data rows.");
+
+            // Parse rows
+            foreach (var row in rows)
             {
-                using var workbook = new XLWorkbook(excelFileStream);
-                var worksheet = workbook.Worksheets.FirstOrDefault();
-
-                if (worksheet == null)
-                    throw new InvalidOperationException("Excel file does not contain any worksheets.");
-
-                // Read data from Excel file (skip header row)
-                var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1);
-                if (rows == null || !rows.Any())
-                    throw new InvalidOperationException("Excel file does not contain any data rows.");
-                // Parse data from Excel to DTO
-                foreach (var row in rows)
+                var rowNumber = row.RowNumber();
+                try
                 {
-                    var rowNumber = row.RowNumber();
-                    try
+                    var parentDto = new ImportParentDto
                     {
-                        var parentDto = new ImportParentDto
-                        {
-                            Email = row.Cell(1).GetString().Trim(),
-                            FirstName = row.Cell(2).GetString().Trim(),
-                            LastName = row.Cell(3).GetString().Trim(),
-                            PhoneNumber = row.Cell(4).GetString().Trim(),
-                            Gender = row.Cell(5).GetValue<int>(),
-                            DateOfBirthString = row.Cell(6).GetString().Trim(),
-                            Address = row.Cell(7).GetString().Trim()
-                        };
+                        Email = row.Cell(1).GetString().Trim(),
+                        FirstName = row.Cell(2).GetString().Trim(),
+                        LastName = row.Cell(3).GetString().Trim(),
+                        PhoneNumber = row.Cell(4).GetString().Trim(),
+                        Gender = row.Cell(5).GetValue<int>(),
+                        DateOfBirthString = row.Cell(6).GetString().Trim(),
+                        Address = row.Cell(7).GetString().Trim()
+                    };
 
-                        // Validate basic data
-                        if (string.IsNullOrWhiteSpace(parentDto.Email) ||
-                            string.IsNullOrWhiteSpace(parentDto.FirstName) ||
-                            string.IsNullOrWhiteSpace(parentDto.LastName) ||
-                            string.IsNullOrWhiteSpace(parentDto.PhoneNumber) ||
-                            parentDto.Gender == 0 ||
-                            string.IsNullOrWhiteSpace(parentDto.DateOfBirthString) ||
-                            string.IsNullOrWhiteSpace(parentDto.Address))
-
-                        {
-                            result.FailedUsers.Add(new ImportUserError
-                            {
-                                RowNumber = rowNumber,
-                                Email = parentDto.Email,
-                                FirstName = parentDto.FirstName,
-                                LastName = parentDto.LastName,
-                                PhoneNumber = parentDto.PhoneNumber,
-                                ErrorMessage = "All properties are required."
-                            });
-                            continue;
-                        }
-
-                        // Validate email format
-                        if (!EmailHelper.IsValidEmail(parentDto.Email))
-                        {
-                            result.FailedUsers.Add(new ImportUserError
-                            {
-                                RowNumber = rowNumber,
-                                Email = parentDto.Email,
-                                FirstName = parentDto.FirstName,
-                                LastName = parentDto.LastName,
-                                PhoneNumber = parentDto.PhoneNumber,
-                                ErrorMessage = "Invalid email format."
-                            });
-                            continue;
-                        }
-
-                        validParentDtos.Add((parentDto, rowNumber));
-                    }
-                    catch (Exception ex)
-                    {
-                        result.FailedUsers.Add(new ImportUserError
-                        {
-                            RowNumber = rowNumber,
-                            Email = "",
-                            FirstName = "",
-                            LastName = "",
-                            ErrorMessage = $"Error parsing data: {ex.Message}"
-                        });
-                    }
-                }
-                // Check duplicate emails in Excel file
-                var duplicateEmailGroups = validParentDtos
-                    .GroupBy(x => x.dto.Email.ToLower())
-                    .Where(g => g.Count() > 1);
-                foreach (var duplicateGroup in duplicateEmailGroups)
-                {
-                    var duplicates = duplicateGroup.ToList();
-                    // Keep the first record, mark the remaining records as errors
-                    for (int i = 1; i < duplicates.Count; i++)
-                    {
-                        result.FailedUsers.Add(new ImportUserError
-                        {
-                            RowNumber = duplicates[i].rowNumber,
-                            Email = duplicates[i].dto.Email,
-                            FirstName = duplicates[i].dto.FirstName,
-                            LastName = duplicates[i].dto.LastName,
-                            PhoneNumber = duplicates[i].dto.PhoneNumber,
-                            ErrorMessage = "Duplicate email found in Excel file."
-                        });
-                        validParentDtos.Remove(duplicates[i]);
-                    }
-                }
-                //Check duplicate phones in Excel file
-                var duplicatePhoneGroups = validParentDtos
-                    .Where(x => !string.IsNullOrWhiteSpace(x.dto.PhoneNumber))
-                    .GroupBy(x => x.dto.PhoneNumber)
-                    .Where(g => g.Count() > 1);
-                foreach (var duplicateGroup in duplicatePhoneGroups)
-                {
-                    var duplicates = duplicateGroup.ToList();
-                    // Keep the first record, mark the remaining records as errors
-                    for (int i = 1; i < duplicates.Count; i++)
-                    {
-                        result.FailedUsers.Add(new ImportUserError
-                        {
-                            RowNumber = duplicates[i].rowNumber,
-                            Email = duplicates[i].dto.Email,
-                            FirstName = duplicates[i].dto.FirstName,
-                            LastName = duplicates[i].dto.LastName,
-                            PhoneNumber = duplicates[i].dto.PhoneNumber,
-                            ErrorMessage = "Duplicate phone number found in Excel file."
-                        });
-                        validParentDtos.Remove(duplicates[i]);
-                    }
-                }
-                // Set total number of records processed
-                result.TotalProcessed = rows.Count();
-
-                // Process từng parent
-                foreach (var (parentDto, rowNumber) in validParentDtos)
-                {
-                    try
-                    {
-                        // Check email exists in database
-                        var isExistingEmail = await _userAccountRepository.IsEmailExistAsync(parentDto.Email);
-                        if (isExistingEmail)
-                        {
-                            result.FailedUsers.Add(new ImportUserError
-                            {
-                                RowNumber = rowNumber,
-                                Email = parentDto.Email,
-                                FirstName = parentDto.FirstName,
-                                LastName = parentDto.LastName,
-                                PhoneNumber = parentDto.PhoneNumber,
-                                ErrorMessage = "Email already exists in database."
-                            });
-                            continue;
-                        }
-
-                        // Check if phone number exists in database
-                        if (!string.IsNullOrWhiteSpace(parentDto.PhoneNumber))
-                        {
-                            var isExistingPhone = await _userAccountRepository.IsPhoneNumberExistAsync(parentDto.PhoneNumber);
-                            if (isExistingPhone)
-                            {
-                                result.FailedUsers.Add(new ImportUserError
-                                {
-                                    RowNumber = rowNumber,
-                                    Email = parentDto.Email,
-                                    FirstName = parentDto.FirstName,
-                                    LastName = parentDto.LastName,
-                                    PhoneNumber = parentDto.PhoneNumber,
-                                    ErrorMessage = "Phone number already exists in database."
-                                });
-                                continue;
-                            }
-                        }
-
-                        // Map DTO thành entity
-                        var parent = _mapper.Map<Parent>(parentDto);
-
-                        // Generate password
-                        var rawPassword = SecurityHelper.GenerateRandomPassword();
-                        var hashedPassword = SecurityHelper.HashPassword(rawPassword);
-                        parent.HashedPassword = hashedPassword;
-
-                        var createdParent = await _parentRepository.AddAsync(parent);
-                        
-                        // After parent is created, link existing students by phone number
-                        var studentsNeedingLink = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == parentDto.PhoneNumber);
-                        foreach (var student in studentsNeedingLink)
-                        {
-                            student.ParentId = createdParent.Id;
-                            student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
-                            await _studentRepository.UpdateAsync(student);
-                        }
-                        
-                        var successResult = _mapper.Map<ImportUserSuccess>(createdParent);
-                        successResult.RowNumber = rowNumber;
-                        successResult.Password = rawPassword;
-                        result.SuccessfulUsers.Add(successResult);
-                        // send mail
-                        var mailContent = CreateWelcomeEmailTemplate(createdParent.FirstName, createdParent.LastName, createdParent.Email, rawPassword);
-                        QueueWelcomeEmail(createdParent.Email, mailContent.subject, mailContent.body);
-                    }
-                    catch (Exception ex)
+                    if (string.IsNullOrWhiteSpace(parentDto.Email) ||
+                        string.IsNullOrWhiteSpace(parentDto.FirstName) ||
+                        string.IsNullOrWhiteSpace(parentDto.LastName) ||
+                        string.IsNullOrWhiteSpace(parentDto.PhoneNumber) ||
+                        parentDto.Gender == 0 ||
+                        string.IsNullOrWhiteSpace(parentDto.DateOfBirthString) ||
+                        string.IsNullOrWhiteSpace(parentDto.Address))
                     {
                         result.FailedUsers.Add(new ImportUserError
                         {
@@ -268,29 +117,141 @@ namespace Services.Implementations
                             FirstName = parentDto.FirstName,
                             LastName = parentDto.LastName,
                             PhoneNumber = parentDto.PhoneNumber,
-                            ErrorMessage = $"Error creating parent: {ex.Message}"
+                            ErrorMessage = "All properties are required."
                         });
+                        continue;
                     }
+
+                    if (!EmailHelper.IsValidEmail(parentDto.Email))
+                    {
+                        result.FailedUsers.Add(new ImportUserError
+                        {
+                            RowNumber = rowNumber,
+                            Email = parentDto.Email,
+                            FirstName = parentDto.FirstName,
+                            LastName = parentDto.LastName,
+                            PhoneNumber = parentDto.PhoneNumber,
+                            ErrorMessage = "Invalid email format."
+                        });
+                        continue;
+                    }
+
+                    validParentDtos.Add((parentDto, rowNumber));
                 }
-                return result;
+                catch (Exception ex)
+                {
+                    result.FailedUsers.Add(new ImportUserError
+                    {
+                        RowNumber = row.RowNumber(),
+                        Email = "",
+                        FirstName = "",
+                        LastName = "",
+                        ErrorMessage = $"Error parsing data: {ex.Message}"
+                    });
+                }
             }
-            catch (Exception ex)
+
+            result.TotalProcessed = rows.Count();
+
+            // Insert từng parent
+            foreach (var (parentDto, rowNumber) in validParentDtos)
             {
-                throw;
+                try
+                {
+                    if (await _userAccountRepository.IsEmailExistAsync(parentDto.Email))
+                    {
+                        result.FailedUsers.Add(new ImportUserError
+                        {
+                            RowNumber = rowNumber,
+                            Email = parentDto.Email,
+                            FirstName = parentDto.FirstName,
+                            LastName = parentDto.LastName,
+                            PhoneNumber = parentDto.PhoneNumber,
+                            ErrorMessage = "Email already exists in database."
+                        });
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(parentDto.PhoneNumber))
+                    {
+                        if (await _userAccountRepository.IsPhoneNumberExistAsync(parentDto.PhoneNumber))
+                        {
+                            result.FailedUsers.Add(new ImportUserError
+                            {
+                                RowNumber = rowNumber,
+                                Email = parentDto.Email,
+                                FirstName = parentDto.FirstName,
+                                LastName = parentDto.LastName,
+                                PhoneNumber = parentDto.PhoneNumber,
+                                ErrorMessage = "Phone number already exists in database."
+                            });
+                            continue;
+                        }
+                    }
+
+                    var parent = _mapper.Map<Parent>(parentDto);
+
+                    var rawPassword = SecurityHelper.GenerateRandomPassword();
+                    parent.HashedPassword = SecurityHelper.HashPassword(rawPassword);
+
+                    var createdParent = await _parentRepository.AddAsync(parent);
+
+                    // 🔑 Link students theo email
+                    var studentsNeedingLink = await _studentRepository.FindByConditionAsync(
+                        s => s.ParentId == null && s.ParentEmail == parentDto.Email);
+
+                    foreach (var student in studentsNeedingLink)
+                    {
+                        student.ParentId = createdParent.Id;
+                        student.ParentEmail = string.Empty;
+                        await _studentRepository.UpdateAsync(student);
+                    }
+
+                    var successResult = _mapper.Map<ImportUserSuccess>(createdParent);
+                    successResult.RowNumber = rowNumber;
+                    successResult.Password = rawPassword;
+                    result.SuccessfulUsers.Add(successResult);
+
+                    var mailContent = CreateWelcomeEmailTemplate(
+                        createdParent.FirstName,
+                        createdParent.LastName,
+                        createdParent.Email,
+                        rawPassword);
+
+                    QueueWelcomeEmail(createdParent.Email, mailContent.subject, mailContent.body);
+                }
+                catch (Exception ex)
+                {
+                    result.FailedUsers.Add(new ImportUserError
+                    {
+                        RowNumber = rowNumber,
+                        Email = parentDto.Email,
+                        FirstName = parentDto.FirstName,
+                        LastName = parentDto.LastName,
+                        PhoneNumber = parentDto.PhoneNumber,
+                        ErrorMessage = $"Error creating parent: {ex.Message}"
+                    });
+                }
             }
+
+            return result;
         }
 
-        public async Task<int> LinkStudentsByPhoneNumberAsync(string phoneNumber)
+        public async Task<int> LinkStudentsByEmailAsync(string email)
         {
-            if (string.IsNullOrWhiteSpace(phoneNumber)) return 0;
-            var parent = (await _parentRepository.FindByConditionAsync(p => p.PhoneNumber == phoneNumber)).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(email)) return 0;
+
+            var parent = (await _parentRepository.FindByConditionAsync(p => p.Email == email)).FirstOrDefault();
             if (parent == null) return 0;
-            var students = await _studentRepository.FindByConditionAsync(s => s.ParentId == null && s.ParentPhoneNumber == phoneNumber);
+
+            var students = await _studentRepository.FindByConditionAsync(
+                s => s.ParentId == null && s.ParentEmail == email);
+
             int updated = 0;
             foreach (var student in students)
             {
                 student.ParentId = parent.Id;
-                student.ParentPhoneNumber = string.Empty; // Clear to avoid duplication
+                student.ParentEmail = string.Empty;
                 await _studentRepository.UpdateAsync(student);
                 updated++;
             }

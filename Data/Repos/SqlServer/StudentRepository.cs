@@ -14,5 +14,10 @@ namespace Data.Repos.SqlServer
         public StudentRepository(DbContext dbContext) : base(dbContext)
         {
         }
+        public async Task<List<Student>> GetStudentsByParentEmailAsync(string email)
+        {
+            return await _table.Where(s => s.ParentEmail == email && !s.IsDeleted)
+                               .ToListAsync();
+        }
     }
 }

@@ -7,8 +7,5 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.Interfaces
 {
-    public interface IStudentRepository: ISqlRepository<Student>
-    {
-        Task<List<Student>> GetStudentsByParentEmailAsync(string email);
-    }
+    public interface IPickupPointRepository : ISqlRepository<PickupPoint> { }
 }

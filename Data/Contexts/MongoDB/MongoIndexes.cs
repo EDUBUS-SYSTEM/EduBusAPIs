@@ -24,6 +24,10 @@ namespace Data.Contexts.MongoDB
             
             // FileStorage indexes
             await CreateFileStorageIndexesAsync(db);
+
+            //PickupPointRequest
+            await CreatePickupPointRequestIndexesAsync(db);
+
         }
 
         private static async Task CreateNotificationIndexesAsync(IMongoDatabase db)
@@ -145,5 +149,20 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.IsActive);
             await fileStorageCollection.Indexes.CreateOneAsync(new CreateIndexModel<FileStorage>(fileTypeKeys));
         }
+        private static async Task CreatePickupPointRequestIndexesAsync(IMongoDatabase db)
+        {
+            var col = db.GetCollection<PickupPointRequestDocument>("pickuppointrequestdocument");
+
+            var emailIdx = Builders<PickupPointRequestDocument>.IndexKeys
+                .Ascending(x => x.ParentEmail)
+                .Descending(x => x.CreatedAt);
+            await col.Indexes.CreateOneAsync(new CreateIndexModel<PickupPointRequestDocument>(emailIdx));
+
+            var statusIdx = Builders<PickupPointRequestDocument>.IndexKeys
+                .Ascending(x => x.Status)
+                .Descending(x => x.CreatedAt);
+            await col.Indexes.CreateOneAsync(new CreateIndexModel<PickupPointRequestDocument>(statusIdx));
+        }
+
     }
 }

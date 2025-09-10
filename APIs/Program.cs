@@ -21,6 +21,7 @@ using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
 using Services.Models.Configuration;
+using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -128,6 +129,7 @@ builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoUrl));
 builder.Services.AddSingleton(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase(mongoUrl.DatabaseName));
 builder.Services.AddSingleton<EduBusMongoContext>();
+builder.Services.AddSingleton<IOtpStore, InMemoryOtpStore>();
 
 // Repository Registration
 builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
@@ -146,11 +148,16 @@ builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
 builder.Services.AddScoped<IDriverLeaveRepository, DriverLeaveRepository>();
 builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRepository>();
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
+builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
+builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
+builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
+builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
+
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -167,6 +174,8 @@ builder.Services.AddScoped<IDriverLeaveService, DriverLeaveService>();
 builder.Services.AddScoped<IDriverWorkingHoursService, DriverWorkingHoursService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
+builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
+builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();

@@ -35,9 +35,6 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<Student> Students { get; set; }
 
         public virtual DbSet<StudentGradeEnrollment> StudentGradeEnrollments { get; set; }
-
-        public virtual DbSet<StudentPickupPoint> StudentPickupPoints { get; set; }
-
         public virtual DbSet<Transaction> Transactions { get; set; }
 
         public virtual DbSet<TransportFeeItem> TransportFeeItems { get; set; }
@@ -55,12 +52,12 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
 
 
-//        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-//            => optionsBuilder.UseSqlServer(
-//                "Server=LAPTOP-DVKPB8S9;Database=edubus_dev;User Id=sa;Password=123;Trusted_Connection=True;TrustServerCertificate=True",
-//                sql => sql.UseNetTopologySuite()
-//            );
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+            => optionsBuilder.UseSqlServer(
+                "Server=localhost,49898;Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
+                sql => sql.UseNetTopologySuite()
+            );
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -274,21 +271,30 @@ namespace Data.Contexts.SqlServer
             modelBuilder.Entity<Student>(entity =>
             {
                 entity.HasIndex(e => e.ParentId, "IX_Students_ParentId");
-                entity.HasIndex(e => e.ParentPhoneNumber, "IX_Students_ParentPhoneNumber");
+                entity.HasIndex(e => e.ParentEmail, "IX_Students_ParentEmail");
+                entity.HasIndex(e => e.CurrentPickupPointId, "IX_Students_CurrentPickupPointId");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
                 entity.Property(e => e.FirstName).HasMaxLength(200);
+                entity.Property(e => e.ParentEmail)
+                     .HasMaxLength(320)
+                     .IsRequired();
                 entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.LastName).HasMaxLength(200);
+                entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
 
                 entity.HasOne(d => d.Parent).WithMany(p => p.Students)
                     .HasForeignKey(d => d.ParentId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(d => d.CurrentPickupPoint).WithMany(p => p.Students)
+                    .HasForeignKey(d => d.CurrentPickupPointId)
                     .OnDelete(DeleteBehavior.SetNull);
             });
 
@@ -312,27 +318,26 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne(d => d.Student).WithMany(p => p.StudentGradeEnrollments).HasForeignKey(d => d.StudentId);
             });
 
-            modelBuilder.Entity<StudentPickupPoint>(entity =>
+            modelBuilder.Entity<StudentPickupPointHistory>(entity =>
             {
-                entity.HasIndex(e => e.PickupPointId, "IX_StudentPickupPoints_PickupPointId");
-
-                entity.HasIndex(e => e.StudentId, "IX_StudentPickupPoints_StudentId");
-
-                entity.HasIndex(e => e.StudentId, "UQ_StudentPickupPoints_Active")
-                    .IsUnique()
-                    .HasFilter("([IsActive]=(1) AND [EndTimeUtc] IS NULL)");
+                entity.HasIndex(e => e.PickupPointId, "IX_StudentPickupPointHistory_PickupPointId");
+                entity.HasIndex(e => e.StudentId, "IX_StudentPickupPointHistory_StudentId");
+                entity.HasIndex(e => e.AssignedAt, "IX_StudentPickupPointHistory_AssignedAt");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
-                entity.Property(e => e.EndTimeUtc).HasPrecision(3);
-                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.AssignedAt).HasPrecision(3);
+                entity.Property(e => e.RemovedAt).HasPrecision(3);
+                entity.Property(e => e.ChangeReason).HasMaxLength(500);
+                entity.Property(e => e.ChangedBy).HasMaxLength(100);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.StartTimeUtc).HasPrecision(3);
 
-                entity.HasOne(d => d.PickupPoint).WithMany(p => p.StudentPickupPoints)
+                entity.HasOne(d => d.PickupPoint).WithMany(p => p.StudentPickupPointHistory)
                     .HasForeignKey(d => d.PickupPointId)
                     .OnDelete(DeleteBehavior.ClientSetNull);
 
-                entity.HasOne(d => d.Student).WithOne(p => p.StudentPickupPoint).HasForeignKey<StudentPickupPoint>(d => d.StudentId);
+                entity.HasOne(d => d.Student).WithMany(p => p.PickupPointHistory)
+                    .HasForeignKey(d => d.StudentId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<Transaction>(entity =>
@@ -480,6 +485,7 @@ namespace Data.Contexts.SqlServer
             modelBuilder.ApplyConfiguration(new DriverSeedConfiguration());
             modelBuilder.ApplyConfiguration(new ParentSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverLicenseSeedConfiguration());
+            modelBuilder.ApplyConfiguration(new StudentSeedConfiguration());
 
             OnModelCreatingPartial(modelBuilder);
         }
