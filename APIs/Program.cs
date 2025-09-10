@@ -151,6 +151,10 @@ builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepo
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
+builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
+builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<IRouteScheduleRepository, RouteScheduleRepository>();
+
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -167,6 +171,9 @@ builder.Services.AddScoped<IDriverLeaveService, DriverLeaveService>();
 builder.Services.AddScoped<IDriverWorkingHoursService, DriverWorkingHoursService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
+builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
