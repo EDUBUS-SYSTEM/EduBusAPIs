@@ -54,6 +54,18 @@ namespace Services.Implementations
         {
             // Check if email already exists in system
             var emailExists = await CheckParentEmailExistsAsync(dto.Email);
+            // If the email does not belong to any student, do not proceed
+            if (!emailExists)
+            {
+                return new ParentRegistrationResponseDto
+                {
+                    RegistrationId = Guid.Empty,
+                    Email = dto.Email,
+                    EmailExists = false,
+                    OtpSent = false,
+                    Message = "The provided email is not associated with any student in the system. Please verify or contact the school."
+                };
+            }
             
             // Check if there's already a pending registration for this email
             var existingRegistration = await _parentRegistrationRepo.FindByEmailAsync(dto.Email);
@@ -99,13 +111,13 @@ namespace Services.Implementations
                 throw new InvalidOperationException("An OTP is still valid. Please check your email or try again later.");
 
             // Send OTP email
-            var subject = "[EduBus] Mã xác thực OTP";
+            var subject = "[EduBus] Your OTP Code";
             var body = $@"
-<p>Xin chào,</p>
-<p>Mã OTP của bạn là <b>{otp}</b>, có hiệu lực trong <b>5 phút</b>.</p>
-<p>Vui lòng sử dụng mã này để xác thực đăng ký dịch vụ đưa đón học sinh.</p>
-<p>Nếu bạn không yêu cầu thao tác này, vui lòng bỏ qua email.</p>
-<p>Trân trọng,<br/>EduBus Team</p>";
+<p>Hello,</p>
+<p>Your OTP code is <b>{otp}</b>. It is valid for <b>5 minutes</b>.</p>
+<p>Please use this code to verify your registration for the student pickup service.</p>
+<p>If you did not request this, please ignore this email.</p>
+<p>Best regards,<br/>EduBus Team</p>";
 
             await _email.SendEmailAsync(dto.Email, subject, body);
 
@@ -138,7 +150,7 @@ namespace Services.Implementations
                 return new VerifyOtpWithStudentsResponseDto
                 {
                     Verified = false,
-                    Message = "OTP không tồn tại hoặc đã hết hạn.",
+                    Message = "OTP does not exist or has expired.",
                     Students = new List<StudentBriefDto>(),
                     EmailExists = false
                 };
@@ -150,7 +162,7 @@ namespace Services.Implementations
                 return new VerifyOtpWithStudentsResponseDto
                 {
                     Verified = false,
-                    Message = "OTP đã hết số lần thử. Vui lòng yêu cầu mã mới.",
+                    Message = "OTP attempt limit reached. Please request a new code.",
                     Students = new List<StudentBriefDto>(),
                     EmailExists = false
                 };
@@ -165,7 +177,7 @@ namespace Services.Implementations
                 return new VerifyOtpWithStudentsResponseDto
                 {
                     Verified = false,
-                    Message = "Mã OTP không đúng. Vui lòng kiểm tra lại.",
+                    Message = "Incorrect OTP. Please try again.",
                     Students = new List<StudentBriefDto>(),
                     EmailExists = false
                 };
@@ -181,7 +193,7 @@ namespace Services.Implementations
             return new VerifyOtpWithStudentsResponseDto
             {
                 Verified = true,
-                Message = "Xác thực OTP thành công.",
+                Message = "OTP verified successfully.",
                 Students = students,
                 EmailExists = emailExists
             };
@@ -490,42 +502,42 @@ namespace Services.Implementations
             string pickupAddress, 
             decimal estimatedPrice)
         {
-            var subject = "🎉 Đơn đăng ký điểm đón được phê duyệt - Tài khoản đã được tạo";
+            var subject = "🎉 Pickup point request approved - Your account has been created";
             var body = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h2 style='color: #2E7D32;'>🎉 Chúc mừng! Đơn đăng ký của bạn đã được phê duyệt</h2>
+                    <h2 style='color: #2E7D32;'>🎉 Congratulations! Your request has been approved</h2>
                     
-                    <p>Xin chào <strong>{firstName} {lastName}</strong>,</p>
+                    <p>Hello <strong>{firstName} {lastName}</strong>,</p>
                     
-                    <p>Chúng tôi rất vui mừng thông báo rằng đơn đăng ký sử dụng dịch vụ đưa đón của bạn đã được phê duyệt thành công!</p>
+                    <p>We are pleased to inform you that your request to use the student pickup service has been approved.</p>
                     
                     <div style='background-color: #E8F5E8; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #2E7D32; margin-top: 0;'>📋 Thông tin tài khoản của bạn:</h3>
-                        <p><strong>Email đăng nhập:</strong> {email}</p>
-                        <p><strong>Mật khẩu:</strong> <code style='background-color: #f5f5f5; padding: 2px 6px; border-radius: 4px;'>{password}</code></p>
-                        <p style='color: #D32F2F; font-size: 14px;'><strong>⚠️ Lưu ý:</strong> Vui lòng đổi mật khẩu sau khi đăng nhập lần đầu để bảo mật tài khoản.</p>
+                        <h3 style='color: #2E7D32; margin-top: 0;'>📋 Your account details:</h3>
+                        <p><strong>Login email:</strong> {email}</p>
+                        <p><strong>Password:</strong> <code style='background-color: #f5f5f5; padding: 2px 6px; border-radius: 4px;'>{password}</code></p>
+                        <p style='color: #D32F2F; font-size: 14px;'><strong>⚠️ Note:</strong> Please change your password after your first login to keep your account secure.</p>
                     </div>
                     
                     <div style='background-color: #E3F2FD; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #1976D2; margin-top: 0;'>📍 Thông tin điểm đón:</h3>
-                        <p><strong>Địa chỉ:</strong> {pickupAddress}</p>
-                        <p><strong>Chi phí ước tính:</strong> {estimatedPrice:N0} VNĐ</p>
+                        <h3 style='color: #1976D2; margin-top: 0;'>📍 Pickup point information:</h3>
+                        <p><strong>Address:</strong> {pickupAddress}</p>
+                        <p><strong>Estimated fee:</strong> {estimatedPrice:N0} VND</p>
                     </div>
                     
                     <div style='background-color: #FFF3E0; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #F57C00; margin-top: 0;'>🚌 Bước tiếp theo:</h3>
+                        <h3 style='color: #F57C00; margin-top: 0;'>🚌 Next steps:</h3>
                         <ol>
-                            <li>Đăng nhập vào hệ thống bằng tài khoản vừa được tạo</li>
-                            <li>Đổi mật khẩu để bảo mật tài khoản</li>
-                            <li>Theo dõi lịch trình đưa đón của con em</li>
-                            <li>Liên hệ với chúng tôi nếu có bất kỳ thắc mắc nào</li>
+                            <li>Log in using the account above</li>
+                            <li>Change your password</li>
+                            <li>Track bus schedules for your child</li>
+                            <li>Contact us if you need any assistance</li>
                         </ol>
                     </div>
                     
-                    <p>Cảm ơn bạn đã tin tưởng sử dụng dịch vụ của chúng tôi!</p>
+                    <p>Thank you for choosing our service!</p>
                     
-                    <p>Trân trọng,<br>
-                    <strong>Đội ngũ EduBus</strong></p>
+                    <p>Best regards,<br>
+                    <strong>EduBus Team</strong></p>
                 </div>";
 
             await _email.SendEmailAsync(email, subject, body);
@@ -537,34 +549,34 @@ namespace Services.Implementations
             string pickupAddress, 
             decimal estimatedPrice)
         {
-            var subject = "🎉 Đơn đăng ký điểm đón được phê duyệt";
+            var subject = "🎉 Pickup point request approved";
             var body = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h2 style='color: #2E7D32;'>🎉 Chúc mừng! Đơn đăng ký của bạn đã được phê duyệt</h2>
+                    <h2 style='color: #2E7D32;'>🎉 Congratulations! Your request has been approved</h2>
                     
-                    <p>Xin chào <strong>{firstName} {lastName}</strong>,</p>
+                    <p>Hello <strong>{firstName} {lastName}</strong>,</p>
                     
-                    <p>Chúng tôi rất vui mừng thông báo rằng đơn đăng ký sử dụng dịch vụ đưa đón của bạn đã được phê duyệt thành công!</p>
+                    <p>Your request to use the student pickup service has been approved.</p>
                     
                     <div style='background-color: #E3F2FD; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #1976D2; margin-top: 0;'>📍 Thông tin điểm đón:</h3>
-                        <p><strong>Địa chỉ:</strong> {pickupAddress}</p>
-                        <p><strong>Chi phí ước tính:</strong> {estimatedPrice:N0} VNĐ</p>
+                        <h3 style='color: #1976D2; margin-top: 0;'>📍 Pickup point information:</h3>
+                        <p><strong>Address:</strong> {pickupAddress}</p>
+                        <p><strong>Estimated fee:</strong> {estimatedPrice:N0} VND</p>
                     </div>
                     
                     <div style='background-color: #FFF3E0; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #F57C00; margin-top: 0;'>🚌 Bước tiếp theo:</h3>
+                        <h3 style='color: #F57C00; margin-top: 0;'>🚌 Next steps:</h3>
                         <ol>
-                            <li>Đăng nhập vào hệ thống bằng tài khoản hiện tại</li>
-                            <li>Theo dõi lịch trình đưa đón của con em</li>
-                            <li>Liên hệ với chúng tôi nếu có bất kỳ thắc mắc nào</li>
+                            <li>Log in using your current account</li>
+                            <li>Track bus schedules for your child</li>
+                            <li>Contact us if you need any assistance</li>
                         </ol>
                     </div>
                     
-                    <p>Cảm ơn bạn đã tin tưởng sử dụng dịch vụ của chúng tôi!</p>
+                    <p>Thank you for choosing our service!</p>
                     
-                    <p>Trân trọng,<br>
-                    <strong>Đội ngũ EduBus</strong></p>
+                    <p>Best regards,<br>
+                    <strong>EduBus Team</strong></p>
                 </div>";
 
             await _email.SendEmailAsync(email, subject, body);
@@ -577,44 +589,44 @@ namespace Services.Implementations
             string reason, 
             string pickupAddress)
         {
-            var subject = "❌ Thông báo về đơn đăng ký điểm đón";
+            var subject = "❌ Pickup point request update";
             var body = $@"
                 <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;'>
-                    <h2 style='color: #D32F2F;'>❌ Thông báo về đơn đăng ký điểm đón</h2>
+                    <h2 style='color: #D32F2F;'>❌ Your pickup point request could not be approved</h2>
                     
-                    <p>Xin chào <strong>{firstName} {lastName}</strong>,</p>
+                    <p>Hello <strong>{firstName} {lastName}</strong>,</p>
                     
-                    <p>Chúng tôi rất tiếc phải thông báo rằng đơn đăng ký sử dụng dịch vụ đưa đón của bạn chưa thể được phê duyệt tại thời điểm này.</p>
+                    <p>We regret to inform you that your request to use the student pickup service cannot be approved at this time.</p>
                     
                     <div style='background-color: #FFEBEE; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #D32F2F;'>
-                        <h3 style='color: #D32F2F; margin-top: 0;'>📋 Thông tin đơn đăng ký:</h3>
-                        <p><strong>Địa chỉ điểm đón:</strong> {pickupAddress}</p>
-                        <p><strong>Lý do từ chối:</strong> {reason}</p>
+                        <h3 style='color: #D32F2F; margin-top: 0;'>📋 Request details:</h3>
+                        <p><strong>Pickup address:</strong> {pickupAddress}</p>
+                        <p><strong>Reason:</strong> {reason}</p>
                     </div>
                     
                     <div style='background-color: #E3F2FD; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #1976D2; margin-top: 0;'>💡 Gợi ý:</h3>
+                        <h3 style='color: #1976D2; margin-top: 0;'>💡 Suggestions:</h3>
                         <ul>
-                            <li>Vui lòng kiểm tra lại thông tin đăng ký</li>
-                            <li>Liên hệ với chúng tôi để được tư vấn thêm</li>
-                            <li>Bạn có thể đăng ký lại sau khi khắc phục các vấn đề được nêu</li>
+                            <li>Please review your request details</li>
+                            <li>Contact us for further assistance</li>
+                            <li>You can resubmit after addressing the noted issues</li>
                         </ul>
                     </div>
                     
                     <div style='background-color: #FFF3E0; padding: 15px; border-radius: 8px; margin: 20px 0;'>
-                        <h3 style='color: #F57C00; margin-top: 0;'>📞 Liên hệ hỗ trợ:</h3>
-                        <p>Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với chúng tôi:</p>
+                        <h3 style='color: #F57C00; margin-top: 0;'>📞 Support:</h3>
+                        <p>If you have any questions, please contact us:</p>
                         <ul>
                             <li>Email: support@edubus.com</li>
                             <li>Hotline: 1900-xxxx</li>
-                            <li>Thời gian: 8:00 - 17:00 (Thứ 2 - Thứ 6)</li>
+                            <li>Hours: 8:00 - 17:00 (Mon - Fri)</li>
                         </ul>
                     </div>
                     
-                    <p>Cảm ơn bạn đã quan tâm đến dịch vụ của chúng tôi!</p>
+                    <p>Thank you for your interest in our service!</p>
                     
-                    <p>Trân trọng,<br>
-                    <strong>Đội ngũ EduBus</strong></p>
+                    <p>Best regards,<br>
+                    <strong>EduBus Team</strong></p>
                 </div>";
 
             await _email.SendEmailAsync(email, subject, body);
