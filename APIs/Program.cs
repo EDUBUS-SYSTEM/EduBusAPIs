@@ -21,7 +21,6 @@ using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
 using Services.Models.Configuration;
-using StackExchange.Redis;
 using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -130,15 +129,7 @@ builder.Services.AddSingleton<IMongoClient>(_ => new MongoClient(mongoUrl));
 builder.Services.AddSingleton(sp =>
     sp.GetRequiredService<IMongoClient>().GetDatabase(mongoUrl.DatabaseName));
 builder.Services.AddSingleton<EduBusMongoContext>();
-
-// --- Redis/OTP Store Configuration ---
-// For development, use in-memory OTP store to avoid external dependencies.
 builder.Services.AddSingleton<IOtpStore, InMemoryOtpStore>();
-
-// If you want to switch back to Redis, replace the above with:
-// var redisConnectionString = builder.Configuration["Redis:ConnectionString"];
-// builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnectionString));
-// builder.Services.AddSingleton<IOtpStore, RedisOtpStore>();
 
 // Repository Registration
 builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
