@@ -2956,3 +2956,92 @@ connection.on("ReceiveAdminNotification", (notification) => {
 2. **Check audit trail for configuration changes**
 3. **Monitor performance impact of validation logic**
 4. **Test error message clarity for end users**
+
+## 14. Schedule & Trip APIs (New)
+
+The following scenarios cover Schedule, RouteSchedule, and Trip operations, including RRULE/timezone-based trip generation and overlap prevention.
+
+```http
+### 14.1 [Schedule] List (active, paginated, sorted)
+GET https://localhost:7061/api/schedule?activeOnly=true&page=1&perPage=10&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+
+### 14.2 [Schedule] Create
+POST https://localhost:7061/api/schedule
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "name": "Morning Route Schedule",
+  "startTime": "07:00:00",
+  "endTime": "08:30:00",
+  "rrule": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  "timezone": "UTC",
+  "effectiveFrom": "2025-09-01T00:00:00Z",
+  "effectiveTo": "2025-12-31T23:59:59Z",
+  "exceptions": ["2025-10-20T00:00:00Z"],
+  "scheduleType": "school_day",
+  "isActive": true
+}
+
+### 14.3 [Schedule] Update (change start time; triggers ScheduleChange if configured)
+PUT https://localhost:7061/api/schedule/{{SCHEDULE_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "id": "{{SCHEDULE_ID}}",
+  "name": "Morning Route Schedule",
+  "startTime": "07:15:00",
+  "endTime": "08:45:00",
+  "rrule": "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  "timezone": "UTC",
+  "effectiveFrom": "2025-09-01T00:00:00Z",
+  "effectiveTo": "2025-12-31T23:59:59Z",
+  "exceptions": ["2025-10-20T00:00:00Z"],
+  "scheduleType": "school_day",
+  "isActive": true
+}
+
+### 14.4 [Schedule] Get by id
+GET https://localhost:7061/api/schedule/{{SCHEDULE_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+
+```http
+### 14.5 [RouteSchedule] Create (priority 10)
+POST https://localhost:7061/api/routeschedule
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "routeId": "{{ROUTE_ID}}",
+  "scheduleId": "{{SCHEDULE_ID}}",
+  "effectiveFrom": "2025-09-01T00:00:00Z",
+  "effectiveTo": "2025-12-31T23:59:59Z",
+  "priority": 10,
+  "isActive": true
+}
+
+### 14.6 [RouteSchedule] Attempt overlapping (same/higher priority) → expect 409
+POST https://localhost:7061/api/routeschedule
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "routeId": "{{ROUTE_ID}}",
+  "scheduleId": "{{ANOTHER_SCHEDULE_ID}}",
+  "effectiveFrom": "2025-10-01T00:00:00Z",
+  "effectiveTo": "2025-11-01T00:00:00Z",
+  "priority": 10,
+  "isActive": true
+}
+
+### 14.7 [RouteSchedule] List by route (paginated)
+GET https://localhost:7061/api/routeschedule?routeId={{ROUTE_ID}}&page=1&perPage=20&sortBy=effectiveFrom&sortOrder=desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+
+### 14.8 [RouteSchedule] Get by id
+GET https://localhost:7061/api/routeschedule/{{ROUTE_SCHEDULE_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
