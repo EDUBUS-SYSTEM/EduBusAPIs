@@ -2639,11 +2639,555 @@ connection.on("ReceiveAdminNotification", (notification) => {
 
 ---
 
-## 21. Enhanced Leave Request Validation Test Scenarios
+## 21. Pickup Point Enrollment Management
 
-### 21.1 Test Leave Request with New Configuration System
+### 21.1 Parent Registration
 
-#### 21.1.1 Test Regular Leave Request with Sufficient Advance Notice
+**Endpoint:** `POST /api/pickup-point/register`
+**Authorization:** No authentication required (public endpoint)
+
+**Request Body:**
+
+```json
+{
+  "email": "parent@example.com",
+  "firstName": "Nguyễn Văn",
+  "lastName": "A",
+  "phoneNumber": "0123456789",
+  "gender": 1,
+  "dateOfBirth": "1985-01-01",
+  "address": "123 Đường ABC, Quận 1, TP.HCM"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "registrationId": "12345678-1234-1234-1234-123456789012",
+  "email": "parent@example.com",
+  "emailExists": false,
+  "otpSent": true,
+  "message": "Registration information saved. OTP has been sent to your email for verification."
+}
+```
+
+**Error Responses:**
+
+- `400`: Validation errors (invalid email, missing required fields)
+- `409`: Email already exists in system
+
+### 23.2 Verify OTP and Get Students
+
+**Endpoint:** `POST /api/pickup-point/verify-otp`
+**Authorization:** No authentication required (public endpoint)
+
+**Request Body:**
+
+```json
+{
+  "email": "parent@example.com",
+  "otp": "123456"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "verified": true,
+  "message": "OTP verified successfully",
+  "students": [
+    {
+      "id": "87654321-4321-4321-4321-210987654321",
+      "firstName": "Nguyễn Văn",
+      "lastName": "B"
+    },
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "firstName": "Nguyễn Thị",
+      "lastName": "C"
+    }
+  ],
+  "emailExists": true
+}
+```
+
+**Error Responses:**
+
+- `400`: Invalid OTP or email
+- `404`: OTP not found or expired
+
+### 23.3 Submit Pickup Point Request
+
+**Endpoint:** `POST /api/pickup-point/submit-request`
+**Authorization:** No authentication required (public endpoint)
+
+**Request Body:**
+
+```json
+{
+  "email": "parent@example.com",
+  "studentIds": [
+    "87654321-4321-4321-4321-210987654321",
+    "11111111-1111-1111-1111-111111111111"
+  ],
+  "addressText": "456 Đường XYZ, Quận 2, TP.HCM",
+  "latitude": 10.762622,
+  "longitude": 106.660172,
+  "distanceKm": 2.5,
+  "unitPriceVndPerKm": 50000,
+  "estimatedPriceVnd": 125000,
+  "description": "Trước cổng chung cư ABC",
+  "reason": "Nhà mới chuyển đến"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "requestId": "22222222-2222-2222-2222-222222222222",
+  "status": "Pending",
+  "message": "Pickup point request submitted successfully",
+  "estimatedPriceVnd": 125000,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- `400`: Validation errors (invalid coordinates, missing students)
+- `409`: Email not verified or students not found
+
+### 23.4 Get Pickup Point Requests (Admin)
+
+**Endpoint:** `GET /api/pickup-point/requests`
+**Authorization:** Bearer Token (Admin only)
+
+**Query Parameters:**
+
+- `status` (optional): "Pending", "Approved", "Rejected"
+- `parentEmail` (optional): Filter by parent email
+- `skip` (optional): Number of records to skip (default: 0)
+- `take` (optional): Number of records to take (default: 50, max: 200)
+
+**Example Requests:**
+
+```bash
+# Get all pending requests
+GET /api/pickup-point/requests?status=Pending
+
+# Get requests for specific parent
+GET /api/pickup-point/requests?parentEmail=parent@example.com
+
+# Get requests with pagination
+GET /api/pickup-point/requests?skip=0&take=10
+```
+
+**Expected Response:**
+
+```json
+[
+  {
+    "id": "22222222-2222-2222-2222-222222222222",
+    "parentEmail": "parent@example.com",
+    "parentInfo": {
+      "firstName": "Nguyễn Văn",
+      "lastName": "A",
+      "phoneNumber": "0123456789",
+      "address": "123 Đường ABC, Quận 1, TP.HCM",
+      "dateOfBirth": "1985-01-01T00:00:00Z",
+      "gender": 1,
+      "createdAt": "2024-01-15T10:00:00Z"
+    },
+    "students": [
+      {
+        "id": "87654321-4321-4321-4321-210987654321",
+        "firstName": "Nguyễn Văn",
+        "lastName": "B"
+      }
+    ],
+    "addressText": "456 Đường XYZ, Quận 2, TP.HCM",
+    "latitude": 10.762622,
+    "longitude": 106.660172,
+    "distanceKm": 2.5,
+    "description": "Trước cổng chung cư ABC",
+    "reason": "Nhà mới chuyển đến",
+    "unitPriceVndPerKm": 50000,
+    "estimatedPriceVnd": 125000,
+    "status": "Pending",
+    "adminNotes": "",
+    "reviewedAt": null,
+    "reviewedByAdminId": null,
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": null
+  }
+]
+```
+
+### 23.5 Approve Pickup Point Request (Admin)
+
+**Endpoint:** `POST /api/pickup-point/requests/{id}/approve`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "notes": "Approved after reviewing location and student information"
+}
+```
+
+**Expected Response:** `204 No Content`
+
+**Error Responses:**
+
+- `401`: Unauthorized - Admin ID not found in claims
+- `404`: Request not found
+- `409`: Request already approved or rejected
+
+### 23.6 Reject Pickup Point Request (Admin)
+
+**Endpoint:** `POST /api/pickup-point/requests/{id}/reject`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "reason": "Location is outside our service area"
+}
+```
+
+**Expected Response:** `204 No Content`
+
+**Error Responses:**
+
+- `401`: Unauthorized - Admin ID not found in claims
+- `404`: Request not found
+- `409`: Request already approved or rejected
+
+---
+
+## 22. Pickup Point Test Scenarios
+
+### 22.1 Complete Parent Registration Flow
+
+**Scenario:** New parent registers for pickup point service
+
+1. **Parent submits registration**
+
+   - POST /api/pickup-point/register
+   - Verify OTP sent to email
+   - Check registration saved in MongoDB
+
+2. **Parent verifies OTP**
+
+   - POST /api/pickup-point/verify-otp
+   - Verify students list returned
+   - Check OTP marked as used
+
+3. **Parent submits pickup point request**
+
+   - POST /api/pickup-point/submit-request
+   - Verify request saved with status "Pending"
+   - Check parent registration linked
+
+4. **Admin reviews request**
+
+   - GET /api/pickup-point/requests
+   - Verify detailed information displayed
+   - Check parent info and students included
+
+5. **Admin approves request**
+   - POST /api/pickup-point/requests/{id}/approve
+   - Verify pickup point created in SQL Server
+   - Check students assigned to pickup point
+   - Verify parent account created (if new)
+   - Check approval email sent to parent
+
+### 22.2 Existing Parent Registration Flow
+
+**Scenario:** Parent with existing account registers for pickup point
+
+1. **Parent submits registration**
+
+   - POST /api/pickup-point/register
+   - Use email that exists in system
+   - Verify emailExists: true in response
+
+2. **Parent verifies OTP and gets students**
+
+   - POST /api/pickup-point/verify-otp
+   - Verify students list returned
+   - Check emailExists: true
+
+3. **Parent submits pickup point request**
+
+   - POST /api/pickup-point/submit-request
+   - Verify request saved successfully
+
+4. **Admin approves request**
+   - POST /api/pickup-point/requests/{id}/approve
+   - Verify no new parent account created
+   - Check approval email sent (without account details)
+
+### 22.3 Request Rejection Flow
+
+**Scenario:** Admin rejects pickup point request
+
+1. **Parent completes registration and submission**
+
+   - Follow steps 1-3 from scenario 22.1
+
+2. **Admin reviews and rejects request**
+
+   - POST /api/pickup-point/requests/{id}/reject
+   - Provide rejection reason
+   - Verify request status updated to "Rejected"
+
+3. **Verify rejection email sent**
+   - Check parent receives rejection email
+   - Verify reason included in email
+   - Check no pickup point created
+
+### 22.4 Error Scenarios
+
+#### 22.4.1 Invalid Registration Data
+
+**Test Cases:**
+
+```json
+// Missing required fields
+{
+  "email": "parent@example.com"
+  // Missing firstName, lastName, etc.
+}
+
+// Invalid email format
+{
+  "email": "invalid-email",
+  "firstName": "John",
+  "lastName": "Doe"
+}
+
+// Invalid phone number
+{
+  "email": "parent@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "phoneNumber": "invalid-phone"
+}
+
+// Invalid gender
+{
+  "email": "parent@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "gender": 5  // Invalid gender value
+}
+```
+
+**Expected Response:** `400 Bad Request` with validation errors
+
+#### 22.4.2 Invalid OTP Verification
+
+**Test Cases:**
+
+```json
+// Invalid OTP
+{
+  "email": "parent@example.com",
+  "otp": "000000"
+}
+
+// Expired OTP
+{
+  "email": "parent@example.com",
+  "otp": "123456"  // OTP expired after 5 minutes
+}
+
+// Email not registered
+{
+  "email": "nonexistent@example.com",
+  "otp": "123456"
+}
+```
+
+**Expected Response:** `400 Bad Request` or `404 Not Found`
+
+#### 22.4.3 Invalid Pickup Point Submission
+
+**Test Cases:**
+
+```json
+// No students selected
+{
+  "email": "parent@example.com",
+  "studentIds": [],
+  "addressText": "123 Main St"
+}
+
+// Invalid coordinates
+{
+  "email": "parent@example.com",
+  "studentIds": ["student-id"],
+  "latitude": 200,  // Invalid latitude
+  "longitude": 200  // Invalid longitude
+}
+
+// Invalid price
+{
+  "email": "parent@example.com",
+  "studentIds": ["student-id"],
+  "estimatedPriceVnd": -1000  // Negative price
+}
+```
+
+**Expected Response:** `400 Bad Request` with validation errors
+
+### 22.5 Email Notification Testing
+
+#### 22.5.1 Registration OTP Email
+
+**Verify email content includes:**
+
+- OTP code (6 digits)
+- 5-minute expiration notice
+- Vietnamese language
+- EduBus branding
+
+#### 22.5.2 Approval Email (New Account)
+
+**Verify email content includes:**
+
+- Account credentials (email + password)
+- Pickup point details
+- Next steps instructions
+- Security notice about password change
+
+#### 22.5.3 Approval Email (Existing Account)
+
+**Verify email content includes:**
+
+- Pickup point details
+- Next steps instructions
+- No account credentials
+
+#### 22.5.4 Rejection Email
+
+**Verify email content includes:**
+
+- Rejection reason
+- Suggestions for improvement
+- Contact information
+- Encouragement to reapply
+
+### 22.6 Data Validation Testing
+
+#### 22.6.1 Coordinate Validation
+
+```json
+// Valid coordinates (Ho Chi Minh City area)
+{
+  "latitude": 10.762622,
+  "longitude": 106.660172
+}
+
+// Invalid coordinates
+{
+  "latitude": 200,     // Out of range
+  "longitude": -200    // Out of range
+}
+```
+
+#### 22.6.2 Distance Validation
+
+```json
+// Valid distance
+{
+  "distanceKm": 2.5
+}
+
+// Invalid distance
+{
+  "distanceKm": 0,      // Too small
+  "distanceKm": 1000    // Too large
+}
+```
+
+#### 22.6.3 Price Validation
+
+```json
+// Valid price
+{
+  "unitPriceVndPerKm": 50000,
+  "estimatedPriceVnd": 125000
+}
+
+// Invalid price
+{
+  "unitPriceVndPerKm": 0,        // Too small
+  "estimatedPriceVnd": 1000000000  // Too large
+}
+```
+
+### 22.7 Performance Testing
+
+#### 22.7.1 Concurrent Registration
+
+- Test multiple parents registering simultaneously
+- Verify OTP generation doesn't conflict
+- Check database performance under load
+
+#### 22.7.2 Large Student Lists
+
+- Test with parent having many students (10+)
+- Verify response time and data size
+- Check UI performance with large lists
+
+### 22.8 Security Testing
+
+#### 22.8.1 OTP Security
+
+- Test OTP reuse prevention
+- Verify OTP expiration enforcement
+- Check rate limiting on OTP requests
+
+#### 22.8.2 Data Privacy
+
+- Verify parent data not exposed to other parents
+- Check admin access controls
+- Test data encryption in transit
+
+### 22.9 Integration Testing
+
+#### 22.9.1 Database Integration
+
+- Test MongoDB document creation/updates
+- Verify SQL Server pickup point creation
+- Check data consistency between systems
+
+#### 22.9.2 Email Service Integration
+
+- Test email delivery reliability
+- Verify email template rendering
+- Check email queue processing
+
+#### 22.9.3 Redis Integration
+
+- Test OTP storage and retrieval
+- Verify TTL enforcement
+- Check Redis connection handling
+
+---
+
+## 23. Enhanced Leave Request Validation Test Scenarios
+
+### 23.1 Test Leave Request with New Configuration System
+
+#### 23.1.1 Test Regular Leave Request with Sufficient Advance Notice
 
 **Endpoint:** `POST /api/Driver/{id}/leaves`
 **Authorization:** Bearer Token (Driver only)
@@ -2676,7 +3220,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-#### 21.1.2 Test Regular Leave Request with Insufficient Advance Notice
+#### 23.1.2 Test Regular Leave Request with Insufficient Advance Notice
 
 **Request Body (Invalid - 6 hours advance):**
 
@@ -2698,7 +3242,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-#### 21.1.3 Test Emergency Leave Request with Sufficient Advance Notice
+#### 23.1.3 Test Emergency Leave Request with Sufficient Advance Notice
 
 **Request Body (Valid - 4 hours advance):**
 
@@ -2714,7 +3258,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 
 **Expected Response:** `201 Created`
 
-#### 21.1.4 Test Sick Leave Request (Emergency Type)
+#### 23.1.4 Test Sick Leave Request (Emergency Type)
 
 **Request Body (Valid - 3 hours advance):**
 
@@ -2730,7 +3274,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 
 **Expected Response:** `201 Created`
 
-#### 21.1.5 Test Emergency Leave Request with Insufficient Advance Notice
+#### 23.1.5 Test Emergency Leave Request with Insufficient Advance Notice
 
 **Request Body (Invalid - 1 hour advance):**
 
@@ -2752,9 +3296,9 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-### 21.2 Test Configuration Changes Impact
+### 23.2 Test Configuration Changes Impact
 
-#### 21.2.1 Test with Updated Minimum Advance Notice (24 hours)
+#### 23.2.1 Test with Updated Minimum Advance Notice (24 hours)
 
 1. **Update settings:**
 
@@ -2779,7 +3323,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 
 **Expected Response:** `400 Bad Request` - requires 24 hours advance notice
 
-#### 21.2.2 Test with Emergency Leave Requests Disabled
+#### 23.2.2 Test with Emergency Leave Requests Disabled
 
 1. **Update settings:**
 
@@ -2804,9 +3348,9 @@ connection.on("ReceiveAdminNotification", (notification) => {
 
 **Expected Response:** `400 Bad Request` - emergency leaves not allowed, requires 12 hours advance notice
 
-### 21.3 Test Configuration Validation
+### 23.3 Test Configuration Validation
 
-#### 21.3.1 Test Invalid Configuration Values
+#### 23.3.1 Test Invalid Configuration Values
 
 **Request Body (Invalid - negative hours):**
 
@@ -2826,7 +3370,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-#### 21.3.2 Test Emergency Hours Greater Than Minimum Hours
+#### 23.3.2 Test Emergency Hours Greater Than Minimum Hours
 
 **Request Body (Invalid - emergency > minimum):**
 
@@ -2846,9 +3390,9 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-### 21.4 Test Leave Request Validation Edge Cases
+### 23.4 Test Leave Request Validation Edge Cases
 
-#### 21.4.1 Test Past Date Validation
+#### 23.4.1 Test Past Date Validation
 
 **Request Body (Invalid - past date):**
 
@@ -2869,7 +3413,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-#### 21.4.2 Test End Date Before Start Date
+#### 23.4.2 Test End Date Before Start Date
 
 **Request Body (Invalid - end before start):**
 
@@ -2890,9 +3434,9 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-### 21.5 Test Configuration API Endpoints
+### 23.5 Test Configuration API Endpoints
 
-#### 21.5.1 Get Current Configuration
+#### 23.5.1 Get Current Configuration
 
 **Endpoint:** `GET /api/Configuration/leave-request-settings`
 **Authorization:** Bearer Token (Admin only)
@@ -2907,7 +3451,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-#### 21.5.2 Update Configuration
+#### 23.5.2 Update Configuration
 
 **Endpoint:** `PUT /api/Configuration/leave-request-settings`
 **Authorization:** Bearer Token (Admin only)
@@ -2932,7 +3476,7 @@ connection.on("ReceiveAdminNotification", (notification) => {
 }
 ```
 
-### 21.6 Test Leave Request with Different Leave Types
+### 23.6 Test Leave Request with Different Leave Types
 
 | Leave Type | Type ID | Advance Notice Required | Test Case            |
 | ---------- | ------- | ----------------------- | -------------------- |
@@ -2943,14 +3487,14 @@ connection.on("ReceiveAdminNotification", (notification) => {
 | Training   | 5       | 12+ hours               | Regular validation   |
 | Other      | 6       | 12+ hours               | Regular validation   |
 
-### 21.7 Test Real-Time Configuration Updates
+### 23.7 Test Real-Time Configuration Updates
 
 1. **Admin updates configuration**
 2. **Driver immediately attempts leave request**
 3. **Verify new validation rules are applied**
 4. **Test configuration persistence across application restarts**
 
-### 21.8 Test Error Logging and Monitoring
+### 23.8 Test Error Logging and Monitoring
 
 1. **Verify detailed error logging for validation failures**
 2. **Check audit trail for configuration changes**

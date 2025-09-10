@@ -9,8 +9,6 @@ namespace Data.Repos.MongoDB
         public PickupPointRequestRepository(IMongoDatabase db)
             : base(db, "pickuppointrequestdocument") { }
 
-        public new async Task<PickupPointRequestDocument> AddAsync(PickupPointRequestDocument doc)
-            => await base.AddAsync(doc);
 
         public async Task<List<PickupPointRequestDocument>> QueryAsync(string? status, string? parentEmail, int skip, int take)
         {

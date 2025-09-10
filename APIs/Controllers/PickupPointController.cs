@@ -23,125 +23,65 @@ namespace APIs.Controllers
 			_svc = svc;
 		}
 
-		// ===========================
-		// Public (guest/parent) APIs
-		// ===========================
-
-		/// <summary>
-		/// Check if the input email exists in the system (linked to at least one student).
-		/// </summary>
-		[HttpPost("check-email")]
+		[HttpPost("register")]
 		[AllowAnonymous]
-		[ProducesResponseType(StatusCodes.Status200OK)]
-		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-		public async Task<IActionResult> CheckEmail([FromBody] CheckEmailRequest req)
-		{
-			if (!ModelState.IsValid) return ValidationProblem(ModelState);
-
-			var exists = await _svc.CheckParentEmailExistsAsync(req.Email);
-			// Trả về object đơn giản để tránh phải tạo thêm DTO Response
-			return Ok(new { email = req.Email, exists });
-		}
-
-		/// <summary>
-		/// Send OTP to parent email if the email is valid in the system.
-		/// </summary>
-		[HttpPost("send-otp")]
-		[AllowAnonymous]
-		[ProducesResponseType(StatusCodes.Status204NoContent)]
+		[ProducesResponseType(typeof(ParentRegistrationResponseDto), StatusCodes.Status201Created)]
 		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
 		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-		public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest req)
+		public async Task<IActionResult> RegisterParent([FromBody] ParentRegistrationRequestDto dto)
 		{
 			if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
 			try
 			{
-				await _svc.SendOtpAsync(req.Email);
-				return NoContent();
+				var result = await _svc.RegisterParentAsync(dto);
+				return StatusCode(StatusCodes.Status201Created, result);
 			}
 			catch (InvalidOperationException ex)
 			{
-				var normalized = ex.Message.ToLowerInvariant();
-
-				if (normalized.Contains("rate") || normalized.Contains("too many"))
-				{
-					return StatusCode(StatusCodes.Status429TooManyRequests,
-						Problem(title: "Rate limit exceeded", detail: ex.Message,
-								statusCode: StatusCodes.Status429TooManyRequests));
-				}
-
-				if (normalized.Contains("otp"))
-				{
-					return Conflict(Problem(title: "OTP conflict", detail: ex.Message,
-											statusCode: StatusCodes.Status409Conflict));
-				}
-
-				return BadRequest(Problem(title: "Cannot send OTP", detail: ex.Message,
-										  statusCode: StatusCodes.Status400BadRequest));
+				return Conflict(Problem(title: "Registration conflict", detail: ex.Message,
+									statusCode: StatusCodes.Status409Conflict));
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(Problem(title: "Invalid registration data", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
 			}
 		}
 
-		/// <summary>
-		/// Verify OTP that was sent to the given email.
-		/// </summary>
+
+
 		[HttpPost("verify-otp")]
 		[AllowAnonymous]
-		[ProducesResponseType(StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(VerifyOtpWithStudentsResponseDto), StatusCodes.Status200OK)]
 		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
 		public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest req)
 		{
 			if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
-			var ok = await _svc.VerifyOtpAsync(req.Email, req.Otp);
-			return Ok(new
-			{
-				email = req.Email,
-				verified = ok,
-				message = ok ? "OTP verified successfully." : "Invalid or expired OTP."
-			});
+			var result = await _svc.VerifyOtpWithStudentsAsync(req.Email, req.Otp);
+			return Ok(result);
 		}
 
-		/// <summary>
-		/// Get students linked to the provided parent email (for the registration form).
-		/// </summary>
-		[HttpGet("students")]
+
+		[HttpPost("submit-request")]
 		[AllowAnonymous]
-		[ProducesResponseType(typeof(List<StudentBriefDto>), StatusCodes.Status200OK)]
-		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-		public async Task<IActionResult> GetStudents([FromQuery][Required, EmailAddress] string email)
-		{
-			if (!ModelState.IsValid) return ValidationProblem(ModelState);
-
-			var exists = await _svc.CheckParentEmailExistsAsync(email);
-			if (!exists)
-				return BadRequest(Problem(title: "Invalid email",
-										  detail: "Email does not exist in the system.",
-										  statusCode: StatusCodes.Status400BadRequest));
-
-			var list = await _svc.GetStudentsByEmailAsync(email);
-			return Ok(list);
-		}
-
-		/// <summary>
-		/// Create a pickup point request (stored in Mongo) after the parent finishes the form.
-		/// NOTE: Frontend sends AddressText + Location{Lat,Lng,PlaceId?} + DistanceKm already computed.
-		/// </summary>
-		[HttpPost("requests")]
-		[AllowAnonymous]
-		[ProducesResponseType(StatusCodes.Status201Created)]
+		[ProducesResponseType(typeof(SubmitPickupPointRequestResponseDto), StatusCodes.Status201Created)]
 		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
 		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-		public async Task<IActionResult> CreateRequest([FromBody] CreatePickupPointRequestDto dto)
+		public async Task<IActionResult> SubmitPickupPointRequest([FromBody] SubmitPickupPointRequestDto dto)
 		{
 			if (!ModelState.IsValid) return ValidationProblem(ModelState);
 
 			try
 			{
-				var doc = await _svc.CreateRequestAsync(dto);
-				// Không dùng CreatedAtAction để khỏi cần GET /requests/{id} khi service chưa có
-				return StatusCode(StatusCodes.Status201Created, doc);
+				var result = await _svc.SubmitPickupPointRequestAsync(dto);
+				return StatusCode(StatusCodes.Status201Created, result);
+			}
+			catch (ArgumentOutOfRangeException ex)
+			{
+				return BadRequest(Problem(title: "Invalid price range", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
 			}
 			catch (ArgumentException ex)
 			{
@@ -155,23 +95,21 @@ namespace APIs.Controllers
 			}
 		}
 
+
 		// ===================
 		// Admin-only endpoints
 		// ===================
 
-		/// <summary>
-		/// List pickup point requests with optional filters (status/email) and paging.
-		/// </summary>
 		[HttpGet("requests")]
 		[Authorize(Roles = Roles.Admin)]
-		[ProducesResponseType(typeof(List<PickupPointRequestDocument>), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(List<PickupPointRequestDetailDto>), StatusCodes.Status200OK)]
 		public async Task<IActionResult> ListRequests([FromQuery] PickupPointRequestListQuery query)
 		{
 			query ??= new PickupPointRequestListQuery();
 			if (query.Take <= 0 || query.Take > 200) query.Take = 50;
 			if (query.Skip < 0) query.Skip = 0;
 
-			var list = await _svc.ListRequestsAsync(query);
+			var list = await _svc.ListRequestDetailsAsync(query);
 			return Ok(list);
 		}
 
