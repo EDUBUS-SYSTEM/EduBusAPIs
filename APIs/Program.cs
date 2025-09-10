@@ -165,6 +165,7 @@ builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
+builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
