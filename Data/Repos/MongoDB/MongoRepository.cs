@@ -66,22 +66,19 @@ namespace Data.Repos.MongoDB
             return null;
         }
 
-        public virtual async Task<T?> DeleteAsync(Guid id)
-        {
-            var filter = Builders<T>.Filter.Eq(x => x.Id, id);
-            var update = Builders<T>.Update
-                .Set(x => x.IsDeleted, true)
-                .Set(x => x.UpdatedAt, DateTime.UtcNow);
+		public virtual async Task<T?> DeleteAsync(Guid id)
+		{
+			var filter = Builders<T>.Filter.Eq(x => x.Id, id);
+			var update = Builders<T>.Update
+				.Set(x => x.IsDeleted, true)
+				.Set(x => x.UpdatedAt, DateTime.UtcNow);
 
-            var result = await _collection.UpdateOneAsync(filter, update);
-            if (result.ModifiedCount > 0)
-            {
-                return await FindAsync(id);
-            }
-            return null;
-        }
+			var options = new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After };
+			var updated = await _collection.FindOneAndUpdateAsync(filter, update, options);
+			return updated; // returns the soft-deleted doc, not null
+		}
 
-        public virtual async Task<IEnumerable<T>> FindByConditionAsync(Expression<Func<T, bool>> expression)
+		public virtual async Task<IEnumerable<T>> FindByConditionAsync(Expression<Func<T, bool>> expression)
         {
             var filter = Builders<T>.Filter.And(
                 expression,

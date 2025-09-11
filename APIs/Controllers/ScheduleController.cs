@@ -26,6 +26,7 @@ namespace APIs.Controllers
 		}
 
 		[HttpGet]
+		[Authorize(Roles = Roles.Admin)]
 		public async Task<ActionResult<IEnumerable<ScheduleDto>>> GetSchedules(
 			[FromQuery] string? scheduleType = null,
 			[FromQuery] DateTime? startDate = null,
@@ -51,6 +52,7 @@ namespace APIs.Controllers
 		}
 
 		[HttpGet("{id}")]
+		[Authorize(Roles = Roles.Admin)]
 		public async Task<ActionResult<ScheduleDto>> GetSchedule(Guid id)
 		{
 			try

@@ -138,6 +138,24 @@ namespace Services.Implementations
 				ValidateSchedule(schedule);
 
 				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+
+				var dupFilter = Builders<Schedule>.Filter.And(
+					Builders<Schedule>.Filter.Eq(x => x.IsDeleted, false),
+					Builders<Schedule>.Filter.Eq(x => x.Name, schedule.Name),
+					Builders<Schedule>.Filter.Eq(x => x.StartTime, schedule.StartTime),
+					Builders<Schedule>.Filter.Eq(x => x.EndTime, schedule.EndTime),
+					Builders<Schedule>.Filter.Eq(x => x.Timezone, schedule.Timezone),
+					Builders<Schedule>.Filter.Eq(x => x.RRule, schedule.RRule),
+					Builders<Schedule>.Filter.Lte(x => x.EffectiveFrom, schedule.EffectiveTo ?? DateTime.MaxValue),
+					Builders<Schedule>.Filter.Or(
+						Builders<Schedule>.Filter.Eq(x => x.EffectiveTo, null),
+						Builders<Schedule>.Filter.Gte(x => x.EffectiveTo, schedule.EffectiveFrom)
+					)
+				);
+				var existingDup = await repository.FindByFilterAsync(dupFilter);
+				if (existingDup.Any())
+					throw new InvalidOperationException("A schedule with the same time/rule already exists in the overlapping effective window.");
+
 				return await repository.AddAsync(schedule);
 			}
 			catch (Exception ex)
@@ -160,6 +178,25 @@ namespace Services.Implementations
 					throw new ArgumentException("Schedule name is required");
 
 				ValidateSchedule(schedule);
+
+				// prevent duplicates on update (exclude self)
+				var dupFilter = Builders<Schedule>.Filter.And(
+					Builders<Schedule>.Filter.Eq(x => x.IsDeleted, false),
+					Builders<Schedule>.Filter.Ne(x => x.Id, schedule.Id),
+					Builders<Schedule>.Filter.Eq(x => x.Name, schedule.Name),
+					Builders<Schedule>.Filter.Eq(x => x.StartTime, schedule.StartTime),
+					Builders<Schedule>.Filter.Eq(x => x.EndTime, schedule.EndTime),
+					Builders<Schedule>.Filter.Eq(x => x.Timezone, schedule.Timezone),
+					Builders<Schedule>.Filter.Eq(x => x.RRule, schedule.RRule),
+					Builders<Schedule>.Filter.Lte(x => x.EffectiveFrom, schedule.EffectiveTo ?? DateTime.MaxValue),
+					Builders<Schedule>.Filter.Or(
+						Builders<Schedule>.Filter.Eq(x => x.EffectiveTo, null),
+						Builders<Schedule>.Filter.Gte(x => x.EffectiveTo, schedule.EffectiveFrom)
+					)
+				);
+				var existingDup = await repository.FindByFilterAsync(dupFilter);
+				if (existingDup.Any())
+					throw new InvalidOperationException("A schedule with the same time/rule already exists in the overlapping effective window.");
 
 				var updated = await repository.UpdateAsync(schedule);
 
@@ -291,7 +328,7 @@ namespace Services.Implementations
 				throw new ArgumentException($"Invalid timezone: {s.Timezone}");
 
 			// effective range
-			if (s.EffectiveTo.HasValue && s.EffectiveTo.Value < s.EffectiveFrom)
+			if (s.EffectiveTo.HasValue && s.EffectiveTo.Value <= s.EffectiveFrom)
 				throw new ArgumentException("effectiveTo must be greater than or equal to effectiveFrom");
 
 			// RRULE basic validation (support DAILY or WEEKLY with optional BYDAY)

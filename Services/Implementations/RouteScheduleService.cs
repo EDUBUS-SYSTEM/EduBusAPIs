@@ -144,6 +144,20 @@ namespace Services.Implementations
 				if (hasInvalidOverlap)
 					throw new InvalidOperationException("Overlapping active route schedule with same or higher priority exists for this route.");
 
+				// prevent exact duplicate link
+				var dupFilter = Builders<RouteSchedule>.Filter.And(
+					Builders<RouteSchedule>.Filter.Eq(x => x.IsDeleted, false),
+					Builders<RouteSchedule>.Filter.Eq(x => x.RouteId, routeSchedule.RouteId),
+					Builders<RouteSchedule>.Filter.Eq(x => x.ScheduleId, routeSchedule.ScheduleId),
+					Builders<RouteSchedule>.Filter.Eq(x => x.Priority, routeSchedule.Priority),
+					Builders<RouteSchedule>.Filter.Eq(x => x.IsActive, routeSchedule.IsActive),
+					Builders<RouteSchedule>.Filter.Eq(x => x.EffectiveFrom, routeSchedule.EffectiveFrom),
+					Builders<RouteSchedule>.Filter.Eq(x => x.EffectiveTo, routeSchedule.EffectiveTo)
+				);
+				var exactDup = await repository.FindByFilterAsync(dupFilter);
+				if (exactDup.Any())
+					throw new InvalidOperationException("Duplicate route-schedule link already exists.");
+
 				return await repository.AddAsync(routeSchedule);
 			}
 			catch (Exception ex)
@@ -178,6 +192,20 @@ namespace Services.Implementations
 
 				if (hasInvalidOverlap)
 					throw new InvalidOperationException("Overlapping active route schedule with same or higher priority exists for this route.");
+
+				// prevent exact duplicate link
+				var dupFilter = Builders<RouteSchedule>.Filter.And(
+					Builders<RouteSchedule>.Filter.Eq(x => x.IsDeleted, false),
+					Builders<RouteSchedule>.Filter.Eq(x => x.RouteId, routeSchedule.RouteId),
+					Builders<RouteSchedule>.Filter.Eq(x => x.ScheduleId, routeSchedule.ScheduleId),
+					Builders<RouteSchedule>.Filter.Eq(x => x.Priority, routeSchedule.Priority),
+					Builders<RouteSchedule>.Filter.Eq(x => x.IsActive, routeSchedule.IsActive),
+					Builders<RouteSchedule>.Filter.Eq(x => x.EffectiveFrom, routeSchedule.EffectiveFrom),
+					Builders<RouteSchedule>.Filter.Eq(x => x.EffectiveTo, routeSchedule.EffectiveTo)
+				);
+				var exactDup = await repository.FindByFilterAsync(dupFilter);
+				if (exactDup.Any())
+					throw new InvalidOperationException("Duplicate route-schedule link already exists.");
 
 				return await repository.UpdateAsync(routeSchedule);
 			}

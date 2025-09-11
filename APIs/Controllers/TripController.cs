@@ -26,6 +26,7 @@ namespace APIs.Controllers
 		}
 
 		[HttpGet]
+		[Authorize(Roles = Roles.Admin)]
 		public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips(
 			[FromQuery] Guid? routeId = null,
 			[FromQuery] DateTime? serviceDate = null,
@@ -62,6 +63,7 @@ namespace APIs.Controllers
 		}
 
 		[HttpGet("{id}")]
+		[Authorize(Roles = Roles.Admin)]
 		public async Task<ActionResult<TripDto>> GetTrip(Guid id)
 		{
 			try
