@@ -151,6 +151,11 @@ builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepo
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
 
+// Payment Repositories
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<ITransportFeeItemRepository, TransportFeeItemRepository>();
+builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository>();
+
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
@@ -176,6 +181,17 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
+
+// Payment Services
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPayOSService, PayOSService>();
+
+// PayOS Configuration
+builder.Services.Configure<Services.Models.Payment.PayOSConfig>(
+    builder.Configuration.GetSection("PayOS"));
+
+// PayOS HttpClient
+builder.Services.AddHttpClient<IPayOSService, PayOSService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();

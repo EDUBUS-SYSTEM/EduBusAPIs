@@ -4,6 +4,7 @@ using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
+using Services.Models.Payment;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
@@ -105,6 +106,12 @@ namespace Services.MapperProfiles
             // Notification mapping
             CreateMap<CreateNotificationDto, Notification>();
             CreateMap<Notification, NotificationResponse>();
+
+            // Payment mapping
+            CreateMap<Transaction, TransactionSummaryResponse>();
+            CreateMap<Transaction, TransactionDetailResponse>();
+            CreateMap<TransportFeeItem, TransportFeeItemResponse>();
+            CreateMap<PaymentEventLog, PaymentEventResponse>();
         }
     }
 }
