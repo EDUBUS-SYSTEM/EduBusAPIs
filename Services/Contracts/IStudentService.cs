@@ -17,5 +17,15 @@ namespace Services.Contracts
         Task<IEnumerable<StudentDto>> GetStudentsByParentAsync(Guid parentId);
         Task<ImportStudentResult> ImportStudentsFromExcelAsync(Stream excelFileStream);
         Task<byte[]> ExportStudentsToExcelAsync();
+        
+        // Status management methods
+        Task<StudentDto> ActivateStudentAsync(Guid id);
+        Task<StudentDto> DeactivateStudentAsync(Guid id, string reason);
+        Task<StudentDto> RestoreStudentAsync(Guid id);
+        Task<StudentDto> SoftDeleteStudentAsync(Guid id, string reason);
+        Task<IEnumerable<StudentDto>> GetStudentsByStatusAsync(Data.Models.Enums.StudentStatus status);
+        
+        // TODO: Will be used when payment service is ready
+        Task<StudentDto> ActivateStudentByPaymentAsync(Guid id);
     }
 }

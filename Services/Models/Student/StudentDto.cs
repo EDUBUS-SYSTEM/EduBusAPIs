@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Data.Models.Enums;
 
 namespace Services.Models.Student
 {
@@ -14,5 +15,9 @@ namespace Services.Models.Student
         public string LastName { get; set; } = null!;
         public bool IsActive { get; set; } = true;
         public string ParentEmail { get; set; } = string.Empty;
+        public StudentStatus Status { get; set; } = StudentStatus.Available;
+        public DateTime? ActivatedAt { get; set; }
+        public DateTime? DeactivatedAt { get; set; }
+        public string? DeactivationReason { get; set; }
     }
 }
