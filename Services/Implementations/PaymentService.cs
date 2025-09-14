@@ -353,6 +353,14 @@ public class PaymentService : IPaymentService
                 return false;
             }
 
+            // Verify webhook signature first
+            var isValidSignature = await _payOSService.VerifyPayOSWebhookSignatureAsync(payload.Data, payload.Signature);
+            if (!isValidSignature)
+            {
+                _logger.LogWarning("Invalid webhook signature for order code: {OrderCode}", payload.Data.OrderCode);
+                return false;
+            }
+
             // Verify webhook data using PayOS SDK
             var verifiedData = await _payOSService.VerifyWebhookDataAsync(payload);
 
