@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -248,6 +249,23 @@ namespace Services.Implementations
 
             var createdDoc = await _requestRepo.AddAsync(doc);
 
+            // Update student status to Pending when pickup point request is submitted
+            if (dto.StudentIds != null && dto.StudentIds.Count > 0)
+            {
+                var students = await _studentRepo.GetQueryable()
+                    .Where(s => dto.StudentIds.Contains(s.Id) && !s.IsDeleted)
+                    .ToListAsync();
+
+                foreach (var student in students)
+                {
+                    if (student.Status == StudentStatus.Available)
+                    {
+                        student.Status = StudentStatus.Pending;
+                        await _studentRepo.UpdateAsync(student);
+                    }
+                }
+            }
+
             return new SubmitPickupPointRequestResponseDto
             {
                 RequestId = createdDoc.Id,
@@ -371,6 +389,13 @@ namespace Services.Implementations
                         // Assign new pickup point
                         s.CurrentPickupPointId = pp.Id;
                         s.PickupPointAssignedAt = now;
+                        
+                        // Auto-activate when approved
+                        if (s.Status == StudentStatus.Pending || s.Status == StudentStatus.Available)
+                        {
+                            s.Status = StudentStatus.Active;
+                            s.IsActive = true;
+                        }                        
                         await _studentRepo.UpdateAsync(s);
 
                         // Write assignment history

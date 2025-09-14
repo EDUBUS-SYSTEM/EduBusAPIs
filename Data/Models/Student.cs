@@ -1,4 +1,6 @@
-﻿namespace Data.Models;
+﻿using Data.Models.Enums;
+
+namespace Data.Models;
 
 public partial class Student : BaseDomain
 {
@@ -9,9 +11,11 @@ public partial class Student : BaseDomain
     public string FirstName { get; set; } = null!;
 
     public string LastName { get; set; } = null!;
-
     public bool IsActive { get; set; }
-
+    public StudentStatus Status { get; set; } = StudentStatus.Available;
+    public DateTime? ActivatedAt { get; set; }
+    public DateTime? DeactivatedAt { get; set; }
+    public string? DeactivationReason { get; set; }
     public Guid? CurrentPickupPointId { get; set; }
     public DateTime? PickupPointAssignedAt { get; set; }
 
