@@ -174,5 +174,166 @@ namespace APIs.Controllers
 				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
 			}
 		}
+
+		[HttpPut("{id}/overrides")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<ScheduleDto>> AddTimeOverride(Guid id, [FromBody] ScheduleTimeOverride timeOverride)
+		{
+			try
+			{
+				var updatedSchedule = await _scheduleService.AddTimeOverrideAsync(id, timeOverride);
+				if (updatedSchedule == null)
+				{
+					return NotFound(new { message = "Schedule not found" });
+				}
+
+				return Ok(_mapper.Map<ScheduleDto>(updatedSchedule));
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error adding time override for schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPut("{id}/overrides/batch")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<ScheduleDto>> AddTimeOverridesBatch(Guid id, [FromBody] List<ScheduleTimeOverride> timeOverrides)
+		{
+			try
+			{
+				var updatedSchedule = await _scheduleService.AddTimeOverridesBatchAsync(id, timeOverrides);
+				if (updatedSchedule == null)
+				{
+					return NotFound(new { message = "Schedule not found" });
+				}
+
+				return Ok(_mapper.Map<ScheduleDto>(updatedSchedule));
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error adding batch time overrides for schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpDelete("{id}/overrides")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<ScheduleDto>> RemoveTimeOverride(Guid id, [FromQuery] DateTime date)
+		{
+			try
+			{
+				var updatedSchedule = await _scheduleService.RemoveTimeOverrideAsync(id, date);
+				if (updatedSchedule == null)
+				{
+					return NotFound(new { message = "Schedule not found" });
+				}
+
+				return Ok(_mapper.Map<ScheduleDto>(updatedSchedule));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error removing time override for schedule {ScheduleId} on {Date}", id, date);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpDelete("{id}/overrides/batch")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<ScheduleDto>> RemoveTimeOverridesBatch(Guid id, [FromBody] List<DateTime> dates)
+		{
+			try
+			{
+				var updatedSchedule = await _scheduleService.RemoveTimeOverridesBatchAsync(id, dates);
+				if (updatedSchedule == null)
+				{
+					return NotFound(new { message = "Schedule not found" });
+				}
+
+				return Ok(_mapper.Map<ScheduleDto>(updatedSchedule));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error removing batch time overrides for schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/overrides")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<List<ScheduleTimeOverride>>> GetTimeOverrides(Guid id)
+		{
+			try
+			{
+				var overrides = await _scheduleService.GetTimeOverridesAsync(id);
+				return Ok(overrides);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting time overrides for schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/overrides/{date}")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<ScheduleTimeOverride>> GetTimeOverride(Guid id, DateTime date)
+		{
+			try
+			{
+				var timeOverride = await _scheduleService.GetTimeOverrideAsync(id, date);
+				if (timeOverride == null)
+				{
+					return NotFound(new { message = "Time override not found" });
+				}
+
+				return Ok(timeOverride);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting time override for schedule {ScheduleId} on {Date}", id, date);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/dates")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<List<DateTime>>> GenerateScheduleDates(Guid id, [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+		{
+			try
+			{
+				var dates = await _scheduleService.GenerateScheduleDatesAsync(id, startDate, endDate);
+				return Ok(dates);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error generating schedule dates for schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/check-date")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<bool>> IsDateMatchingSchedule(Guid id, [FromQuery] DateTime date)
+		{
+			try
+			{
+				var isMatching = await _scheduleService.IsDateMatchingScheduleAsync(id, date);
+				return Ok(isMatching);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error checking if date matches schedule {ScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
 	}
 }

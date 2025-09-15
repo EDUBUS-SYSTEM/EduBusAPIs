@@ -5,12 +5,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Notification;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.Implementations
@@ -363,39 +358,233 @@ namespace Services.Implementations
 
 		private static void ValidateBasicRRule(string rrule)
 		{
-			// Allow empty RRULE (treated as DAILY)
-			if (string.IsNullOrWhiteSpace(rrule)) return;
+			if (!RRuleHelper.ValidateEnhancedRRule(rrule))
+				throw new ArgumentException("Invalid RRULE format. Supported patterns: DAILY, WEEKLY, MONTHLY, YEARLY");
+		}
 
-			var freq = "";
-			HashSet<string> byDays = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-			var parts = rrule.Split(';', StringSplitOptions.RemoveEmptyEntries);
-			foreach (var p in parts)
+		public async Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride)
+		{
+			try
 			{
-				var kv = p.Split('=', 2);
-				if (kv.Length != 2) continue;
-				var key = kv[0].Trim().ToUpperInvariant();
-				var val = kv[1].Trim().ToUpperInvariant();
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return null;
 
-				if (key == "FREQ")
-					freq = val;
-				else if (key == "BYDAY")
+				// Validate time override
+				if (string.IsNullOrWhiteSpace(timeOverride.StartTime) || string.IsNullOrWhiteSpace(timeOverride.EndTime))
+					throw new ArgumentException("Start time and end time are required for override");
+
+				// Check if override already exists for this date
+				var existingOverride = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == timeOverride.Date.Date);
+				if (existingOverride != null)
 				{
-					foreach (var d in val.Split(',', StringSplitOptions.RemoveEmptyEntries))
-						byDays.Add(d.Trim());
+					// Update existing override
+					existingOverride.StartTime = timeOverride.StartTime;
+					existingOverride.EndTime = timeOverride.EndTime;
+					existingOverride.Reason = timeOverride.Reason;
+					existingOverride.CreatedBy = timeOverride.CreatedBy;
+					existingOverride.CreatedAt = timeOverride.CreatedAt;
+					existingOverride.IsCancelled = timeOverride.IsCancelled;
 				}
+				else
+				{
+					// Add new override
+					schedule.TimeOverrides.Add(timeOverride);
+				}
+
+				return await repository.UpdateAsync(schedule);
 			}
-
-			// Only support DAILY or WEEKLY
-			if (freq != "DAILY" && freq != "WEEKLY")
-				throw new ArgumentException("RRULE FREQ must be DAILY or WEEKLY");
-
-			// If WEEKLY with BYDAY, validate tokens
-			if (freq == "WEEKLY" && byDays.Count > 0)
+			catch (Exception ex)
 			{
-				var valid = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "MO", "TU", "WE", "TH", "FR", "SA", "SU" };
-				if (!byDays.All(valid.Contains))
-					throw new ArgumentException("RRULE BYDAY must contain only MO,TU,WE,TH,FR,SA,SU");
+				_logger.LogError(ex, "Error adding time override for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		public async Task<Schedule?> AddTimeOverridesBatchAsync(Guid scheduleId, List<ScheduleTimeOverride> timeOverrides)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return null;
+
+				foreach (var timeOverride in timeOverrides)
+				{
+					// Validate each override
+					if (string.IsNullOrWhiteSpace(timeOverride.StartTime) || string.IsNullOrWhiteSpace(timeOverride.EndTime))
+						throw new ArgumentException($"Start time and end time are required for override on {timeOverride.Date:yyyy-MM-dd}");
+
+					// Check if override already exists for this date
+					var existingOverride = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == timeOverride.Date.Date);
+					if (existingOverride != null)
+					{
+						// Update existing override
+						existingOverride.StartTime = timeOverride.StartTime;
+						existingOverride.EndTime = timeOverride.EndTime;
+						existingOverride.Reason = timeOverride.Reason;
+						existingOverride.CreatedBy = timeOverride.CreatedBy;
+						existingOverride.CreatedAt = timeOverride.CreatedAt;
+						existingOverride.IsCancelled = timeOverride.IsCancelled;
+					}
+					else
+					{
+						// Add new override
+						schedule.TimeOverrides.Add(timeOverride);
+					}
+				}
+
+				return await repository.UpdateAsync(schedule);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error adding batch time overrides for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		public async Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return null;
+
+				var overrideToRemove = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == date.Date);
+				if (overrideToRemove != null)
+				{
+					schedule.TimeOverrides.Remove(overrideToRemove);
+					return await repository.UpdateAsync(schedule);
+				}
+
+				return schedule;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error removing time override for schedule {ScheduleId} on {Date}", scheduleId, date);
+				throw;
+			}
+		}
+
+		public async Task<Schedule?> RemoveTimeOverridesBatchAsync(Guid scheduleId, List<DateTime> dates)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return null;
+
+				var overridesToRemove = schedule.TimeOverrides
+					.Where(o => dates.Any(d => d.Date == o.Date.Date))
+					.ToList();
+
+				foreach (var overrideToRemove in overridesToRemove)
+				{
+					schedule.TimeOverrides.Remove(overrideToRemove);
+				}
+
+				return await repository.UpdateAsync(schedule);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error removing batch time overrides for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		public async Task<List<ScheduleTimeOverride>> GetTimeOverridesAsync(Guid scheduleId)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return new List<ScheduleTimeOverride>();
+
+				return schedule.TimeOverrides.OrderBy(o => o.Date).ToList();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting time overrides for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		public async Task<ScheduleTimeOverride?> GetTimeOverrideAsync(Guid scheduleId, DateTime date)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return null;
+
+				return schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == date.Date);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting time override for schedule {ScheduleId} on {Date}", scheduleId, date);
+				throw;
+			}
+		}
+
+		public async Task<List<DateTime>> GenerateScheduleDatesAsync(Guid scheduleId, DateTime startDate, DateTime endDate)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return new List<DateTime>();
+
+				// Generate dates based on RRule
+				var dates = RRuleHelper.GenerateDatesFromRRule(schedule.RRule, startDate, endDate);
+
+				// Filter out exceptions
+				dates = dates.Where(d => !schedule.Exceptions.Any(e => e.Date == d.Date)).ToList();
+
+				// Filter by effective date range
+				dates = dates.Where(d => d >= schedule.EffectiveFrom && 
+					(schedule.EffectiveTo == null || d <= schedule.EffectiveTo.Value)).ToList();
+
+				return dates.OrderBy(d => d).ToList();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error generating schedule dates for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		public async Task<bool> IsDateMatchingScheduleAsync(Guid scheduleId, DateTime date)
+		{
+			try
+			{
+				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var schedule = await repository.FindAsync(scheduleId);
+				if (schedule == null)
+					return false;
+
+				// Check if date is in effective range
+				if (date < schedule.EffectiveFrom || (schedule.EffectiveTo.HasValue && date > schedule.EffectiveTo.Value))
+					return false;
+
+				// Check if date is in exceptions
+				if (schedule.Exceptions.Any(e => e.Date == date.Date))
+					return false;
+
+				// Check if date matches RRule
+				return RRuleHelper.IsDateMatchingRRule(date, schedule.RRule);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error checking if date matches schedule {ScheduleId}", scheduleId);
+				throw;
 			}
 		}
 	}

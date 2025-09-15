@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Data.Models;
+using Services.Models.AcademicCalendar;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
@@ -124,6 +125,14 @@ namespace Services.MapperProfiles
 			CreateMap<RouteSchedule, RouteScheduleDto>();
 			CreateMap<CreateRouteScheduleDto, RouteSchedule>();
 			CreateMap<UpdateRouteScheduleDto, RouteSchedule>();
+
+			// AcademicCalendar mappings
+			CreateMap<AcademicCalendar, AcademicCalendarDto>();
+			CreateMap<AcademicCalendarCreateDto, AcademicCalendar>();
+			CreateMap<AcademicCalendarUpdateDto, AcademicCalendar>();
+			CreateMap<AcademicSemester, AcademicSemesterDto>();
+			CreateMap<SchoolHoliday, SchoolHolidayDto>();
+			CreateMap<SchoolDay, SchoolDayDto>();
 		}
     }
 }

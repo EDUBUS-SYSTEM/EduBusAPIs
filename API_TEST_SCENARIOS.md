@@ -3501,17 +3501,26 @@ GET /api/pickup-point/requests?skip=0&take=10
 3. **Monitor performance impact of validation logic**
 4. **Test error message clarity for end users**
 
-## 14. Schedule & Trip APIs (New)
+## 24. Schedule & Academic Calendar
 
-The following scenarios cover Schedule, RouteSchedule, and Trip operations, including RRULE/timezone-based trip generation and overlap prevention.
+### 1.1 List Schedules (filter/sort/paginate)
 
 ```http
-### 14.1 [Schedule] List (active, paginated, sorted)
-GET https://localhost:7061/api/schedule?activeOnly=true&page=1&perPage=10&sortBy=createdAt&sortOrder=desc
+GET /api/schedule?scheduleType=school_day&activeOnly=true&page=1&perPage=20&sortBy=createdAt&sortOrder=desc
 Authorization: Bearer {{ADMIN_TOKEN}}
+```
 
-### 14.2 [Schedule] Create
-POST https://localhost:7061/api/schedule
+Query params:
+
+- `scheduleType` (optional): string, e.g., `school_day`, `exam_day`, `holiday`
+- `startDate`, `endDate` (optional): filter by effective range
+- `activeOnly` (optional): true/false
+- `page`, `perPage`, `sortBy`, `sortOrder`
+
+### 1.2 Create Schedule
+
+```http
+POST /api/schedule
 Authorization: Bearer {{ADMIN_TOKEN}}
 Content-Type: application/json
 
@@ -3527,9 +3536,21 @@ Content-Type: application/json
   "scheduleType": "school_day",
   "isActive": true
 }
+```
 
-### 14.3 [Schedule] Update (change start time; triggers ScheduleChange if configured)
-PUT https://localhost:7061/api/schedule/{{SCHEDULE_ID}}
+Expected: `201 Created` with `ScheduleDto`.
+
+### 1.3 Get Schedule by Id
+
+```http
+GET /api/schedule/{{SCHEDULE_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 1.4 Update Schedule
+
+```http
+PUT /api/schedule/{{SCHEDULE_ID}}
 Authorization: Bearer {{ADMIN_TOKEN}}
 Content-Type: application/json
 
@@ -3546,46 +3567,278 @@ Content-Type: application/json
   "scheduleType": "school_day",
   "isActive": true
 }
+```
 
-### 14.4 [Schedule] Get by id
-GET https://localhost:7061/api/schedule/{{SCHEDULE_ID}}
+Expected: `204 No Content`.
+
+### 1.5 Delete Schedule
+
+```http
+DELETE /api/schedule/{{SCHEDULE_ID}}
 Authorization: Bearer {{ADMIN_TOKEN}}
 ```
 
+Expected: `204 No Content`.
+
+### 1.6 Get Active Schedules (no Admin role required in controller)
 
 ```http
-### 14.5 [RouteSchedule] Create (priority 10)
-POST https://localhost:7061/api/routeschedule
+GET /api/schedule/active
+Authorization: Bearer {{TOKEN}}
+```
+
+### 1.7 Get Schedules by Type (no Admin role required in controller)
+
+```http
+GET /api/schedule/type/school_day
+Authorization: Bearer {{TOKEN}}
+```
+
+## 2) Schedule Time Overrides
+
+Time overrides allow per-date changes or cancellations.
+
+Override payload shape (`ScheduleTimeOverride`):
+
+```json
+{
+  "date": "2025-10-21T00:00:00Z",
+  "startTime": "07:30:00",
+  "endTime": "09:00:00",
+  "reason": "Assembly",
+  "createdBy": "admin@edubus.com",
+  "createdAt": "2025-10-01T10:00:00Z",
+  "isCancelled": false
+}
+```
+
+### 2.1 Add Single Override
+
+```http
+PUT /api/schedule/{{SCHEDULE_ID}}/overrides
 Authorization: Bearer {{ADMIN_TOKEN}}
 Content-Type: application/json
 
 {
-  "routeId": "{{ROUTE_ID}}",
-  "scheduleId": "{{SCHEDULE_ID}}",
-  "effectiveFrom": "2025-09-01T00:00:00Z",
-  "effectiveTo": "2025-12-31T23:59:59Z",
-  "priority": 10,
-  "isActive": true
+  "date": "2025-10-21T00:00:00Z",
+  "startTime": "07:30:00",
+  "endTime": "09:00:00",
+  "reason": "Assembly",
+  "createdBy": "admin@edubus.com",
+  "createdAt": "2025-10-01T10:00:00Z",
+  "isCancelled": false
 }
+```
 
-### 14.6 [RouteSchedule] Attempt overlapping (same/higher priority) → expect 409
-POST https://localhost:7061/api/routeschedule
+Expected: `200 OK` with updated `ScheduleDto`.
+
+### 2.2 Add Batch Overrides
+
+```http
+PUT /api/schedule/{{SCHEDULE_ID}}/overrides/batch
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+[
+  {
+    "date": "2025-11-01T00:00:00Z",
+    "startTime": "07:45:00",
+    "endTime": "09:15:00",
+    "reason": "School event",
+    "createdBy": "admin@edubus.com",
+    "createdAt": "2025-10-25T09:00:00Z",
+    "isCancelled": false
+  },
+  {
+    "date": "2025-11-02T00:00:00Z",
+    "startTime": "",
+    "endTime": "",
+    "reason": "Cancelled due to weather",
+    "createdBy": "admin@edubus.com",
+    "createdAt": "2025-10-25T09:05:00Z",
+    "isCancelled": true
+  }
+]
+```
+
+### 2.3 Remove Single Override (by date)
+
+```http
+DELETE /api/schedule/{{SCHEDULE_ID}}/overrides?date=2025-11-01T00:00:00Z
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 2.4 Remove Batch Overrides (by dates)
+
+```http
+DELETE /api/schedule/{{SCHEDULE_ID}}/overrides/batch
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+[
+  "2025-11-01T00:00:00Z",
+  "2025-11-02T00:00:00Z"
+]
+```
+
+### 2.5 List Overrides
+
+```http
+GET /api/schedule/{{SCHEDULE_ID}}/overrides
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 2.6 Get Override by Date
+
+```http
+GET /api/schedule/{{SCHEDULE_ID}}/overrides/2025-11-01T00:00:00Z
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+## 3) Schedule Date Utilities
+
+### 3.1 Generate Dates From RRULE (within range)
+
+```http
+GET /api/schedule/{{SCHEDULE_ID}}/dates?startDate=2025-10-01T00:00:00Z&endDate=2025-10-31T23:59:59Z
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+Expected: `200 OK` with `List<DateTime>` matching RRULE minus exceptions.
+
+### 3.2 Check If Date Matches Schedule
+
+```http
+GET /api/schedule/{{SCHEDULE_ID}}/check-date?date=2025-10-21T00:00:00Z
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+Expected: `200 OK` with `true|false`.
+
+### 3.3 Supported RRULE Patterns (reference)
+
+Examples supported by `Utils.RRuleHelper`:
+
+- DAILY: `FREQ=DAILY;INTERVAL=1`
+- WEEKLY: `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR`
+- MONTHLY: `FREQ=MONTHLY;BYMONTHDAY=1,15`
+- YEARLY: `FREQ=YEARLY;BYMONTH=9;BYMONTHDAY=1`
+- COMPLEX: `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;BYMONTH=9,10,11,12,1,2,3,4,5`
+
+## 4) Academic Calendar APIs
+
+Entity: `Data.Models.AcademicCalendar` with semesters, holidays, and school-days.
+
+### 4.1 List Academic Calendars
+
+```http
+GET /api/academiccalendar?academicYear=2025-2026&activeOnly=true&page=1&perPage=20&sortBy=createdAt&sortOrder=desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 4.2 Create Academic Calendar
+
+```http
+POST /api/academiccalendar
 Authorization: Bearer {{ADMIN_TOKEN}}
 Content-Type: application/json
 
 {
-  "routeId": "{{ROUTE_ID}}",
-  "scheduleId": "{{ANOTHER_SCHEDULE_ID}}",
-  "effectiveFrom": "2025-10-01T00:00:00Z",
-  "effectiveTo": "2025-11-01T00:00:00Z",
-  "priority": 10,
+  "academicYear": "2025-2026",
+  "name": "EduBus Academic Calendar 2025-2026",
+  "startDate": "2025-09-01T00:00:00Z",
+  "endDate": "2026-06-30T23:59:59Z",
+  "semesters": [
+    { "name": "Semester 1", "code": "S1", "startDate": "2025-09-01T00:00:00Z", "endDate": "2025-12-31T23:59:59Z", "isActive": true },
+    { "name": "Semester 2", "code": "S2", "startDate": "2026-01-05T00:00:00Z", "endDate": "2026-06-30T23:59:59Z", "isActive": true }
+  ],
+  "holidays": [
+    { "name": "Tet Holiday", "startDate": "2026-02-08T00:00:00Z", "endDate": "2026-02-16T23:59:59Z", "description": "Lunar New Year", "isRecurring": false }
+  ],
+  "schoolDays": [],
   "isActive": true
 }
+```
 
-### 14.7 [RouteSchedule] List by route (paginated)
-GET https://localhost:7061/api/routeschedule?routeId={{ROUTE_ID}}&page=1&perPage=20&sortBy=effectiveFrom&sortOrder=desc
+### 4.3 Get Academic Calendar by Id
+
+```http
+GET /api/academiccalendar/{{CALENDAR_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 4.4 Update Academic Calendar
+
+```http
+PUT /api/academiccalendar/{{CALENDAR_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "academicYear": "2025-2026",
+  "name": "EduBus Academic Calendar 2025-2026",
+  "startDate": "2025-09-01T00:00:00Z",
+  "endDate": "2026-06-30T23:59:59Z",
+  "semesters": [],
+  "holidays": [],
+  "schoolDays": [],
+  "isActive": true
+}
+```
+
+Expected: `204 No Content`.
+
+### 4.5 Delete Academic Calendar
+
+```http
+DELETE /api/academiccalendar/{{CALENDAR_ID}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+Expected: `204 No Content`.
+
+### 4.6 Get Active Academic Calendars (no Admin role required in controller)
+
+```http
+GET /api/academiccalendar/active
+Authorization: Bearer {{TOKEN}}
+```
+
+### 4.7 Get Calendar by Year (no Admin role required in controller)
+
+```http
+GET /api/academiccalendar/year/2025-2026
+Authorization: Bearer {{TOKEN}}
+```
+
+### 4.8 Get Holidays and School Days
+
+```http
+GET /api/academiccalendar/{{CALENDAR_ID}}/holidays
 Authorization: Bearer {{ADMIN_TOKEN}}
 
-### 14.8 [RouteSchedule] Get by id
-GET https://localhost:7061/api/routeschedule/{{ROUTE_SCHEDULE_ID}}
+GET /api/academiccalendar/{{CALENDAR_ID}}/school-days
 Authorization: Bearer {{ADMIN_TOKEN}}
+```
+
+### 4.9 Check If Date Is School Day (no Admin role required in controller)
+
+```http
+GET /api/academiccalendar/{{CALENDAR_ID}}/is-school-day?date=2026-03-01T00:00:00Z
+Authorization: Bearer {{TOKEN}}
+```
+
+## 5) Error Scenarios
+
+### 5.1 Schedule
+
+- `400 Bad Request`: invalid RRULE, invalid time formats, ID mismatch on update
+- `404 Not Found`: schedule not found
+- `409 Conflict`: when adding overrides that duplicate date entries (if enforced)
+
+### 5.2 Academic Calendar
+
+- `400 Bad Request`: invalid date ranges
+- `404 Not Found`: calendar not found
+
+---

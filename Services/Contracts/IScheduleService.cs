@@ -1,9 +1,4 @@
 ﻿using Data.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Services.Contracts
 {
@@ -27,5 +22,13 @@ namespace Services.Contracts
 			int perPage,
 			string sortBy,
 			string sortOrder);
+		Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride);
+		Task<Schedule?> AddTimeOverridesBatchAsync(Guid scheduleId, List<ScheduleTimeOverride> timeOverrides);
+		Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date);
+		Task<Schedule?> RemoveTimeOverridesBatchAsync(Guid scheduleId, List<DateTime> dates);
+		Task<List<ScheduleTimeOverride>> GetTimeOverridesAsync(Guid scheduleId);
+		Task<ScheduleTimeOverride?> GetTimeOverrideAsync(Guid scheduleId, DateTime date);
+		Task<List<DateTime>> GenerateScheduleDatesAsync(Guid scheduleId, DateTime startDate, DateTime endDate);
+		Task<bool> IsDateMatchingScheduleAsync(Guid scheduleId, DateTime date);
 	}
 }
