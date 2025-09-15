@@ -177,5 +177,105 @@ namespace APIs.Controllers
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         "Students.xlsx");
         }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{id}/activate")]
+        public async Task<IActionResult> ActivateStudent(Guid id)
+        {
+            try
+            {
+                var student = await _studentService.ActivateStudentAsync(id);
+                return Ok(student);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{id}/deactivate")]
+        public async Task<IActionResult> DeactivateStudent(Guid id, [FromBody] DeactivateStudentRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var student = await _studentService.DeactivateStudentAsync(id, request.Reason);
+                return Ok(student);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{id}/restore")]
+        public async Task<IActionResult> RestoreStudent(Guid id)
+        {
+            try
+            {
+                var student = await _studentService.RestoreStudentAsync(id);
+                return Ok(student);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteStudent(Guid id)
+        {
+            try
+            {
+                var result = await _studentService.SoftDeleteStudentAsync(id, "Deleted by admin");
+                return Ok(result);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet("status/{status}")]
+        public async Task<IActionResult> GetStudentsByStatus(int status)
+        {
+            try
+            {
+                if (!Enum.IsDefined(typeof(Data.Models.Enums.StudentStatus), status))
+                {
+                    return BadRequest(new { message = "Invalid status value. Valid values are: 0 (Available), 1 (Pending), 2 (Active), 3 (Inactive), 4 (Deleted)." });
+                }
+
+                var studentStatus = (Data.Models.Enums.StudentStatus)status;
+                var students = await _studentService.GetStudentsByStatusAsync(studentStatus);
+                return Ok(students);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
     }
 }

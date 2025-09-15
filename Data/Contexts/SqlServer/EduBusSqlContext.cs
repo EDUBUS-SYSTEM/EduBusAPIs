@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Data.Models.Enums;
 using Data.SeedConfiguration;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
@@ -288,6 +289,12 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
+                entity.Property(e => e.Status)
+                        .HasConversion<int>()                  
+                        .HasDefaultValue(StudentStatus.Available);
+                entity.Property(e => e.ActivatedAt).HasPrecision(3);
+                entity.Property(e => e.DeactivatedAt).HasPrecision(3);
+                entity.Property(e => e.DeactivationReason).HasMaxLength(500);
 
                 entity.HasOne(d => d.Parent).WithMany(p => p.Students)
                     .HasForeignKey(d => d.ParentId)
