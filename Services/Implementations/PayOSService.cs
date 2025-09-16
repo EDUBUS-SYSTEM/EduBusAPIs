@@ -33,6 +33,15 @@ public class PayOSService : IPayOSService
     {
         try
         {
+            // Build signature per PayOS docs:
+            // data = amount=$amount&cancelUrl=$cancelUrl&description=$description&orderCode=$orderCode&returnUrl=$returnUrl
+            var signature = GenerateCreatePaymentSignature(
+                request.Amount,
+                request.CancelUrl,
+                request.Description,
+                request.OrderCode,
+                request.ReturnUrl);
+
             var payload = new
             {
                 orderCode = request.OrderCode,
@@ -40,7 +49,8 @@ public class PayOSService : IPayOSService
                 description = request.Description,
                 items = request.Items,
                 returnUrl = request.ReturnUrl,
-                cancelUrl = request.CancelUrl
+                cancelUrl = request.CancelUrl,
+                signature = signature
             };
 
             var json = JsonSerializer.Serialize(payload);
@@ -72,6 +82,16 @@ public class PayOSService : IPayOSService
             _logger.LogError(ex, "Error creating PayOS payment for order: {OrderCode}", request.OrderCode);
             throw;
         }
+    }
+
+    private string GenerateCreatePaymentSignature(int amount, string cancelUrl, string description, long orderCode, string returnUrl)
+    {
+        // Build canonical string in alphabetical key order
+        // amount=...&cancelUrl=...&description=...&orderCode=...&returnUrl=...
+        var data = $"amount={amount}&cancelUrl={cancelUrl}&description={description}&orderCode={orderCode}&returnUrl={returnUrl}";
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_config.ChecksumKey));
+        var hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
     public async Task<PayOSPaymentResponse> GetPaymentInfoAsync(string orderCode)
@@ -125,7 +145,7 @@ public class PayOSService : IPayOSService
         try
         {
             // Verify signature first
-            var isValid = await VerifyWebhookSignatureAsync(webhookPayload.Signature, webhookPayload.Data);
+            var isValid = await VerifyPayOSWebhookSignatureAsync(webhookPayload.Data, webhookPayload.Signature);
             if (!isValid)
             {
                 _logger.LogWarning("Invalid webhook signature for order code: {OrderCode}", webhookPayload.Data.OrderCode);

@@ -66,6 +66,8 @@ public class PaymentController : ControllerBase
         }
     }
 
+    // Removed simple create-and-QR endpoint per user's request
+
     [HttpGet("{id}")]
     public async Task<ActionResult<TransactionDetailResponse>> GetTransactionDetail(Guid id)
     {

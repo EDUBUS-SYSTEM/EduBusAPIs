@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Payment;
-using Utils;
+using Services.Utils;
 using Microsoft.Extensions.Options;
 
 namespace APIs.Controllers;

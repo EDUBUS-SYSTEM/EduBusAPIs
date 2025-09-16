@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Services.Models.Payment;
 
-namespace Utils;
+namespace Services.Utils;
 
 /// <summary>
 /// Helper class for PayOS signature validation and testing
