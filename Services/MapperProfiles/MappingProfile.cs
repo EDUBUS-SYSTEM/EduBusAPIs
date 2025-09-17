@@ -4,6 +4,7 @@ using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
+using Services.Models.Payment;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
@@ -91,7 +92,7 @@ namespace Services.MapperProfiles
             CreateMap<DriverVehicle, EnhancedDriverAssignmentResponse>()
                 .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"))
                 .ForMember(dest => dest.VehiclePlate, opt => opt.MapFrom(src => 
-                    src.Vehicle != null ? Utils.SecurityHelper.DecryptFromBytes(src.Vehicle.HashedLicensePlate) : string.Empty))
+                    src.Vehicle != null ? SecurityHelper.DecryptFromBytes(src.Vehicle.HashedLicensePlate) : string.Empty))
                 .ForMember(dest => dest.AssignmentId, opt => opt.MapFrom(src => src.Id));
             
             // Assignment Conflict mapping
@@ -105,6 +106,12 @@ namespace Services.MapperProfiles
             // Notification mapping
             CreateMap<CreateNotificationDto, Notification>();
             CreateMap<Notification, NotificationResponse>();
+
+            // Payment mapping
+            CreateMap<Transaction, TransactionSummaryResponse>();
+            CreateMap<Transaction, TransactionDetailResponse>();
+            CreateMap<TransportFeeItem, TransportFeeItemResponse>();
+            CreateMap<PaymentEventLog, PaymentEventResponse>();
         }
     }
 }

@@ -3503,6 +3503,711 @@ GET /api/pickup-point/requests?skip=0&take=10
 
 ---
 
+## 24. Payment API Management
+
+### 24.1 List Transactions
+
+**Endpoint:** `GET /api/payment`
+**Authorization:** Bearer Token (Parent/Admin)
+
+**Query Parameters:**
+
+- `status` (optional): "Notyet", "Paid", "Failed", "Cancelled", "Expired"
+- `parentId` (optional): Filter by parent ID (Admin only)
+- `from` (optional): Start date filter (ISO 8601 format)
+- `to` (optional): End date filter (ISO 8601 format)
+- `page` (optional): Page number (default: 1)
+- `perPage` (optional): Items per page (default: 20, max: 100)
+- `sortBy` (optional): Field to sort by (e.g., "createdAtUtc", "amount", "status")
+- `sortOrder` (optional): "asc" or "desc" (default: "desc")
+
+**Example Requests:**
+
+```bash
+# Get all transactions (Admin)
+GET /api/payment?page=1&perPage=20&sortBy=createdAtUtc&sortOrder=desc
+
+# Get transactions by status (Admin)
+GET /api/payment?status=Notyet&page=1&perPage=10
+
+# Get transactions for specific parent (Admin)
+GET /api/payment?parentId=12345678-1234-1234-1234-123456789012
+
+# Get transactions by date range (Admin)
+GET /api/payment?from=2024-01-01T00:00:00Z&to=2024-12-31T23:59:59Z
+
+# Get own transactions (Parent)
+GET /api/payment?page=1&perPage=10
+```
+
+**Expected Response:**
+
+```json
+{
+  "transactions": [
+    {
+      "id": "12345678-1234-1234-1234-123456789012",
+      "transactionCode": "TXN_20240115_001",
+      "parentId": "87654321-4321-4321-4321-210987654321",
+      "parentName": "Nguyễn Văn A",
+      "amount": 150000,
+      "currency": "VND",
+      "status": "Notyet",
+      "description": "Phí vận chuyển học sinh tháng 1/2024",
+      "provider": "PayOS",
+      "providerTransactionId": "pay_123456789",
+      "paidAtUtc": null,
+      "pickupPointRequestId": "11111111-1111-1111-1111-111111111111",
+      "scheduleId": "22222222-2222-2222-2222-222222222222",
+      "metadata": "{\"pickupPointName\":\"Trước cổng chung cư ABC\"}",
+      "createdAtUtc": "2024-01-15T10:30:00Z",
+      "updatedAtUtc": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "totalCount": 50,
+  "page": 1,
+  "perPage": 20,
+  "totalPages": 3
+}
+```
+
+**Error Responses:**
+
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Parent trying to access other parent's transactions
+
+### 24.2 Get Transaction Detail
+
+**Endpoint:** `GET /api/payment/{transactionId}`
+**Authorization:** Bearer Token (Parent/Admin)
+
+**Description:** Get detailed information of a specific transaction including transport fee items and payment events.
+
+**Example Request:**
+
+```bash
+GET /api/payment/12345678-1234-1234-1234-123456789012
+```
+
+**Expected Response:**
+
+```json
+{
+  "id": "12345678-1234-1234-1234-123456789012",
+  "transactionCode": "TXN_20240115_001",
+  "parentId": "87654321-4321-4321-4321-210987654321",
+  "parentName": "Nguyễn Văn A",
+  "amount": 150000,
+  "currency": "VND",
+  "status": "Notyet",
+  "description": "Phí vận chuyển học sinh tháng 1/2024",
+  "provider": "PayOS",
+  "providerTransactionId": "pay_123456789",
+  "paidAtUtc": null,
+  "pickupPointRequestId": "11111111-1111-1111-1111-111111111111",
+  "scheduleId": "22222222-2222-2222-2222-222222222222",
+  "metadata": "{\"pickupPointName\":\"Trước cổng chung cư ABC\",\"studentNames\":[\"Nguyễn Văn B\",\"Nguyễn Thị C\"],\"routeName\":\"Tuyến 43A-12345\"}",
+  "transportFeeItems": [
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "transactionId": "12345678-1234-1234-1234-123456789012",
+      "studentId": "44444444-4444-4444-4444-444444444444",
+      "studentName": "Nguyễn Văn B",
+      "description": "Phí vận chuyển tháng 1/2024",
+      "distanceKm": 2.5,
+      "unitPriceVndPerKm": 50000,
+      "quantityKm": 2.5,
+      "subtotal": 125000,
+      "periodMonth": 1,
+      "periodYear": 2024,
+      "status": "Invoiced",
+      "createdAtUtc": "2024-01-15T10:30:00Z",
+      "updatedAtUtc": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "createdAtUtc": "2024-01-15T10:30:00Z",
+  "updatedAtUtc": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Parent trying to access other parent's transaction
+- `404`: Transaction not found
+
+### 24.3 Generate/Refresh QR Code
+
+**Endpoint:** `POST /api/payment/{transactionId}/qrcode`
+**Authorization:** Bearer Token (Parent/Admin)
+
+**Description:** Generate or refresh QR code for payment via PayOS. Creates a new payment request with PayOS and returns QR code information.
+
+**Example Request:**
+
+```bash
+POST /api/payment/12345678-1234-1234-1234-123456789012/qrcode
+```
+
+**Expected Response:**
+
+```json
+{
+  "qrCode": "https://img.vietqr.io/image/970422-1234567890-qr_only.png",
+  "checkoutUrl": "https://pay.payos.vn/web/123456789",
+  "expiresAt": "2024-01-15T12:15:00Z"
+}
+```
+
+**Error Responses:**
+
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Parent trying to access other parent's transaction
+- `404`: Transaction not found
+- `409`: Transaction not in valid state for QR generation
+- `500`: PayOS integration error
+
+### 24.4 Get Transaction Events
+
+**Endpoint:** `GET /api/payment/{transactionId}/events`
+**Authorization:** Bearer Token (Parent/Admin)
+
+**Description:** Get payment event history for a transaction.
+
+**Example Request:**
+
+```bash
+GET /api/payment/12345678-1234-1234-1234-123456789012/events
+```
+
+**Expected Response:**
+
+```json
+[
+  {
+    "id": "55555555-5555-5555-5555-555555555555",
+    "transactionId": "12345678-1234-1234-1234-123456789012",
+    "status": "Notyet",
+    "atUtc": "2024-01-15T10:30:00Z",
+    "source": "Manual",
+    "message": "Transaction created",
+    "rawPayload": null
+  },
+  {
+    "id": "66666666-6666-6666-6666-666666666666",
+    "transactionId": "12345678-1234-1234-1234-123456789012",
+    "status": "Notyet",
+    "atUtc": "2024-01-15T10:35:00Z",
+    "source": "Manual",
+    "message": "QR code generated/refreshed",
+    "rawPayload": null
+  }
+]
+```
+
+**Error Responses:**
+
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Parent trying to access other parent's transaction
+- `404`: Transaction not found
+
+### 24.5 Cancel Transaction (Admin Only)
+
+**Endpoint:** `POST /api/payment/{transactionId}/cancel`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Cancel a transaction. Only transactions in "Notyet" status can be cancelled.
+
+**Example Request:**
+
+```bash
+POST /api/payment/12345678-1234-1234-1234-123456789012/cancel
+```
+
+**Expected Response:** `204 No Content`
+
+**Error Responses:**
+
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Non-admin user
+- `404`: Transaction not found
+- `409`: Transaction not in cancellable state
+
+### 24.6 Mark Transaction as Paid (Admin Only)
+
+**Endpoint:** `POST /api/payment/{transactionId}/mark-paid`
+**Authorization:** Bearer Token (Admin only)
+
+**Description:** Manually mark a transaction as paid (for cash payments, bank transfers, etc.).
+
+**Request Body:**
+
+```json
+{
+  "providerTransactionId": "BANK_TRANSFER_123456",
+  "note": "Manual payment confirmation via bank transfer"
+}
+```
+
+**Expected Response:** `204 No Content`
+
+**Error Responses:**
+
+- `400`: Validation errors (missing required fields)
+- `401`: Unauthorized - Missing or invalid token
+- `403`: Forbidden - Non-admin user
+- `404`: Transaction not found
+- `409`: Transaction not in valid state for manual payment
+
+### 24.7 PayOS Webhook (Public Endpoint)
+
+**Endpoint:** `POST /api/payment/webhook/payos`
+**Authorization:** No authentication required
+
+**Description:** Webhook endpoint for PayOS payment notifications. This endpoint is called by PayOS when payment status changes.
+
+**Request Body:**
+
+```json
+{
+  "code": "00",
+  "desc": "success",
+  "success": true,
+  "data": {
+    "orderCode": 123456789,
+    "amount": 150000,
+    "description": "Phí vận chuyển học sinh tháng 1/2024",
+    "accountNumber": "1234567890",
+    "reference": "TXN_20240115_001",
+    "transactionDateTime": "2024-01-15T11:00:00Z",
+    "currency": "VND",
+    "paymentLinkId": "pay_123456789",
+    "code": "00",
+    "desc": "success",
+    "counterAccountBankId": "970422",
+    "counterAccountBankName": "Vietcombank",
+    "counterAccountName": "NGUYEN VAN A",
+    "counterAccountNumber": "1234567890",
+    "virtualAccountName": "EduBus Payment",
+    "virtualAccountNumber": "9876543210"
+  },
+  "signature": "abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+}
+```
+
+**Expected Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Webhook processed successfully"
+}
+```
+
+**Error Responses:**
+
+- `400`: Invalid webhook payload or signature verification failed
+- `404`: Transaction not found
+- `500`: Server error processing webhook
+
+### 24.8 PayOS Return URL (Public Endpoint)
+
+**Endpoint:** `GET /api/payment/return`
+**Authorization:** No authentication required
+
+**Description:** Handle PayOS payment return URL when user completes payment successfully.
+
+**Query Parameters:**
+
+- `code`: PayOS response code
+- `id`: PayOS payment ID
+- `cancel`: Boolean indicating if payment was cancelled
+- `status`: Payment status
+- `orderCode`: Order code from PayOS
+
+**Example Request:**
+
+```bash
+GET /api/payment/return?code=00&id=123456789&cancel=false&status=success&orderCode=123456789
+```
+
+**Expected Response:** `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Payment completed successfully",
+  "orderCode": "123456789",
+  "status": "success"
+}
+```
+
+### 24.9 PayOS Cancel URL (Public Endpoint)
+
+**Endpoint:** `GET /api/payment/cancel`
+**Authorization:** No authentication required
+
+**Description:** Handle PayOS payment cancel URL when user cancels payment.
+
+**Query Parameters:**
+
+- `code`: PayOS response code
+- `id`: PayOS payment ID
+- `cancel`: Boolean indicating if payment was cancelled
+- `status`: Payment status
+- `orderCode`: Order code from PayOS
+
+**Example Request:**
+
+```bash
+GET /api/payment/cancel?code=01&id=123456789&cancel=true&status=cancelled&orderCode=123456789
+```
+
+**Expected Response:** `200 OK`
+
+```json
+{
+  "success": false,
+  "message": "Payment was cancelled",
+  "orderCode": "123456789",
+  "status": "cancelled"
+}
+```
+
+---
+
+## 25. Payment API Test Scenarios
+
+### 25.1 Complete Payment Flow Test
+
+**Scenario:** Parent completes payment for pickup point service
+
+1. **Admin approves pickup point request**
+
+   - Creates transaction automatically
+   - Transaction status: "Notyet"
+
+2. **Parent generates QR code**
+
+   - POST /api/payment/{transactionId}/qrcode
+   - Verify PayOS payment request created
+   - Check QR code and checkout URL returned
+   - Verify expiration time
+
+3. **Parent makes payment via PayOS**
+
+   - Use checkout URL or scan QR code
+   - Complete payment on PayOS hosted page
+
+4. **PayOS redirects to return URL**
+
+   - GET /api/payment/return
+   - Verify return URL parameters parsed
+   - Check payment status message
+
+5. **PayOS sends webhook**
+
+   - POST /api/payment/webhook/payos
+   - Verify signature validation
+   - Check transaction status updated to "Paid"
+   - Verify transport fee items marked as "Paid"
+   - Check providerTransactionId updated
+
+6. **Parent checks payment status**
+   - GET /api/payment/{transactionId}
+   - Verify status is "Paid"
+   - Check paidAtUtc timestamp
+
+### 25.2 Manual Payment Flow Test
+
+**Scenario:** Admin manually marks transaction as paid
+
+1. **Transaction created with "Notyet" status**
+
+   - Parent generates QR code
+   - QR code expires
+
+2. **Parent makes cash payment**
+
+   - Informs admin of payment
+
+3. **Admin marks as paid**
+
+   - POST /api/payment/{transactionId}/mark-paid
+   - Provide bank transfer reference
+   - Add payment note
+
+4. **Verify payment recorded**
+   - GET /api/payment/{transactionId}
+   - Check status is "Paid"
+   - Verify providerTransactionId updated
+   - Check transport fee items marked as "Paid"
+
+### 25.3 Payment Failure Flow Test
+
+**Scenario:** Payment fails or is cancelled
+
+1. **Parent attempts payment**
+
+   - QR code generated via PayOS
+   - Payment fails or is cancelled
+
+2. **PayOS redirects to cancel URL**
+
+   - GET /api/payment/cancel
+   - Verify cancel URL parameters parsed
+   - Check cancellation message
+
+3. **PayOS sends failure webhook**
+
+   - POST /api/payment/webhook/payos
+   - Code: "01" (failure)
+   - Verify transaction status updated to "Failed"
+
+4. **Parent can retry payment**
+   - POST /api/payment/{transactionId}/qrcode
+   - Generate new PayOS payment request
+   - Attempt payment again
+
+### 25.4 Transaction Cancellation Test
+
+**Scenario:** Admin cancels transaction
+
+1. **Transaction in "Notyet" status**
+
+   - Parent has not made payment
+   - QR code may or may not be generated
+
+2. **Admin cancels transaction**
+
+   - POST /api/payment/{transactionId}/cancel
+   - Verify status updated to "Cancelled"
+
+3. **Verify cancellation effects**
+   - GET /api/payment/{transactionId}
+   - Check status is "Cancelled"
+   - Verify transport fee items marked as "Cancelled"
+
+### 25.5 Role-Based Access Test
+
+**Scenario:** Test access control for different user roles
+
+1. **Parent access**
+
+   - GET /api/payment (own transactions only)
+   - GET /api/payment/{transactionId} (own transactions only)
+   - POST /api/payment/{transactionId}/qrcode (own transactions only)
+
+2. **Admin access**
+
+   - GET /api/payment (all transactions)
+   - GET /api/payment/{transactionId} (any transaction)
+   - POST /api/payment/{transactionId}/cancel (any transaction)
+   - POST /api/payment/{transactionId}/mark-paid (any transaction)
+
+3. **Unauthorized access**
+   - Parent trying to access other parent's transaction
+   - Non-admin trying to cancel transaction
+   - Invalid or missing JWT token
+
+### 25.6 PayOS Integration Test
+
+**Scenario:** Test PayOS API integration
+
+1. **Payment Request Creation**
+
+   - POST /api/payment/{transactionId}/qrcode
+   - Verify PayOS API called with correct parameters
+   - Check QR code and checkout URL returned
+   - Verify expiration time calculation
+
+2. **Return/Cancel URL Handling**
+
+   - GET /api/payment/return
+   - GET /api/payment/cancel
+   - Test with various query parameters
+   - Verify proper response messages
+
+3. **Webhook Signature Verification**
+
+   - POST /api/payment/webhook/payos
+   - Test with valid signature
+   - Test with invalid signature
+   - Verify proper error handling
+
+4. **Payment Status Updates**
+   - Test successful payment webhook
+   - Test failed payment webhook
+   - Verify transaction status updates
+   - Check transport fee item updates
+   - Verify providerTransactionId updates
+
+### 25.7 Error Scenarios Test
+
+**Scenario:** Test various error conditions
+
+1. **Invalid Transaction ID**
+
+   - GET /api/payment/00000000-0000-0000-0000-000000000000
+   - Expected: 404 Not Found
+
+2. **Transaction in Wrong State**
+
+   - POST /api/payment/{paidTransactionId}/cancel
+   - Expected: 409 Conflict
+
+3. **PayOS API Errors**
+
+   - Simulate PayOS API failure
+   - Test payment request creation failure
+   - Verify error handling
+
+4. **Webhook Processing Errors**
+
+   - Invalid webhook payload
+   - Missing transaction
+   - Database errors
+
+5. **Return/Cancel URL Errors**
+   - Invalid query parameters
+   - Missing orderCode
+   - Malformed URLs
+
+### 25.8 Performance Test
+
+**Scenario:** Test API performance under load
+
+1. **Concurrent Payment Request Creation**
+
+   - Multiple parents generating payment requests simultaneously
+   - Verify PayOS API rate limiting
+   - Check response times
+
+2. **Webhook Processing**
+
+   - Multiple webhooks received simultaneously
+   - Verify proper queuing and processing
+   - Check database performance
+
+3. **Return/Cancel URL Processing**
+
+   - Multiple redirects processed simultaneously
+   - Verify proper parameter parsing
+   - Check response times
+
+4. **Transaction Listing**
+   - Large number of transactions
+   - Test pagination performance
+   - Verify filtering and sorting
+
+### 25.9 Data Validation Test
+
+**Scenario:** Test input validation
+
+1. **Invalid Query Parameters**
+
+   - Invalid status values
+   - Invalid date formats
+   - Invalid pagination parameters
+
+2. **Invalid Request Bodies**
+
+   - Missing required fields in mark-paid request
+   - Invalid provider transaction ID format
+   - Empty or null values
+
+3. **PayOS Webhook Validation**
+
+   - Invalid webhook payload structure
+   - Missing required fields
+   - Invalid data types
+
+4. **Return/Cancel URL Validation**
+
+   - Invalid query parameters
+   - Missing required parameters
+   - Invalid data formats
+
+5. **Boundary Value Testing**
+   - Maximum page size
+   - Date range limits
+   - Amount limits
+
+### 25.10 Security Test
+
+**Scenario:** Test security measures
+
+1. **JWT Token Validation**
+
+   - Expired tokens
+   - Invalid tokens
+   - Missing tokens
+
+2. **PayOS Webhook Security**
+
+   - Signature verification
+   - PayOS checksum validation
+   - IP whitelisting (if implemented)
+   - Rate limiting
+
+3. **Return/Cancel URL Security**
+
+   - Parameter validation
+   - XSS prevention
+   - CSRF protection
+
+4. **Data Privacy**
+   - Parent data isolation
+   - Sensitive information masking
+   - Audit logging
+
+---
+
+## 26. Payment API Error Scenarios
+
+### 26.1 Authentication Errors
+
+- **Missing JWT Token**: 401 Unauthorized
+- **Invalid JWT Token**: 401 Unauthorized
+- **Expired JWT Token**: 401 Unauthorized
+- **Wrong User Role**: 403 Forbidden
+
+### 26.2 Authorization Errors
+
+- **Parent accessing other parent's transaction**: 403 Forbidden
+- **Non-admin trying to cancel transaction**: 403 Forbidden
+- **Non-admin trying to mark as paid**: 403 Forbidden
+
+### 26.3 Validation Errors
+
+- **Invalid transaction ID format**: 400 Bad Request
+- **Missing required fields**: 400 Bad Request
+- **Invalid status values**: 400 Bad Request
+- **Invalid date formats**: 400 Bad Request
+
+### 26.4 Business Logic Errors
+
+- **Transaction not found**: 404 Not Found
+- **Transaction not in cancellable state**: 409 Conflict
+- **Transaction not in valid state for QR generation**: 409 Conflict
+- **QR code generation failed**: 500 Internal Server Error
+
+### 26.5 PayOS Integration Errors
+
+- **PayOS API unavailable**: 503 Service Unavailable
+- **Invalid PayOS credentials**: 500 Internal Server Error
+- **Webhook signature verification failed**: 400 Bad Request
+- **PayOS response parsing error**: 500 Internal Server Error
+- **Payment request creation failed**: 500 Internal Server Error
+- **Return/Cancel URL processing error**: 400 Bad Request
+
+### 26.6 Database Errors
+
+- **Database connection failed**: 500 Internal Server Error
+- **Transaction save failed**: 500 Internal Server Error
+- **Concurrent update conflict**: 409 Conflict
+- **Data integrity violation**: 500 Internal Server Error
+
 ## 24. Student Status Management
 
 ### 24.1 Create Student (Default Status)
@@ -3520,12 +4225,6 @@ GET /api/pickup-point/requests?skip=0&take=10
   "parentPhoneNumber": "0123456789"
 }
 ```
-
-**Expected Response:**
-
-```json
-{
-  "id": "12345678-1234-1234-1234-123456789012",
   "firstName": "Nguyễn Văn",
   "lastName": "A",
   "parentEmail": "parent@example.com",
@@ -3547,11 +4246,6 @@ GET /api/pickup-point/requests?skip=0&take=10
 
 **Form Data:**
 - `file`: [Select Excel file - .xlsx format]
-
-**Expected Response:**
-
-```json
-{
   "success": true,
   "data": {
     "importedCount": 5,
@@ -3585,11 +4279,6 @@ GET /api/pickup-point/requests?skip=0&take=10
 **Example Request:**
 ```bash
 GET /api/Student/status/0
-```
-
-**Expected Response:**
-
-```json
 {
   "success": true,
   "data": [
@@ -3637,11 +4326,6 @@ GET /api/Student/status/0
 
 **Endpoint:** `POST /api/Student/{id}/deactivate`
 **Authorization:** Bearer Token (Admin only)
-
-**Request Body:**
-
-```json
-{
   "reason": "Tạm ngưng dịch vụ theo yêu cầu phụ huynh"
 }
 ```
@@ -3672,9 +4356,6 @@ GET /api/Student/status/0
 
 **Expected Response:**
 
-```json
-{
-  "success": true,
   "data": {
     "id": "12345678-1234-1234-1234-123456789012",
     "firstName": "Nguyễn Văn",
@@ -3943,3 +4624,4 @@ GET /api/Student/status/0
 3. **Error message clarity**
    - Verify error messages are clear and actionable
    - Check error messages are in appropriate language
+

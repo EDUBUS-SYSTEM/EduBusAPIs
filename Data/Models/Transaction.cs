@@ -1,14 +1,24 @@
 ﻿namespace Data.Models;
+using Data.Models.Enums;
 
 public partial class Transaction : BaseDomain
 {
     public Guid ParentId { get; set; }
-
     public string TransactionCode { get; set; } = null!;
-
+    public TransactionStatus Status { get; set; }
     public decimal Amount { get; set; }
+    public string Currency { get; set; } = "VND";
+    public string Description { get; set; } = null!;
+    public PaymentProvider Provider { get; set; }
+    public string? ProviderTransactionId { get; set; }
+    public string? QrCodeUrl { get; set; }
+    public string? QrContent { get; set; }
+    public DateTime? QrExpiredAtUtc { get; set; }
+    public DateTime? PaidAtUtc { get; set; }
+    public string? PickupPointRequestId { get; set; }
+    public Guid? ScheduleId { get; set; }
+    public string? Metadata { get; set; }
 
     public virtual Parent Parent { get; set; } = null!;
-
     public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
 }

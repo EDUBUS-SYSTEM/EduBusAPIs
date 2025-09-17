@@ -1,0 +1,198 @@
+{
+  "environments": {
+    "development": {
+      "baseUrl": "https://localhost:7223",
+      "payOS": {
+        "baseUrl": "https://api-merchant.payos.vn",
+        "webhookUrl": "https://your-ngrok-url.ngrok.io/api/payment/webhook/payos",
+        "returnUrl": "https://localhost:7000/api/payment/return",
+        "cancelUrl": "https://localhost:7000/api/payment/cancel"
+      },
+      "testData": {
+        "amount": 10000,
+        "description": "Test payment development",
+        "currency": "VND"
+      }
+    },
+    "staging": {
+      "baseUrl": "https://staging-api.yourdomain.com",
+      "payOS": {
+        "baseUrl": "https://api-merchant.payos.vn",
+        "webhookUrl": "https://staging-api.yourdomain.com/api/payment/webhook/payos",
+        "returnUrl": "https://staging-app.yourdomain.com/api/payment/return",
+        "cancelUrl": "https://staging-app.yourdomain.com/api/payment/cancel"
+      },
+      "testData": {
+        "amount": 50000,
+        "description": "Test payment staging",
+        "currency": "VND"
+      }
+    },
+    "production": {
+      "baseUrl": "https://api.yourdomain.com",
+      "payOS": {
+        "baseUrl": "https://api-merchant.payos.vn",
+        "webhookUrl": "https://api.yourdomain.com/api/payment/webhook/payos",
+        "returnUrl": "https://app.yourdomain.com/api/payment/return",
+        "cancelUrl": "https://app.yourdomain.com/api/payment/cancel"
+      },
+      "testData": {
+        "amount": 100000,
+        "description": "Test payment production",
+        "currency": "VND"
+      }
+    }
+  },
+  "testScenarios": {
+    "successfulPayment": {
+      "name": "Successful Payment Test",
+      "description": "Test successful payment flow",
+      "steps": [
+        "Create transaction",
+        "Generate QR code",
+        "Make payment with correct amount",
+        "Verify webhook received",
+        "Check transaction status updated"
+      ],
+      "expectedResult": "Transaction status should be 'Paid'"
+    },
+    "failedPayment": {
+      "name": "Failed Payment Test",
+      "description": "Test failed payment flow",
+      "steps": [
+        "Create transaction",
+        "Generate QR code",
+        "Make payment with wrong amount",
+        "Verify no webhook received",
+        "Check transaction status remains 'Notyet'"
+      ],
+      "expectedResult": "Transaction status should remain 'Notyet'"
+    },
+    "cancelledPayment": {
+      "name": "Cancelled Payment Test",
+      "description": "Test cancelled payment flow",
+      "steps": [
+        "Create transaction",
+        "Generate QR code",
+        "Cancel payment",
+        "Verify webhook received with cancelled status",
+        "Check transaction status"
+      ],
+      "expectedResult": "Transaction status should be 'Cancelled' or remain 'Notyet'"
+    },
+    "webhookTest": {
+      "name": "Webhook Test",
+      "description": "Test webhook endpoint directly",
+      "steps": [
+        "Create transaction",
+        "Generate QR code",
+        "Send webhook payload manually",
+        "Verify webhook processing",
+        "Check transaction status updated"
+      ],
+      "expectedResult": "Webhook should be processed successfully"
+    }
+  },
+  "sampleWebhookPayloads": {
+    "success": {
+      "code": "00",
+      "desc": "success",
+      "success": true,
+      "data": {
+        "orderCode": 123456789,
+        "amount": 150000,
+        "description": "Test payment",
+        "accountNumber": "1234567890",
+        "reference": "TXN_20240115_001",
+        "transactionDateTime": "2024-01-15T12:05:00",
+        "currency": "VND",
+        "paymentLinkId": "pay_123456789",
+        "code": "00",
+        "desc": "Thành công",
+        "counterAccountBankId": "",
+        "counterAccountBankName": "",
+        "counterAccountName": "",
+        "counterAccountNumber": "",
+        "virtualAccountName": "",
+        "virtualAccountNumber": ""
+      },
+      "signature": "generated_signature_here"
+    },
+    "failure": {
+      "code": "01",
+      "desc": "failed",
+      "success": false,
+      "data": {
+        "orderCode": 123456789,
+        "amount": 150000,
+        "description": "Test payment",
+        "accountNumber": "1234567890",
+        "reference": "TXN_20240115_001",
+        "transactionDateTime": "2024-01-15T12:05:00",
+        "currency": "VND",
+        "paymentLinkId": "pay_123456789",
+        "code": "01",
+        "desc": "Thất bại",
+        "counterAccountBankId": "",
+        "counterAccountBankName": "",
+        "counterAccountName": "",
+        "counterAccountNumber": "",
+        "virtualAccountName": "",
+        "virtualAccountNumber": ""
+      },
+      "signature": "generated_signature_here"
+    },
+    "cancelled": {
+      "code": "02",
+      "desc": "cancelled",
+      "success": false,
+      "data": {
+        "orderCode": 123456789,
+        "amount": 150000,
+        "description": "Test payment",
+        "accountNumber": "1234567890",
+        "reference": "TXN_20240115_001",
+        "transactionDateTime": "2024-01-15T12:05:00",
+        "currency": "VND",
+        "paymentLinkId": "pay_123456789",
+        "code": "02",
+        "desc": "Đã hủy",
+        "counterAccountBankId": "",
+        "counterAccountBankName": "",
+        "counterAccountName": "",
+        "counterAccountNumber": "",
+        "virtualAccountName": "",
+        "virtualAccountNumber": ""
+      },
+      "signature": "generated_signature_here"
+    }
+  },
+  "monitoring": {
+    "endpoints": {
+      "health": "/health",
+      "transactions": "/api/payment",
+      "transactionDetail": "/api/payment/{id}",
+      "transactionEvents": "/api/payment/{id}/events",
+      "webhook": "/api/payment/webhook/payos",
+      "return": "/api/payment/return",
+      "cancel": "/api/payment/cancel"
+    },
+    "logLevels": {
+      "PayOSService": "Debug",
+      "PaymentService": "Debug",
+      "PaymentController": "Information"
+    }
+  },
+  "security": {
+    "requiredHeaders": {
+      "Authorization": "Bearer {jwt_token}",
+      "Content-Type": "application/json"
+    },
+    "sensitiveFields": ["clientId", "apiKey", "checksumKey", "signature"],
+    "rateLimiting": {
+      "webhook": "100 requests per minute",
+      "payment": "50 requests per minute"
+    }
+  }
+}
+

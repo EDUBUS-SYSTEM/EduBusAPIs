@@ -1,6 +1,132 @@
-@APIs_HostAddress = http://localhost:5223
+### EduBus APIs Test File
 
-GET {{APIs_HostAddress}}/weatherforecast/
-Accept: application/json
+### Variables
+@baseUrl = https://localhost:7223
+@apiUrl = {{baseUrl}}/api
 
-###
+### Health Check
+GET {{baseUrl}}/health
+
+### PayOS Signature Test - Test with sample data from PayOS documentation
+POST {{apiUrl}}/PayOSTest/test-signature
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+### PayOS Signature Test - Test with custom data
+POST {{apiUrl}}/PayOSTest/test-signature-custom
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "orderCode": 123,
+  "amount": 3000,
+  "description": "VQRIO123",
+  "accountNumber": "12345678",
+  "reference": "TF230204212323",
+  "transactionDateTime": "2023-02-04 18:25:00",
+  "currency": "VND",
+  "paymentLinkId": "124c33293c43417ab7879e14c8d9eb18",
+  "code": "00",
+  "desc": "Thành công",
+  "counterAccountBankId": "",
+  "counterAccountBankName": "",
+  "counterAccountName": "",
+  "counterAccountNumber": "",
+  "virtualAccountName": "",
+  "virtualAccountNumber": ""
+}
+
+### PayOS Signature Test - Test signature verification
+POST {{apiUrl}}/PayOSTest/test-signature-verify
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "data": {
+    "orderCode": 123,
+    "amount": 3000,
+    "description": "VQRIO123",
+    "accountNumber": "12345678",
+    "reference": "TF230204212323",
+    "transactionDateTime": "2023-02-04 18:25:00",
+    "currency": "VND",
+    "paymentLinkId": "124c33293c43417ab7879e14c8d9eb18",
+    "code": "00",
+    "desc": "Thành công",
+    "counterAccountBankId": "",
+    "counterAccountBankName": "",
+    "counterAccountName": "",
+    "counterAccountNumber": "",
+    "virtualAccountName": "",
+    "virtualAccountNumber": ""
+  },
+  "signature": "412e915d2871504ed31be63c8f62a149a4410d34c4c42affc9006ef9917eaa03"
+}
+
+### PayOS Configuration Test
+GET {{apiUrl}}/PayOSTest/config
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### PayOS Webhook Test - Simulate PayOS webhook
+POST {{apiUrl}}/Payment/webhook/payos
+Content-Type: application/json
+
+{
+  "code": "00",
+  "desc": "success",
+  "success": true,
+  "data": {
+    "orderCode": 123,
+    "amount": 3000,
+    "description": "VQRIO123",
+    "accountNumber": "12345678",
+    "reference": "TF230204212323",
+    "transactionDateTime": "2023-02-04 18:25:00",
+    "currency": "VND",
+    "paymentLinkId": "124c33293c43417ab7879e14c8d9eb18",
+    "code": "00",
+    "desc": "Thành công",
+    "counterAccountBankId": "",
+    "counterAccountBankName": "",
+    "counterAccountName": "",
+    "counterAccountNumber": "",
+    "virtualAccountName": "",
+    "virtualAccountNumber": ""
+  },
+  "signature": "412e915d2871504ed31be63c8f62a149a4410d34c4c42affc9006ef9917eaa03"
+}
+
+### Payment Return URL Test
+GET {{apiUrl}}/Payment/return?code=00&id=123456789&cancel=false&status=success&orderCode=123
+
+### Payment Cancel URL Test
+GET {{apiUrl}}/Payment/cancel?code=01&id=123456789&cancel=true&status=cancelled&orderCode=123
+
+### Get Transactions
+GET {{apiUrl}}/Payment
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Get Transaction Detail
+GET {{apiUrl}}/Payment/{{transactionId}}
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Generate QR Code
+POST {{apiUrl}}/Payment/{{transactionId}}/qrcode
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Get Transaction Events
+GET {{apiUrl}}/Payment/{{transactionId}}/events
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Cancel Transaction (Admin only)
+POST {{apiUrl}}/Payment/{{transactionId}}/cancel
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+
+### Mark Transaction as Paid (Admin only)
+POST {{apiUrl}}/Payment/{{transactionId}}/mark-paid
+Authorization: Bearer YOUR_JWT_TOKEN_HERE
+Content-Type: application/json
+
+{
+  "note": "Payment received manually"
+}
