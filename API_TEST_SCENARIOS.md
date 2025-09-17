@@ -4207,3 +4207,421 @@ GET /api/payment/cancel?code=01&id=123456789&cancel=true&status=cancelled&orderC
 - **Transaction save failed**: 500 Internal Server Error
 - **Concurrent update conflict**: 409 Conflict
 - **Data integrity violation**: 500 Internal Server Error
+
+## 24. Student Status Management
+
+### 24.1 Create Student (Default Status)
+
+**Endpoint:** `POST /api/Student`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "firstName": "Nguyễn Văn",
+  "lastName": "A",
+  "parentEmail": "parent@example.com",
+  "parentPhoneNumber": "0123456789"
+}
+```
+  "firstName": "Nguyễn Văn",
+  "lastName": "A",
+  "parentEmail": "parent@example.com",
+  "parentPhoneNumber": "0123456789",
+  "isActive": true,
+  "status": 0,
+  "activatedAt": null,
+  "deactivatedAt": null,
+  "deactivationReason": null,
+  "createdAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### 24.2 Import Students from Excel (Default Status)
+
+**Endpoint:** `POST /api/Student/import`
+**Authorization:** Bearer Token (Admin only)
+**Content-Type:** multipart/form-data
+
+**Form Data:**
+- `file`: [Select Excel file - .xlsx format]
+  "success": true,
+  "data": {
+    "importedCount": 5,
+    "failedCount": 0,
+    "students": [
+      {
+        "id": "12345678-1234-1234-1234-123456789012",
+        "firstName": "Nguyễn Văn",
+        "lastName": "A",
+        "status": 0,
+        "isActive": true
+      }
+    ]
+  },
+  "error": null
+}
+```
+
+### 24.3 Get Students by Status
+
+**Endpoint:** `GET /api/Student/status/{status}`
+**Authorization:** Bearer Token (Admin only)
+
+**Status Values:**
+- `0` - Available
+- `1` - Pending  
+- `2` - Active
+- `3` - Inactive
+- `4` - Deleted
+
+**Example Request:**
+```bash
+GET /api/Student/status/0
+{
+  "success": true,
+  "data": [
+    {
+      "id": "12345678-1234-1234-1234-123456789012",
+      "firstName": "Nguyễn Văn",
+      "lastName": "A",
+      "parentEmail": "parent@example.com",
+      "status": 0,
+      "isActive": true,
+      "activatedAt": null,
+      "deactivatedAt": null,
+      "deactivationReason": null
+    }
+  ],
+  "error": null
+}
+```
+
+### 24.4 Activate Student
+
+**Endpoint:** `POST /api/Student/{id}/activate`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "12345678-1234-1234-1234-123456789012",
+    "firstName": "Nguyễn Văn",
+    "lastName": "A",
+    "status": 2,
+    "isActive": true,
+    "activatedAt": "2024-01-15T10:30:00Z",
+    "deactivatedAt": null,
+    "deactivationReason": null
+  },
+  "error": null
+}
+```
+
+### 24.5 Deactivate Student
+
+**Endpoint:** `POST /api/Student/{id}/deactivate`
+**Authorization:** Bearer Token (Admin only)
+  "reason": "Tạm ngưng dịch vụ theo yêu cầu phụ huynh"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "12345678-1234-1234-1234-123456789012",
+    "firstName": "Nguyễn Văn",
+    "lastName": "A",
+    "status": 3,
+    "isActive": false,
+    "activatedAt": "2024-01-15T10:30:00Z",
+    "deactivatedAt": "2024-01-16T14:20:00Z",
+    "deactivationReason": "Tạm ngưng dịch vụ theo yêu cầu phụ huynh"
+  },
+  "error": null
+}
+```
+
+### 24.6 Restore Student
+
+**Endpoint:** `POST /api/Student/{id}/restore`
+**Authorization:** Bearer Token (Admin only)
+
+**Expected Response:**
+
+  "data": {
+    "id": "12345678-1234-1234-1234-123456789012",
+    "firstName": "Nguyễn Văn",
+    "lastName": "A",
+    "status": 2,
+    "isActive": true,
+    "activatedAt": "2024-01-15T10:30:00Z",
+    "deactivatedAt": null,
+    "deactivationReason": null
+  },
+  "error": null
+}
+```
+
+### 24.7 Soft Delete Student
+
+**Endpoint:** `POST /api/Student/{id}/soft-delete`
+**Authorization:** Bearer Token (Admin only)
+
+**Request Body:**
+
+```json
+{
+  "reason": "Học sinh chuyển trường"
+}
+```
+
+**Expected Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "12345678-1234-1234-1234-123456789012",
+    "firstName": "Nguyễn Văn",
+    "lastName": "A",
+    "status": 4,
+    "isActive": false,
+    "activatedAt": "2024-01-15T10:30:00Z",
+    "deactivatedAt": "2024-01-16T14:20:00Z",
+    "deactivationReason": "Học sinh chuyển trường"
+  },
+  "error": null
+}
+```
+
+---
+
+## 25. Student Status Management Test Scenarios
+
+### 25.1 Complete Student Status Flow
+
+**Scenario:** Test complete student lifecycle from creation to deletion
+
+1. **Create new student**
+   - POST /api/Student
+   - Verify status = 0 (Available)
+   - Verify isActive = true
+
+2. **Parent submits pickup point request**
+   - POST /api/pickup-point/submit-request
+   - Verify student status changes to 1 (Pending)
+
+3. **Admin approves pickup point request**
+   - POST /api/pickup-point/requests/{id}/approve
+   - Verify student status changes to 2 (Active)
+   - Verify isActive = true
+   - Verify activatedAt is set
+
+4. **Admin deactivates student**
+   - POST /api/Student/{id}/deactivate
+   - Verify status changes to 3 (Inactive)
+   - Verify isActive = false
+   - Verify deactivatedAt and deactivationReason are set
+
+5. **Admin restores student**
+   - POST /api/Student/{id}/restore
+   - Verify status changes to 2 (Active)
+   - Verify isActive = true
+   - Verify deactivatedAt and deactivationReason are cleared
+
+6. **Admin soft deletes student**
+   - POST /api/Student/{id}/soft-delete
+   - Verify status changes to 4 (Deleted)
+   - Verify isActive = false
+
+### 25.2 Status Filtering and Display
+
+**Scenario:** Test status filtering in admin interface
+
+1. **Get all available students**
+   - GET /api/Student/status/0
+   - Verify only Available students returned
+
+2. **Get all pending students**
+   - GET /api/Student/status/1
+   - Verify only Pending students returned
+
+3. **Get all active students**
+   - GET /api/Student/status/2
+   - Verify only Active students returned
+
+4. **Get all inactive students**
+   - GET /api/Student/status/3
+   - Verify only Inactive students returned
+
+5. **Get all deleted students**
+   - GET /api/Student/status/4
+   - Verify only Deleted students returned
+
+### 25.3 Automatic Status Transitions
+
+**Scenario:** Test automatic status updates based on business events
+
+1. **Import students from Excel**
+   - POST /api/Student/import
+   - Verify all imported students have status = 0 (Available)
+
+2. **Parent submits pickup point request**
+   - POST /api/pickup-point/submit-request
+   - Verify student status automatically changes to 1 (Pending)
+
+3. **Admin approves pickup point request**
+   - POST /api/pickup-point/requests/{id}/approve
+   - Verify student status automatically changes to 2 (Active)
+   - Verify isActive = true
+   - Verify activatedAt is set
+
+### 25.4 Error Scenarios
+
+**Scenario:** Test error handling for invalid operations
+
+1. **Activate already active student**
+   - POST /api/Student/{id}/activate (student already Active)
+   - Verify appropriate error message
+
+2. **Deactivate already inactive student**
+   - POST /api/Student/{id}/deactivate (student already Inactive)
+   - Verify appropriate error message
+
+3. **Restore active student**
+   - POST /api/Student/{id}/restore (student already Active)
+   - Verify appropriate error message
+
+4. **Invalid status value**
+   - GET /api/Student/status/99
+   - Verify 400 Bad Request response
+
+5. **Non-existent student ID**
+   - POST /api/Student/00000000-0000-0000-0000-000000000000/activate
+   - Verify 404 Not Found response
+
+### 25.5 Status Validation Rules
+
+**Scenario:** Test business rules for status transitions
+
+1. **Cannot activate deleted student**
+   - Try to activate student with status = 4 (Deleted)
+   - Verify operation fails with appropriate message
+
+2. **Cannot deactivate deleted student**
+   - Try to deactivate student with status = 4 (Deleted)
+   - Verify operation fails with appropriate message
+
+3. **Can restore from Inactive or Deleted**
+   - Restore student from status = 3 (Inactive) → should work
+   - Restore student from status = 4 (Deleted) → should work
+
+4. **Required reason for deactivation**
+   - POST /api/Student/{id}/deactivate without reason
+   - Verify 400 Bad Request response
+
+5. **Required reason for soft delete**
+   - POST /api/Student/{id}/soft-delete without reason
+   - Verify 400 Bad Request response
+
+### 25.6 Integration with Pickup Point System
+
+**Scenario:** Test status updates during pickup point workflow
+
+1. **Student starts as Available**
+   - Create student → status = 0 (Available)
+
+2. **Parent submits request → status becomes Pending**
+   - Submit pickup point request → status = 1 (Pending)
+
+3. **Admin approves → status becomes Active**
+   - Approve request → status = 2 (Active)
+
+4. **Admin rejects → status remains Available**
+   - Reject request → status = 0 (Available)
+
+5. **Multiple students in same request**
+   - Submit request with multiple students
+   - Verify all students change to Pending
+   - Approve request → all students become Active
+
+### 25.7 Data Consistency Tests
+
+**Scenario:** Test data consistency between Status and IsActive fields
+
+1. **Active student has isActive = true**
+   - Verify student with status = 2 has isActive = true
+
+2. **Inactive student has isActive = false**
+   - Verify student with status = 3 has isActive = false
+
+3. **Deleted student has isActive = false**
+   - Verify student with status = 4 has isActive = false
+
+4. **Available student has isActive = true**
+   - Verify student with status = 0 has isActive = true
+
+5. **Pending student has isActive = true**
+   - Verify student with status = 1 has isActive = true
+
+### 25.8 Performance Tests
+
+**Scenario:** Test performance with large datasets
+
+1. **Import large number of students**
+   - Import 1000+ students from Excel
+   - Verify all have status = 0 (Available)
+   - Measure import time
+
+2. **Filter by status with large dataset**
+   - GET /api/Student/status/0 with 1000+ students
+   - Measure response time
+   - Verify pagination works correctly
+
+3. **Bulk status updates**
+   - Test multiple status changes in sequence
+   - Verify database performance
+   - Check for any locking issues
+
+### 25.9 Audit Trail Tests
+
+**Scenario:** Test audit trail for status changes
+
+1. **Track status change history**
+   - Verify createdAt, updatedAt timestamps
+   - Check activatedAt, deactivatedAt fields
+
+2. **Track who made changes**
+   - Verify admin ID is recorded for status changes
+   - Check audit logs for status transitions
+
+3. **Track reason for changes**
+   - Verify deactivationReason is stored
+   - Check reason is included in audit trail
+
+### 25.10 API Response Format Tests
+
+**Scenario:** Test API response consistency
+
+1. **Consistent response format**
+   - Verify all status endpoints return same format
+   - Check success/error response structure
+
+2. **Proper HTTP status codes**
+   - 200 OK for successful operations
+   - 400 Bad Request for validation errors
+   - 404 Not Found for non-existent resources
+   - 500 Internal Server Error for server errors
+
+3. **Error message clarity**
+   - Verify error messages are clear and actionable
+   - Check error messages are in appropriate language
+

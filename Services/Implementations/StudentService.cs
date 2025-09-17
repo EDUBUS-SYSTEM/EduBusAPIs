@@ -1,8 +1,10 @@
 ﻿using AutoMapper;
 using ClosedXML.Excel;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Data.Repos.SqlServer;
+using Microsoft.EntityFrameworkCore;
 using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.Student;
@@ -57,6 +59,7 @@ namespace Services.Implementations
             // Map request -> entity
             var student = _mapper.Map<Student>(request);
             student.IsActive = true;
+            student.Status = StudentStatus.Available;
 
             // Always keep ParentEmail on Student:
             // - If a ParentId is provided and request has a valid email, keep it.
@@ -302,6 +305,7 @@ namespace Services.Implementations
                     // Always keep ParentEmail on Student (requested behavior)
                     student.ParentEmail = dto.ParentEmail;
                     student.IsActive = true;
+                    student.Status = StudentStatus.Available;
 
                     var created = await _studentRepository.AddAsync(student);
 
@@ -369,6 +373,113 @@ namespace Services.Implementations
             using var stream = new System.IO.MemoryStream();
             workbook.SaveAs(stream);
             return stream.ToArray();
+        }
+
+        public async Task<StudentDto> ActivateStudentAsync(Guid id)
+        {
+            var student = await _studentRepository.FindAsync(id);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+
+            student.Status = StudentStatus.Active;
+            student.IsActive = true;
+            student.ActivatedAt = DateTime.UtcNow;
+            student.DeactivatedAt = null;
+            student.DeactivationReason = null;
+
+            await _studentRepository.UpdateAsync(student);
+            return _mapper.Map<StudentDto>(student);
+        }
+
+        public async Task<StudentDto> DeactivateStudentAsync(Guid id, string reason)
+        {
+            var student = await _studentRepository.FindAsync(id);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+
+            student.Status = StudentStatus.Inactive;
+            student.IsActive = false;
+            student.DeactivatedAt = DateTime.UtcNow;
+            student.DeactivationReason = reason;
+
+            await _studentRepository.UpdateAsync(student);
+            return _mapper.Map<StudentDto>(student);
+        }
+
+        public async Task<StudentDto> RestoreStudentAsync(Guid id)
+        {
+            var student = await _studentRepository.FindAsync(id);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+
+            if (student.Status == StudentStatus.Deleted)
+            {
+                student.Status = StudentStatus.Available;
+                student.IsActive = true;
+                student.DeactivatedAt = null;
+                student.DeactivationReason = null;
+            }
+            else if (student.Status == StudentStatus.Inactive)
+            {
+                student.Status = StudentStatus.Active;
+                student.IsActive = true;
+                student.DeactivatedAt = null;
+                student.DeactivationReason = null;
+            }
+
+            await _studentRepository.UpdateAsync(student);
+            return _mapper.Map<StudentDto>(student);
+        }
+
+        public async Task<StudentDto> SoftDeleteStudentAsync(Guid id, string reason)
+        {
+            var student = await _studentRepository.FindAsync(id);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+
+            student.Status = StudentStatus.Deleted;
+            student.IsActive = false;
+            student.DeactivatedAt = DateTime.UtcNow;
+            student.DeactivationReason = reason;
+
+            await _studentRepository.UpdateAsync(student);
+            return _mapper.Map<StudentDto>(student);
+        }
+
+        public async Task<IEnumerable<StudentDto>> GetStudentsByStatusAsync(Data.Models.Enums.StudentStatus status)
+        {
+            if (status == Data.Models.Enums.StudentStatus.Deleted)
+            {
+                var students = await _studentRepository.GetQueryable()
+                    .Where(s => s.Status == status)
+                    .ToListAsync();
+                return _mapper.Map<IEnumerable<StudentDto>>(students);
+            }
+            else
+            {
+                var students = await _studentRepository.FindByConditionAsync(s => s.Status == status && !s.IsDeleted);
+                return _mapper.Map<IEnumerable<StudentDto>>(students);
+            }
+        }
+
+        // TODO: Add payment status logic when payment service is ready
+        // This method will be called when payment is processed to auto-activate student
+        public async Task<StudentDto> ActivateStudentByPaymentAsync(Guid id)
+        {
+            var student = await _studentRepository.FindAsync(id);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+
+            // Auto-activate when payment is made
+            if (student.Status == StudentStatus.Available || student.Status == StudentStatus.Pending)
+            {
+                student.Status = StudentStatus.Active;
+                student.IsActive = true;
+                student.ActivatedAt = DateTime.UtcNow;
+                await _studentRepository.UpdateAsync(student);
+            }
+
+            return _mapper.Map<StudentDto>(student);
         }
     }
 }
