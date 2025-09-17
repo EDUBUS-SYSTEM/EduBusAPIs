@@ -166,25 +166,26 @@ public class PaymentService : IPaymentService
                 throw new InvalidOperationException("Transaction is not in Notyet status");
 
             // Always generate new QR code for PayOS integration
-            // PayOS handles QR code expiration internally
+            // Ensure numeric orderCode as PayOS requires
+            long orderCode;
+            if (!long.TryParse(transaction.TransactionCode, out orderCode))
+            {
+                orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                transaction.TransactionCode = orderCode.ToString();
+                transaction.UpdatedAt = DateTime.UtcNow;
+                await _transactionRepository.UpdateAsync(transaction);
+            }
 
             // Generate QR using PayOS
             var payOSRequest = new PayOSCreatePaymentRequest
             {
-                OrderCode = transaction.TransactionCode,
+                OrderCode = orderCode,
                 Amount = (int)transaction.Amount,
                 Description = transaction.Description,
                 ReturnUrl = _config.ReturnUrl ?? "https://edubus.app/payment/success",
                 CancelUrl = _config.CancelUrl ?? "https://edubus.app/payment/cancel",
-                Items = new[]
-                {
-                    new PayOSItem
-                    {
-                        Name = "Phí vận chuyển học sinh",
-                        Quantity = 1,
-                        Price = (int)transaction.Amount
-                    }
-                }
+                // Items optional; remove to satisfy PayOS validation for simple amount-only payments
+                Items = Array.Empty<PayOSItem>()
             };
 
             var payOSResponse = await _payOSService.CreatePaymentAsync(payOSRequest);
@@ -233,6 +234,8 @@ public class PaymentService : IPaymentService
             throw;
         }
     }
+
+    // Simple create-and-QR flow was removed per user's request. Keep existing flows only.
 
     public async Task<TransactionSummaryResponse> CancelTransactionAsync(Guid transactionId)
     {
@@ -350,6 +353,14 @@ public class PaymentService : IPaymentService
             if (transaction == null)
             {
                 _logger.LogWarning("Transaction not found for order code: {OrderCode}", payload.Data.OrderCode);
+                return false;
+            }
+
+            // Verify webhook signature first
+            var isValidSignature = await _payOSService.VerifyPayOSWebhookSignatureAsync(payload.Data, payload.Signature);
+            if (!isValidSignature)
+            {
+                _logger.LogWarning("Invalid webhook signature for order code: {OrderCode}", payload.Data.OrderCode);
                 return false;
             }
 

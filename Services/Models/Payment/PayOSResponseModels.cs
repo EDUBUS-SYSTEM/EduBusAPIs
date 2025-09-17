@@ -58,3 +58,5 @@ public class PayOSTransaction
     public string? CounterAccountName { get; set; }
     public string? CounterAccountNumber { get; set; }
 }
+
+// DTOs specific to payment responses are kept minimal and necessary only

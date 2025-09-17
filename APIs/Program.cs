@@ -266,6 +266,9 @@ else
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Serve static files from wwwroot
+app.UseStaticFiles();
+
 // Map SignalR Hub with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
 {

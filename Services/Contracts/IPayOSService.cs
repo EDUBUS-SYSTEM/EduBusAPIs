@@ -10,4 +10,8 @@ public interface IPayOSService
     Task<PayOSWebhookData> VerifyWebhookDataAsync(PayOSWebhookPayload webhookPayload);
     Task<string> CancelPaymentLinkAsync(long orderCode, string? cancellationReason = null);
     Task<string> ConfirmWebhookAsync(string webhookUrl);
+    
+    // New signature verification methods
+    Task<string> GenerateSignatureAsync(PayOSWebhookData data);
+    Task<bool> VerifyPayOSWebhookSignatureAsync(PayOSWebhookData data, string signature);
 }
