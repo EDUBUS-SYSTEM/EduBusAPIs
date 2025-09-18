@@ -1,0 +1,585 @@
+// 3. Service Implementation
+using Data.Models;
+using Data.Repos.Interfaces;
+using Services.Contracts;
+using Services.Models.Route;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Google.OrTools.ConstraintSolver;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Services.Implementations
+{
+    public class RouteSuggestionService : IRouteSuggestionService
+    {
+        private readonly IMongoRepository<Route> _routeRepository;
+        private readonly ISqlRepository<PickupPoint> _pickupPointRepository;
+        private readonly ISqlRepository<Student> _studentRepository;
+        private readonly ISqlRepository<Vehicle> _vehicleRepository;
+        private readonly VRPSettings _vrpSettings;
+        private readonly ILogger<RouteSuggestionService> _logger;
+
+        public RouteSuggestionService(
+            IMongoRepository<Route> routeRepository,
+            ISqlRepository<PickupPoint> pickupPointRepository,
+            ISqlRepository<Student> studentRepository,
+            ISqlRepository<Vehicle> vehicleRepository,
+            IOptions<VRPSettings> vrpSettings,
+            ILogger<RouteSuggestionService> logger)
+        {
+            _routeRepository = routeRepository;
+            _pickupPointRepository = pickupPointRepository;
+            _studentRepository = studentRepository;
+            _vehicleRepository = vehicleRepository;
+            _vrpSettings = vrpSettings.Value;
+            _logger = logger;
+        }
+
+        public async Task<RouteSuggestionResponse> GenerateRouteSuggestionsAsync(RouteSuggestionRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Generating route suggestions using OR-Tools VRP");
+
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+                // Get data for VRP
+                var vrpData = await PrepareVRPDataAsync(request);
+                if (!vrpData.IsValid)
+                {
+                    return new RouteSuggestionResponse
+                    {
+                        Success = false,
+                        Message = vrpData.ErrorMessage
+                    };
+                }
+
+                // Solve VRP using OR-Tools
+                var solution = await SolveVRPWithORToolsAsync(vrpData);
+
+                stopwatch.Stop();
+
+                // Convert solution to response
+                var response = ConvertSolutionToResponse(solution, vrpData);
+                response.GeneratedAt = DateTime.UtcNow;
+
+                _logger.LogInformation("OR-Tools VRP solved in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating route suggestions with OR-Tools");
+                return new RouteSuggestionResponse
+                {
+                    Success = false,
+                    Message = "An error occurred while generating route suggestions"
+                };
+            }
+        }
+
+        public async Task<RouteSuggestionResponse> OptimizeExistingRouteAsync(Guid routeId)
+        {
+            try
+            {
+                var route = await _routeRepository.FindAsync(routeId);
+                if (route == null)
+                {
+                    return new RouteSuggestionResponse
+                    {
+                        Success = false,
+                        Message = "Route not found"
+                    };
+                }
+
+                var request = new RouteSuggestionRequest
+                {
+                    ServiceDate = DateTime.Today
+                };
+
+                return await GenerateRouteSuggestionsAsync(request);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error optimizing existing route {RouteId}", routeId);
+                return new RouteSuggestionResponse
+                {
+                    Success = false,
+                    Message = "An error occurred while optimizing the route"
+                };
+            }
+        }
+
+        #region Private Helper Methods
+
+        private async Task<VRPData> PrepareVRPDataAsync(RouteSuggestionRequest request)
+        {
+            try
+            {
+                // Get all active students with pickup points
+                var students = await GetActiveStudentsWithPickupPointsAsync();
+                if (!students.Any())
+                {
+                    return new VRPData { IsValid = false, ErrorMessage = "No active students found" };
+                }
+
+                // Get all active pickup points
+                var pickupPoints = await GetAllActivePickupPointsAsync();
+                if (!pickupPoints.Any())
+                {
+                    return new VRPData { IsValid = false, ErrorMessage = "No pickup points found" };
+                }
+
+                // Get all available vehicles
+                var vehicles = await GetAllAvailableVehiclesAsync();
+                if (!vehicles.Any())
+                {
+                    return new VRPData { IsValid = false, ErrorMessage = "No available vehicles found" };
+                }
+
+                return new VRPData
+                {
+                    IsValid = true,
+                    Students = students,
+                    PickupPoints = pickupPoints,
+                    Vehicles = vehicles,
+                    SchoolLocation = new Location
+                    {
+                        Latitude = request.SchoolLatitude ?? 16.0544, // Da Nang coordinates
+                        Longitude = request.SchoolLongitude ?? 108.2022
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error preparing VRP data");
+                return new VRPData { IsValid = false, ErrorMessage = "Error preparing data" };
+            }
+        }
+
+        private async Task<VRPSolution> SolveVRPWithORToolsAsync(VRPData data)
+        {
+            try
+            {
+                int numVehicles = data.Vehicles.Count;
+                int depot = 0;
+                int numNodes = data.PickupPoints.Count + 1; // +1 for depot
+
+                // Create OR-Tools routing model
+                var manager = new RoutingIndexManager(numNodes, numVehicles, depot);
+                var routing = new RoutingModel(manager);
+
+                // Add distance callback (only distance, no time)
+                var distanceCallback = new DistanceCallback(data);
+                var transitCallbackIndex = routing.RegisterTransitCallback(distanceCallback.Call);
+
+                // Add demand callback for CVRP
+                var demandCallback = new DemandCallback(data);
+                var demandCallbackIndex = routing.RegisterUnaryTransitCallback(demandCallback.Call);
+
+                // Set arc cost evaluator (distance-based)
+                routing.SetArcCostEvaluatorOfAllVehicles(transitCallbackIndex);
+
+                // Add capacity constraints
+                var vehicleCapacities = data.Vehicles.Select(v => (long)v.Capacity).ToArray();
+                routing.AddDimensionWithVehicleCapacity(
+                    demandCallbackIndex,
+                    0, // null capacity slack
+                    vehicleCapacities,
+                    true, // start cumul to zero
+                    "Capacity"
+                );
+
+                // Add time windows if configured
+                if (_vrpSettings.UseTimeWindows)
+                {
+                    AddTimeWindowConstraints(routing, manager, data);
+                }
+
+                // Search parameters from configuration
+                var searchParameters = operations_research_constraint_solver.DefaultRoutingSearchParameters();
+                searchParameters.FirstSolutionStrategy = GetOptimizationStrategy(_vrpSettings.OptimizationType);
+                searchParameters.LocalSearchMetaheuristic = LocalSearchMetaheuristic.Types.Value.GuidedLocalSearch;
+                searchParameters.TimeLimit = new Google.Protobuf.WellKnownTypes.Duration
+                {
+                    Seconds = _vrpSettings.DefaultTimeLimitSeconds
+                };
+
+                // Solve
+                var assignment = routing.SolveWithParameters(searchParameters);
+
+                return new VRPSolution
+                {
+                    IsSuccess = assignment != null,
+                    Model = routing,
+                    Manager = manager,
+                    Assignment = assignment,
+                    Data = data
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error solving VRP with OR-Tools");
+                return new VRPSolution
+                {
+                    IsSuccess = false,
+                    Data = data
+                };
+            }
+        }
+
+        private void AddTimeWindowConstraints(RoutingModel routing, RoutingIndexManager manager, VRPData data)
+        {
+            // Create time callback for service time
+            var timeCallbackIndex = routing.RegisterTransitCallback((fromIndex, toIndex) => {
+                // Only add service time when arriving at pickup points (not depot)
+                var toNode = manager.IndexToNode(toIndex);
+                return toNode == 0 ? 0 : _vrpSettings.ServiceTimeSeconds;
+            });
+
+            // Add time dimension
+            routing.AddDimension(
+                timeCallbackIndex,
+                300, // 5 minutes slack
+                7200, // 2 hours max route duration
+                true, // start cumul to zero
+                "Time"
+            );
+
+            var timeDimension = routing.GetMutableDimension("Time");
+
+            // Set time windows for pickup points (6:30 AM - 7:45 AM)
+            for (int i = 1; i < data.PickupPoints.Count + 1; i++) // Skip depot (index 0)
+            {
+                var index = manager.NodeToIndex(i);
+                timeDimension.CumulVar(index).SetRange(
+                    TimeToSeconds(6, 30), // 6:30 AM
+                    TimeToSeconds(7, 45)  // 7:45 AM
+                );
+            }
+
+            // School arrival deadline (8:00 AM)
+            var schoolIndex = manager.NodeToIndex(0);
+            timeDimension.CumulVar(schoolIndex).SetMax(TimeToSeconds(8, 0));
+        }
+
+        private FirstSolutionStrategy.Types.Value GetOptimizationStrategy(string optimizationType)
+        {
+            return optimizationType.ToLower() switch
+            {
+                "distance" => FirstSolutionStrategy.Types.Value.PathCheapestArc,
+                "time" => FirstSolutionStrategy.Types.Value.PathMostConstrainedArc,
+                "cost" => FirstSolutionStrategy.Types.Value.Savings,
+                _ => FirstSolutionStrategy.Types.Value.PathCheapestArc
+            };
+        }
+
+        private RouteSuggestionResponse ConvertSolutionToResponse(VRPSolution solution, VRPData data)
+        {
+            var response = new RouteSuggestionResponse
+            {
+                Success = solution.IsSuccess,
+                Message = solution.IsSuccess ?
+                    "Route suggestions generated successfully using OR-Tools VRP" :
+                    "Failed to generate optimal routes",
+                GeneratedAt = DateTime.UtcNow
+            };
+
+            if (!solution.IsSuccess || solution.Assignment == null)
+            {
+                return response;
+            }
+
+            var routes = new List<RouteSuggestionDto>();
+
+            for (int vehicleIndex = 0; vehicleIndex < data.Vehicles.Count; vehicleIndex++)
+            {
+                var route = GetRouteForVehicle(solution, vehicleIndex);
+                if (route.Any(node => node != 0)) // Only if route has pickup points
+                {
+                    var routeSuggestion = CreateRouteSuggestion(route, vehicleIndex, data);
+                    routes.Add(routeSuggestion);
+                }
+            }
+
+            response.Routes = routes;
+            response.TotalRoutes = routes.Count;
+
+            return response;
+        }
+
+        private List<int> GetRouteForVehicle(VRPSolution solution, int vehicleIndex)
+        {
+            var route = new List<int>();
+
+            // Get starting index for this vehicle
+            long index = solution.Model.Start(vehicleIndex);
+
+            // Traverse the route
+            while (!solution.Model.IsEnd(index))
+            {
+                var nodeIndex = solution.Manager.IndexToNode(index);
+                route.Add((int)nodeIndex);
+
+                // Get next index
+                index = solution.Assignment.Value(solution.Model.NextVar(index));
+            }
+
+            return route;
+        }
+
+        private RouteSuggestionDto CreateRouteSuggestion(List<int> route, int vehicleIndex, VRPData data)
+        {
+            var routeSuggestion = new RouteSuggestionDto
+            {
+                Id = Guid.NewGuid(),
+                RouteName = $"Route {vehicleIndex + 1} (OR-Tools Optimized)",
+                GeneratedAt = DateTime.UtcNow
+            };
+
+            var pickupPoints = new List<PickupPointInfoDto>();
+            var totalStudents = 0;
+            var totalDistance = 0.0;
+            var currentTime = TimeSpan.FromHours(6.5); // Start at 6:30 AM
+
+            Location previousLocation = data.SchoolLocation;
+
+            for (int i = 0; i < route.Count; i++)
+            {
+                var nodeIndex = route[i];
+                if (nodeIndex == 0) continue; // Skip depot
+
+                var pickupPointIndex = nodeIndex - 1;
+                if (pickupPointIndex >= 0 && pickupPointIndex < data.PickupPoints.Count)
+                {
+                    var pickupPoint = data.PickupPoints[pickupPointIndex];
+                    var students = data.Students.Where(s => s.CurrentPickupPointId == pickupPoint.Id).ToList();
+
+                    // Get coordinates from NetTopologySuite Point
+                    var coordinates = GetCoordinatesFromPickupPoint(pickupPoint);
+                    var currentLocation = new Location { Latitude = coordinates.lat, Longitude = coordinates.lng };
+
+                    var pickupPointInfo = new PickupPointInfoDto
+                    {
+                        PickupPointId = pickupPoint.Id,
+                        Description = pickupPoint.Description,
+                        Address = pickupPoint.Location,
+                        Latitude = coordinates.lat,
+                        Longitude = coordinates.lng,
+                        SequenceOrder = pickupPoints.Count + 1,
+                        StudentCount = students.Count,
+                        ArrivalTime = currentTime,
+                        Students = students.Select(s => new StudentInfo
+                        {
+                            Id = s.Id,
+                            FirstName = s.FirstName,
+                            LastName = s.LastName,
+                            ParentEmail = s.ParentEmail
+                        }).ToList()
+                    };
+
+                    pickupPoints.Add(pickupPointInfo);
+                    totalStudents += students.Count;
+
+                    // Calculate distance from previous point
+                    totalDistance += CalculateHaversineDistance(previousLocation, currentLocation);
+
+                    // Update previous location
+                    previousLocation = currentLocation;
+
+                    // Add travel time + service time
+                    currentTime = currentTime.Add(TimeSpan.FromMinutes(10)); // Travel time
+                    currentTime = currentTime.Add(TimeSpan.FromSeconds(_vrpSettings.ServiceTimeSeconds)); // Service time
+                }
+            }
+
+            routeSuggestion.PickupPoints = pickupPoints;
+            routeSuggestion.TotalStudents = totalStudents;
+            routeSuggestion.TotalDistance = totalDistance;
+            routeSuggestion.TotalDuration = currentTime.Subtract(TimeSpan.FromHours(6.5));
+            routeSuggestion.EstimatedCost = CalculateEstimatedCost(totalDistance, totalStudents);
+
+            // Assign vehicle
+            if (vehicleIndex < data.Vehicles.Count)
+            {
+                var vehicle = data.Vehicles[vehicleIndex];
+                routeSuggestion.Vehicle = new VehicleInfo
+                {
+                    VehicleId = vehicle.Id,
+                    LicensePlate = "***", // Hashed in database
+                    Capacity = vehicle.Capacity,
+                    AssignedStudents = totalStudents,
+                    UtilizationPercentage = vehicle.Capacity > 0 ? (double)totalStudents / vehicle.Capacity * 100 : 0
+                };
+            }
+
+            return routeSuggestion;
+        }
+
+        // Helper methods for data retrieval
+        private async Task<List<Student>> GetActiveStudentsWithPickupPointsAsync()
+        {
+            return (await _studentRepository.FindByConditionAsync(
+                s => s.IsActive && s.CurrentPickupPointId.HasValue,
+                s => s.CurrentPickupPoint)).ToList();
+        }
+
+        private async Task<List<PickupPoint>> GetAllActivePickupPointsAsync()
+        {
+            return (await _pickupPointRepository.FindByConditionAsync(
+                pp => !pp.IsDeleted)).ToList();
+        }
+
+        private async Task<List<Vehicle>> GetAllAvailableVehiclesAsync()
+        {
+            return (await _vehicleRepository.FindByConditionAsync(v =>
+                v.Status == Data.Models.Enums.VehicleStatus.Active)).ToList();
+        }
+
+        private decimal CalculateEstimatedCost(double distance, int students)
+        {
+            return (decimal)(distance * 10000 + students * 5000); // VND
+        }
+
+        private (double lat, double lng) GetCoordinatesFromPickupPoint(PickupPoint pickupPoint)
+        {
+            return (pickupPoint.Geog.Y, pickupPoint.Geog.X);
+        }
+
+        private double CalculateHaversineDistance(Location from, Location to)
+        {
+            const double R = 6371; // Earth's radius in kilometers
+            var dLat = ToRadians(to.Latitude - from.Latitude);
+            var dLon = ToRadians(to.Longitude - from.Longitude);
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(ToRadians(from.Latitude)) * Math.Cos(ToRadians(to.Latitude)) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
+        }
+
+        private double ToRadians(double degrees)
+        {
+            return degrees * (Math.PI / 180);
+        }
+
+        private int TimeToSeconds(int hours, int minutes)
+        {
+            return hours * 3600 + minutes * 60;
+        }
+
+        #endregion
+    }
+
+    #region OR-Tools Helper Classes
+
+    public class VRPData
+    {
+        public bool IsValid { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
+        public List<Student> Students { get; set; } = new();
+        public List<PickupPoint> PickupPoints { get; set; } = new();
+        public List<Vehicle> Vehicles { get; set; } = new();
+        public Location SchoolLocation { get; set; } = new();
+    }
+
+    public class Location
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+    }
+
+    public class VRPSolution
+    {
+        public bool IsSuccess { get; set; }
+        public RoutingModel? Model { get; set; }
+        public RoutingIndexManager? Manager { get; set; }
+        public Assignment? Assignment { get; set; }
+        public VRPData? Data { get; set; }
+    }
+
+    public class DistanceCallback
+    {
+        private readonly VRPData _data;
+
+        public DistanceCallback(VRPData data)
+        {
+            _data = data;
+        }
+
+        public long Call(long fromIndex, long toIndex)
+        {
+            if (fromIndex == toIndex) return 0;
+
+            var fromLocation = GetLocationFromIndex(fromIndex);
+            var toLocation = GetLocationFromIndex(toIndex);
+
+            // Only distance, no time component
+            return (long)(CalculateHaversineDistance(fromLocation, toLocation) * 1000); // meters
+        }
+
+        private Location GetLocationFromIndex(long index)
+        {
+            if (index == 0) return _data.SchoolLocation; // Depot
+
+            var pickupPointIndex = (int)index - 1;
+            if (pickupPointIndex >= 0 && pickupPointIndex < _data.PickupPoints.Count)
+            {
+                var pickupPoint = _data.PickupPoints[pickupPointIndex];
+                return new Location
+                {
+                    Latitude = pickupPoint.Geog.Y,
+                    Longitude = pickupPoint.Geog.X
+                };
+            }
+
+            return _data.SchoolLocation;
+        }
+
+        private double CalculateHaversineDistance(Location from, Location to)
+        {
+            const double R = 6371; // Earth's radius in kilometers
+            var dLat = ToRadians(to.Latitude - from.Latitude);
+            var dLon = ToRadians(to.Longitude - from.Longitude);
+            var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                    Math.Cos(ToRadians(from.Latitude)) * Math.Cos(ToRadians(to.Latitude)) *
+                    Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+            var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+            return R * c;
+        }
+
+        private double ToRadians(double degrees)
+        {
+            return degrees * (Math.PI / 180);
+        }
+    }
+
+    public class DemandCallback
+    {
+        private readonly VRPData _data;
+
+        public DemandCallback(VRPData data)
+        {
+            _data = data;
+        }
+
+        public long Call(long fromIndex)
+        {
+            if (fromIndex == 0) return 0; // Depot has no demand
+
+            var pickupPointIndex = (int)fromIndex - 1;
+            if (pickupPointIndex >= 0 && pickupPointIndex < _data.PickupPoints.Count)
+            {
+                var pickupPoint = _data.PickupPoints[pickupPointIndex];
+                return _data.Students.Count(s => s.CurrentPickupPointId == pickupPoint.Id);
+            }
+
+            return 0;
+        }
+    }
+
+    #endregion
+}

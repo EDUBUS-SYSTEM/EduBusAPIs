@@ -1,27 +1,28 @@
+using APIs.Hubs;
 using Data.Contexts.MongoDB;
 using Data.Contexts.SqlServer;
+using Data.Models;
 using Data.Repos.Interfaces;
 using Data.Repos.MongoDB;
 using Data.Repos.SqlServer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
-using Utils;
-using MongoDB.Driver;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using MongoDB.Driver;
 using Services.Contracts;
 using Services.Implementations;
-using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Services.MapperProfiles;
-using APIs.Hubs;
-using Data.Models;
 using Services.Models.Configuration;
+using Services.Models.Route;
 using System.Security.Authentication;
+using System.Text;
+using Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -181,6 +182,8 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
+//Route Services
+builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
@@ -235,6 +238,10 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+// Configure VRP settings
+builder.Services.Configure<VRPSettings>(
+    builder.Configuration.GetSection("VRPSettings"));
 
 var app = builder.Build();
 
