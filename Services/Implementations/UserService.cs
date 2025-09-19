@@ -1,7 +1,6 @@
 ﻿using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.UserAccount;
-using Data.Models;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;

@@ -2,7 +2,6 @@
 using Data.Models.Enums;
 using Data.SeedConfiguration;
 using Microsoft.EntityFrameworkCore;
-using NetTopologySuite.Geometries;
 
 namespace Data.Contexts.SqlServer
 {
@@ -130,7 +129,6 @@ namespace Data.Contexts.SqlServer
 
                 entity.HasOne(d => d.Vehicle).WithMany(p => p.DriverVehicles).HasForeignKey(d => d.VehicleId);
 
-                // Relations to Admin for assignment/approval
                 entity.HasOne(d => d.AssignedByAdmin)
                       .WithMany(a => a.AssignedDriverVehicles)
                       .HasForeignKey(d => d.AssignedByAdminId)
@@ -152,7 +150,7 @@ namespace Data.Contexts.SqlServer
                       .HasPrecision(3);
 
                 entity.HasOne(d => d.Driver)
-                      .WithMany() // no collection on Driver
+                      .WithMany()
                       .HasForeignKey(d => d.DriverId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
@@ -176,7 +174,6 @@ namespace Data.Contexts.SqlServer
                       .HasForeignKey(e => e.ApprovedByAdminId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // Optional suggested replacements
                 entity.HasOne(e => e.SuggestedReplacementDriver)
                       .WithMany()
                       .HasForeignKey(e => e.SuggestedReplacementDriverId)
@@ -212,7 +209,6 @@ namespace Data.Contexts.SqlServer
                       .HasForeignKey(e => e.SuggestedVehicleId)
                       .OnDelete(DeleteBehavior.SetNull);
 
-                // Ignore Mongo Trip navigation on SQL side
                 entity.Ignore(e => e.Trip);
             });
 
@@ -505,7 +501,6 @@ namespace Data.Contexts.SqlServer
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // Apply Seed Configurations
             modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverSeedConfiguration());
             modelBuilder.ApplyConfiguration(new ParentSeedConfiguration());

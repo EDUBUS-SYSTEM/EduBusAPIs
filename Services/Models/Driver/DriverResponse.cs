@@ -1,5 +1,4 @@
 using Data.Models.Enums;
-using System;
 
 namespace Services.Models.Driver
 {

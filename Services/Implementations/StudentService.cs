@@ -3,17 +3,9 @@ using ClosedXML.Excel;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
-using Data.Repos.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using Services.Contracts;
-using Services.Models.Parent;
 using Services.Models.Student;
-using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.Implementations

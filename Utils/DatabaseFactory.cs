@@ -1,14 +1,9 @@
+using Data.Models.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Utils
 {
-    public enum DatabaseType
-    {
-        SqlServer,
-        MongoDb
-    }
-
     public interface IDatabaseFactory
     {
         T GetRepository<T>() where T : class;

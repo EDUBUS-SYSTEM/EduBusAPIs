@@ -1,5 +1,4 @@
 ﻿using Services.Models.DriverVehicle;
-using Data.Models.Enums;
 using Services.Models.Driver;
 
 namespace Services.Contracts

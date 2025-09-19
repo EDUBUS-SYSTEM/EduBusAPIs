@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Utils
+﻿namespace Utils
 {
     public static class EmailHelper
     {
@@ -18,7 +12,6 @@ namespace Utils
             try
             {
                 var addr = new System.Net.Mail.MailAddress(email);
-                // So sánh không phân biệt hoa thường
                 return string.Equals(addr.Address, email, StringComparison.OrdinalIgnoreCase);
             }
             catch

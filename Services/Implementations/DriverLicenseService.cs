@@ -4,7 +4,6 @@ using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
 using Utils;
-using System.Linq;
 
 namespace Services.Implementations
 {

@@ -1,5 +1,4 @@
-﻿using Data.Models;
-using Data.Repos.Interfaces;
+﻿using Data.Repos.Interfaces;
 using MongoDB.Driver;
 
 namespace Data.Repos.MongoDB

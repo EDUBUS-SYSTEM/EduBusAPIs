@@ -22,8 +22,6 @@ public class DriverLeaveRequest : BaseDomain
     public Guid? SuggestedReplacementDriverId { get; set; }
     public Guid? SuggestedReplacementVehicleId { get; set; }
     public DateTime? SuggestionGeneratedAt { get; set; }
-    
-    // Navigation properties
     public virtual Driver Driver { get; set; } = null!;
     public virtual Admin? ApprovedByAdmin { get; set; }
     public virtual Driver? SuggestedReplacementDriver { get; set; }

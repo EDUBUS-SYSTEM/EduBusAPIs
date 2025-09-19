@@ -11,8 +11,6 @@ public class DriverLeaveConflict : BaseDomain
     public string RouteName { get; set; } = string.Empty;
     public int AffectedStudents { get; set; }
     public ConflictSeverity Severity { get; set; }
-    
-    // Replacement suggestion
     public Guid? SuggestedDriverId { get; set; }
     public Guid? SuggestedVehicleId { get; set; }
     public double ReplacementScore { get; set; } // 0-100

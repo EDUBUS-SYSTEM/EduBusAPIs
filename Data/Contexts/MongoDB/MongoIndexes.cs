@@ -163,6 +163,5 @@ namespace Data.Contexts.MongoDB
                 .Descending(x => x.CreatedAt);
             await col.Indexes.CreateOneAsync(new CreateIndexModel<PickupPointRequestDocument>(statusIdx));
         }
-
     }
 }

@@ -1,5 +1,3 @@
-using System;
-
 namespace Services.Models.Driver
 {
     public class DriverLicenseResponse
