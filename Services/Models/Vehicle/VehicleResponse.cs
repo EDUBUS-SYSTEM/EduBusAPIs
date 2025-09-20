@@ -11,5 +11,6 @@ namespace Services.Models.Vehicle
         public bool Success { get; set; }
         public VehicleDto? Data { get; set; }
         public object? Error { get; set; }
+        public string? Message { get; set; }
     }
 }

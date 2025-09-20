@@ -7,6 +7,7 @@ namespace Services.Contracts
     public interface IDriverVehicleService
     {
         Task<VehicleDriversResponse?> GetDriversByVehicleAsync(Guid vehicleId, bool? isActive);
+        Task<IEnumerable<DriverInfoDto>> GetDriversNotAssignedToVehicleAsync(Guid vehicleId, DateTime start, DateTime end);
         Task<DriverAssignmentResponse?> AssignDriverAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId);
         
         Task<DriverAssignmentResponse?> AssignDriverWithValidationAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId);
@@ -19,5 +20,11 @@ namespace Services.Contracts
         
         Task<DriverAssignmentResponse?> ApproveAssignmentAsync(Guid assignmentId, Guid adminId, string? note);
         Task<DriverAssignmentResponse?> RejectAssignmentAsync(Guid assignmentId, Guid adminId, string reason);
+        
+        // New methods for advanced filtering and management
+        Task<AssignmentListResponse> GetAssignmentsWithFiltersAsync(AssignmentListRequest request);
+        Task<DriverAssignmentSummaryResponse> GetDriverAssignmentSummaryAsync(Guid driverId);
+        Task<AssignmentListResponse> GetDriverAssignmentsAsync(Guid driverId, bool? isActive = null, DateTime? startDate = null, DateTime? endDate = null, int page = 1, int perPage = 20);
+        Task<DriverAssignmentResponse?> UpdateAssignmentStatusAsync(Guid assignmentId, DriverVehicleStatus status, Guid adminId, string? note = null);
     }
 }
