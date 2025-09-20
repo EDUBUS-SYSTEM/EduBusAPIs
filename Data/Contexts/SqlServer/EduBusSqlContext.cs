@@ -285,7 +285,6 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.ParentEmail)
                      .HasMaxLength(320)
                      .IsRequired();
-                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.LastName).HasMaxLength(200);
                 entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
