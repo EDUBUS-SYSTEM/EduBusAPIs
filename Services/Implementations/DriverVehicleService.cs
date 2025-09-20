@@ -5,6 +5,7 @@ using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
+using Services.Models.UserAccount;
 using Utils;
 
 namespace Services.Implementations
@@ -110,7 +111,8 @@ namespace Services.Implementations
             var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
             if (assignment == null || assignment.IsDeleted) return null;
             if (dto.IsPrimaryDriver.HasValue) assignment.IsPrimaryDriver = dto.IsPrimaryDriver.Value;
-            if (dto.StartTimeUtc.HasValue) assignment.StartTimeUtc = dto.StartTimeUtc.Value;
+            if (dto.StartTimeUtc.HasValue && dto.EndTimeUtc.HasValue && dto.EndTimeUtc <= dto.StartTimeUtc)
+                throw new InvalidOperationException("End time cannot be earlier than start time.");
             if (dto.EndTimeUtc.HasValue) assignment.EndTimeUtc = dto.EndTimeUtc.Value;
             if (!string.IsNullOrWhiteSpace(dto.AssignmentReason)) assignment.AssignmentReason = dto.AssignmentReason;
             assignment.UpdatedAt = DateTime.UtcNow;
@@ -125,8 +127,24 @@ namespace Services.Implementations
             assignment.Status = DriverVehicleStatus.Cancelled;
             assignment.EndTimeUtc = assignment.EndTimeUtc ?? DateTime.UtcNow;
             assignment.ApprovalNote = reason;
+            assignment.ApprovedByAdminId = adminId;         
+            assignment.ApprovedAt = DateTime.UtcNow;       
+            assignment.UpdatedAt = DateTime.UtcNow;         
             var updated = await _driverVehicleRepo.UpdateAsync(assignment);
             return new DriverAssignmentResponse { Success = true, Data = MapToDriverAssignmentDto(updated!) };
+        }
+        public async Task<BasicSuccessResponse?> DeleteAssignmentAsync(Guid assignmentId, Guid adminId)
+        {
+            var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
+            if (assignment == null || assignment.IsDeleted) return null;
+
+            await _driverVehicleRepo.DeleteAsync(assignment);
+
+            return new BasicSuccessResponse
+            {
+                Success = true,
+                Data = new { Message = "Assignment deleted (soft)" }
+            };
         }
 
         public async Task<IEnumerable<AssignmentConflictDto>> DetectAssignmentConflictsAsync(Guid vehicleId, DateTime startTime, DateTime endTime)

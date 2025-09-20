@@ -100,7 +100,7 @@ namespace Data.Repos.SqlServer
         public async Task<bool> HasTimeConflictAsync(Guid driverId, DateTime startTime, DateTime? endTime)
         {
             var query = _context.DriverVehicles
-                .Where(dv => dv.DriverId == driverId && !dv.IsDeleted);
+            .Where(dv => dv.DriverId == driverId && !dv.IsDeleted && dv.Status != DriverVehicleStatus.Cancelled);
 
             // overlap: existing.Start < newEnd && newStart < existing.End (null end = infinite)
             var newEndVal = endTime ?? DateTime.MaxValue;
@@ -110,7 +110,8 @@ namespace Data.Repos.SqlServer
         public async Task<bool> HasVehicleTimeConflictAsync(Guid vehicleId, DateTime startTime, DateTime? endTime)
         {
             var query = _context.DriverVehicles
-                .Where(dv => dv.VehicleId == vehicleId && !dv.IsDeleted);
+            .Where(dv => dv.VehicleId == vehicleId && !dv.IsDeleted && dv.Status != DriverVehicleStatus.Cancelled);
+
             var newEndVal = endTime ?? DateTime.MaxValue;
             return await query.AnyAsync(dv => dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue));
         }

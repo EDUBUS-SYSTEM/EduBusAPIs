@@ -1,6 +1,7 @@
 ﻿using Services.Models.DriverVehicle;
 using Data.Models.Enums;
 using Services.Models.Driver;
+using Services.Models.UserAccount;
 
 namespace Services.Contracts
 {
@@ -13,7 +14,9 @@ namespace Services.Contracts
         Task<DriverAssignmentResponse?> AssignDriverWithValidationAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId);
         Task<DriverAssignmentResponse?> UpdateAssignmentAsync(Guid assignmentId, UpdateAssignmentRequest dto, Guid adminId);
         Task<DriverAssignmentResponse?> CancelAssignmentAsync(Guid assignmentId, string reason, Guid adminId);
-        
+        Task<BasicSuccessResponse?> DeleteAssignmentAsync(Guid assignmentId, Guid adminId);
+
+
         Task<IEnumerable<AssignmentConflictDto>> DetectAssignmentConflictsAsync(Guid vehicleId, DateTime startTime, DateTime endTime);
         Task<ReplacementSuggestionResponse> SuggestReplacementAsync(Guid assignmentId, Guid adminId);
         Task<bool> AcceptReplacementSuggestionAsync(Guid assignmentId, Guid suggestionId, Guid adminId);

@@ -7,6 +7,7 @@ using Data.Models.Enums;
 using Constants;
 using System.Security.Claims;
 using Utils;
+using Services.Models.UserAccount;
 
 namespace APIs.Controllers
 {
@@ -241,26 +242,19 @@ namespace APIs.Controllers
         /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpDelete("assignments/{assignmentId}")]
-        public async Task<ActionResult<DriverAssignmentResponse>> CancelAssignment(Guid assignmentId, [FromQuery] string reason)
+        public async Task<ActionResult<BasicSuccessResponse>> DeleteAssignment(Guid assignmentId)
         {
             var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
             if (adminIdClaim == null)
                 return Unauthorized(new { success = false, error = "ADMIN_ID_NOT_FOUND" });
 
-            Guid adminId = Guid.Parse(adminIdClaim.Value);
+            var adminId = Guid.Parse(adminIdClaim.Value);
 
-            try
-            {
-                var result = await _driverVehicleService.CancelAssignmentAsync(assignmentId, reason, adminId);
-                if (result == null)
-                    return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
+            var result = await _driverVehicleService.DeleteAssignmentAsync(assignmentId, adminId);
+            if (result == null)
+                return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
 
-                return Ok(result);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { success = false, error = ex.Message });
-            }
+            return Ok(result);
         }
 
         /// <summary>
