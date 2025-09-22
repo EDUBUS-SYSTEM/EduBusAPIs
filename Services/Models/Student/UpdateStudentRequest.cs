@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Data.Models.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace Services.Models.Student
 {
@@ -13,8 +14,6 @@ namespace Services.Models.Student
         [Required(ErrorMessage = "Last name is required.")]
         [StringLength(50)]
         public string LastName { get; set; } = null!;
-
-        public bool IsActive { get; set; } = true;
 
         [StringLength(256)]
         [EmailAddress(ErrorMessage = "Invalid email format.")]
