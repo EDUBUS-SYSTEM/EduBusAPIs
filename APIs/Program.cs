@@ -121,8 +121,7 @@ if (!string.IsNullOrEmpty(sqlConnectionString) && sqlConnectionString.Contains("
     sqlConnectionString = connectionStringBuilder.ConnectionString;
 }
 
-// Add connection pooling configuration
-builder.Services.AddDbContextPool<EduBusSqlContext>(options =>
+builder.Services.AddDbContext<EduBusSqlContext>(options =>
     options.UseSqlServer(
         sqlConnectionString,
         sqlOptions =>
@@ -135,8 +134,7 @@ builder.Services.AddDbContextPool<EduBusSqlContext>(options =>
             );
             sqlOptions.CommandTimeout(30);
         }
-    ),
-    poolSize: 10
+    )
 );
 
 // --- MongoDB Configuration ---
