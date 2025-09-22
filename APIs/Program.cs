@@ -21,7 +21,7 @@ using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
 using Services.Models.Configuration;
-using System.Security.Authentication;
+using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -107,19 +107,36 @@ builder.Services.AddScoped<IDatabaseFactory, DatabaseFactory>();
 
 // --- SQL Server Configuration ---
 var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
-builder.Services.AddDbContext<EduBusSqlContext>(options =>
+
+if (!string.IsNullOrEmpty(sqlConnectionString) && sqlConnectionString.Contains("database.windows.net"))
+{
+    // Add connection pooling parameters for Azure SQL Database
+    var connectionStringBuilder = new SqlConnectionStringBuilder(sqlConnectionString)
+    {
+        MaxPoolSize = 10,
+        MinPoolSize = 1,
+        Pooling = true,
+        MultipleActiveResultSets = false
+    };
+    sqlConnectionString = connectionStringBuilder.ConnectionString;
+}
+
+// Add connection pooling configuration
+builder.Services.AddDbContextPool<EduBusSqlContext>(options =>
     options.UseSqlServer(
         sqlConnectionString,
         sqlOptions =>
         {
             sqlOptions.UseNetTopologySuite();
             sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
                 errorNumbersToAdd: null
             );
+            sqlOptions.CommandTimeout(30);
         }
-    )
+    ),
+    poolSize: 10
 );
 
 // --- MongoDB Configuration ---
