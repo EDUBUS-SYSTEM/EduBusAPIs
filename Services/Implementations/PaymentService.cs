@@ -315,6 +315,7 @@ public class PaymentService : IPaymentService
                 item.UpdatedAt = DateTime.UtcNow;
                 await _transportFeeItemRepository.UpdateAsync(item);
             }
+            await ActivateStudentsForTransactionAsync(transactionId, PaymentEventSource.manual);
 
             // Log event
             var message = $"Transaction marked as paid manually. Note: {request.Note}";
@@ -388,6 +389,7 @@ public class PaymentService : IPaymentService
                     item.UpdatedAt = DateTime.UtcNow;
                     await _transportFeeItemRepository.UpdateAsync(item);
                 }
+                await ActivateStudentsForTransactionAsync(transaction.Id, PaymentEventSource.webhook);
             }
             else
             {
@@ -544,5 +546,26 @@ public class PaymentService : IPaymentService
             _logger.LogError(ex, "Error logging payment event for transaction: {TransactionId}", transactionId);
             // Don't throw here to avoid breaking the main flow
         }
+    }
+    private async Task ActivateStudentsForTransactionAsync(Guid transactionId, PaymentEventSource source)
+    {
+        var items = await _transportFeeItemRepository.FindByConditionAsync(tfi => tfi.TransactionId == transactionId);
+        var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
+        if (!studentIds.Any()) return;
+
+        var students = await _studentRepository.GetQueryable()
+            .Where(s => studentIds.Contains(s.Id) && !s.IsDeleted)
+            .ToListAsync();
+
+        foreach (var s in students)
+        {
+            if (s.Status == StudentStatus.Available || s.Status == StudentStatus.Pending)
+            {
+                s.Status = StudentStatus.Active;
+                await _studentRepository.UpdateAsync(s);
+            }
+        }
+
+        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated after payment");
     }
 }
