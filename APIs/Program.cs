@@ -134,7 +134,8 @@ builder.Services.AddDbContext<EduBusSqlContext>(options =>
             );
             sqlOptions.CommandTimeout(30);
         }
-    )
+    ),
+    poolSize: 10
 );
 
 // --- MongoDB Configuration ---
