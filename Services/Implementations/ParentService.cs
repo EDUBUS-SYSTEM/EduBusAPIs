@@ -153,7 +153,6 @@ namespace Services.Implementations
 
             result.TotalProcessed = rows.Count();
 
-            // Insert từng parent
             foreach (var (parentDto, rowNumber) in validParentDtos)
             {
                 try

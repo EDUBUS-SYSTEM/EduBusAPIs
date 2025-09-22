@@ -410,8 +410,8 @@ namespace Data.Contexts.SqlServer
             modelBuilder.Entity<UnitPrice>(entity =>
             {
                 entity.HasIndex(e => e.AdminId, "IX_UnitPrices_AdminId");
-
                 entity.HasIndex(e => e.StartTimeUtc, "IX_UnitPrices_ValidFrom");
+                entity.HasIndex(e => new { e.AcademicYear, e.SemesterCode, e.ScheduleType }, "IX_UnitPrices_AcademicPeriod");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.CreatedAt)
@@ -421,9 +421,11 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.EndTimeUtc).HasPrecision(3);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.ScheduleType).HasMaxLength(50);
+                entity.Property(e => e.AcademicYear).HasMaxLength(20);
+                entity.Property(e => e.SemesterCode).HasMaxLength(20);
+                entity.Property(e => e.PricePerKm).HasColumnType("decimal(19, 0)");
                 entity.Property(e => e.StartTimeUtc).HasPrecision(3);
-                entity.Property(e => e.UpdatedAt)
-                    .HasPrecision(3);
+                entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
                 entity.HasOne(d => d.Admin).WithMany(p => p.UnitPrices)
                     .HasForeignKey(d => d.AdminId)

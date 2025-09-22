@@ -21,10 +21,12 @@ namespace Services.Implementations
         private readonly IStudentPickupPointHistoryRepository _historyRepo;
         private readonly IPickupPointRequestRepository _requestRepo;
         private readonly IParentRegistrationRepository _parentRegistrationRepo;
+        private readonly IParentRepository _parentRepo;
         private readonly IEmailService _email;
         private readonly DbContext _sqlDb;
         private readonly IOtpStore _otpStore;
         private readonly IParentService _parentService;
+        private readonly ITransactionService _transactionService;
 
         private const string Purpose = "PickupPointRequest";
         private const decimal MaxEstimatedPrice = 50_000_000m; // sanity cap
@@ -35,20 +37,24 @@ namespace Services.Implementations
             IStudentPickupPointHistoryRepository historyRepo,
             IPickupPointRequestRepository requestRepo,
             IParentRegistrationRepository parentRegistrationRepo,
+            IParentRepository parentRepo,
             IEmailService email,
             DbContext sqlDb,
             IOtpStore otpStore,
-            IParentService parentService)
+            IParentService parentService,
+            ITransactionService transactionService)
         {
             _studentRepo = studentRepo;
             _pickupPointRepo = pickupPointRepo;
             _historyRepo = historyRepo;
             _requestRepo = requestRepo;
             _parentRegistrationRepo = parentRegistrationRepo;
+            _parentRepo = parentRepo;
             _email = email;
             _sqlDb = sqlDb;
             _otpStore = otpStore;
             _parentService = parentService;
+            _transactionService = transactionService;
         }
 
         public async Task<ParentRegistrationResponseDto> RegisterParentAsync(ParentRegistrationRequestDto dto)
@@ -467,7 +473,106 @@ namespace Services.Implementations
             req.ReviewedByAdminId = adminId;
             req.AdminNotes = notes ?? "";
             await _requestRepo.UpdateAsync(req);
+
+            // Create transaction for approved pickup point request
+            await CreateTransactionForApprovedRequestAsync(req, adminId);
         }
+
+        private async Task CreateTransactionForApprovedRequestAsync(PickupPointRequestDocument req, Guid adminId)
+        {
+            try
+            {
+                Console.WriteLine($"Creating transaction for request {req.Id}, ParentEmail: {req.ParentEmail}");
+                
+                // Get parent ID from email
+                var parents = await _parentRepo.FindByConditionAsync(p => p.Email == req.ParentEmail);
+                var parent = parents.FirstOrDefault();
+                if (parent == null) 
+                {
+                    Console.WriteLine($"⚠️ Parent not found for email: {req.ParentEmail} - Creating new parent...");
+                    
+                    // Create parent if not exists
+                    parent = new Data.Models.Parent
+                    {
+                        Id = Guid.NewGuid(),
+                        Email = req.ParentEmail,
+                        FirstName = "Parent",
+                        LastName = "User",
+                        PhoneNumber = "0000000000",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    await _parentRepo.AddAsync(parent);
+                    Console.WriteLine($"✅ Created new parent: {parent.Id} for email: {req.ParentEmail}");
+                }
+                
+                Console.WriteLine($"Found parent: {parent.Id}, Students count: {req.StudentIds.Count}");
+
+                // Create transaction for each student
+                int createdCount = 0;
+                foreach (var studentId in req.StudentIds)
+                {
+                    var student = await _studentRepo.FindAsync(studentId);
+                    if (student == null) 
+                    {
+                        Console.WriteLine($"⚠️ Student not found: {studentId} - Skipping transaction creation");
+                        continue;
+                    }
+                    
+                    Console.WriteLine($"✅ Creating transaction for student: {student.FirstName} {student.LastName}, Amount: {req.EstimatedPriceVnd}");
+
+                    var transactionRequest = new Services.Models.Transaction.CreateTransactionRequestDto
+                    {
+                        ParentId = parent.Id,
+                        Amount = req.EstimatedPriceVnd, // Use estimated price from request
+                        Description = $"Pickup point service for {student.FirstName} {student.LastName} - {req.AddressText}",
+                        PickupPointRequestId = req.Id.ToString(),
+                        Metadata = System.Text.Json.JsonSerializer.Serialize(new
+                        {
+                            DistanceKm = req.DistanceKm,
+                            Address = req.AddressText,
+                            Latitude = req.Latitude,
+                            Longitude = req.Longitude,
+                            StudentId = studentId,
+                            StudentName = $"{student.FirstName} {student.LastName}"
+                        })
+                    };
+
+                    // Add transport fee item
+                    transactionRequest.TransportFeeItems.Add(new Services.Models.Transaction.CreateTransportFeeItemRequestDto
+                    {
+                        StudentId = studentId,
+                        Description = $"Transport fee for {student.FirstName} {student.LastName}",
+                        DistanceKm = req.DistanceKm,
+                        UnitPriceVndPerKm = req.UnitPriceVndPerKm,
+                        QuantityKm = req.DistanceKm, // Simple calculation
+                        Subtotal = req.EstimatedPriceVnd,
+                        PeriodMonth = DateTime.UtcNow.Month,
+                        PeriodYear = DateTime.UtcNow.Year
+                    });
+
+                    try
+                    {
+                        var result = await _transactionService.CreateTransactionAsync(transactionRequest);
+                        Console.WriteLine($"✅ Transaction created successfully: {result.Id}");
+                        createdCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ Failed to create transaction for student {studentId}: {ex.Message}");
+                    }
+                }
+                
+                Console.WriteLine($"📊 Summary: Created {createdCount} transactions out of {req.StudentIds.Count} students for request {req.Id}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating transaction for approved request: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            }
+        }
+
         public async Task RejectRequestAsync(Guid requestId, Guid adminId, string reason)
         {
             var req = await _requestRepo.FindAsync(requestId)

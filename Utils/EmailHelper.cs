@@ -18,7 +18,6 @@ namespace Utils
             try
             {
                 var addr = new System.Net.Mail.MailAddress(email);
-                // So sánh không phân biệt hoa thường
                 return string.Equals(addr.Address, email, StringComparison.OrdinalIgnoreCase);
             }
             catch

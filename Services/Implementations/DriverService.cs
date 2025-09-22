@@ -228,7 +228,6 @@ namespace Services.Implementations
                         var hashedPassword = SecurityHelper.HashPassword(rawPassword);
                         driver.HashedPassword = hashedPassword;
                         // Note: License number will be handled separately through DriverLicense entity
-                        // Thêm vào database
                         var createdDriver = await _driverRepository.AddAsync(driver);
 
                         var successResult = _mapper.Map<ImportUserSuccess>(createdDriver);

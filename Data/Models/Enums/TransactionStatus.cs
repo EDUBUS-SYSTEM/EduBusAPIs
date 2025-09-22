@@ -3,10 +3,13 @@ namespace Data.Models.Enums;
 public enum TransactionStatus
 {
     Notyet = 0,
-    Paid = 1,
-    Failed = 2,
-    Cancelled = 3,
-    Expired = 4
+    Pending = 1,
+    Paid = 2,
+    Failed = 3,
+    Cancelled = 4,
+    Expired = 5,
+    Approved = 6,
+    Rejected = 7
 }
 
 

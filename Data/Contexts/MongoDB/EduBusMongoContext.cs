@@ -13,7 +13,7 @@ namespace Data.Contexts.MongoDB
         {
             _configuration = configuration;
             var connectionString = configuration.GetConnectionString("MongoDb");
-            var databaseName = configuration["MongoDb:DatabaseName"] ?? "EduBusDB";
+            var databaseName = configuration["MongoDb:DatabaseName"] ?? "edubus";
             
             if (string.IsNullOrEmpty(connectionString))
             {
