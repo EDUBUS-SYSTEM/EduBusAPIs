@@ -52,7 +52,7 @@ namespace Services.Backgrounds
                 var leaveRepo = serviceProvider.GetRequiredService<IDriverLeaveRepository>();
 
                 // Get all pending leave requests that need replacement suggestions
-                // Limit to 10 requests per batch to prevent connection overload
+                // Limit to 5 requests per batch to prevent connection overload
                 var pendingLeaves = await leaveRepo.FindByConditionAsync(
                     l => l.Status == LeaveStatus.Pending && 
                          l.AutoReplacementEnabled && 
@@ -62,7 +62,7 @@ namespace Services.Backgrounds
                 );
                 
                 // Limit batch size to prevent connection pool exhaustion
-                var limitedLeaves = pendingLeaves.Take(10).ToList();
+                var limitedLeaves = pendingLeaves.Take(3).ToList();
 
                 var processedCount = 0;
                 var suggestionCount = 0;
@@ -151,8 +151,8 @@ namespace Services.Backgrounds
 
                         processedCount++;
                         
-                        // Add small delay between operations to prevent connection overload
-                        await Task.Delay(1000, CancellationToken.None);
+                        // Add delay between operations to prevent connection overload
+                        await Task.Delay(3000, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {

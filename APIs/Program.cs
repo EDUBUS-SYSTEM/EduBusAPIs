@@ -113,10 +113,11 @@ builder.Services.AddDbContext<EduBusSqlContext>(options =>
         {
             sqlOptions.UseNetTopologySuite();
             sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
                 errorNumbersToAdd: null
             );
+            sqlOptions.CommandTimeout(30);
         }
     )
 );
@@ -242,6 +243,16 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+else
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EduBus APIs v1");
+        c.RoutePrefix = "swagger";
+        c.DocumentTitle = "EduBus APIs - Production";
+    });
 }
 
 if (!app.Environment.IsDevelopment())
