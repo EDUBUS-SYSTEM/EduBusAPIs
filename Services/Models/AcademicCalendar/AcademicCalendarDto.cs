@@ -54,6 +54,7 @@ namespace Services.Models.AcademicCalendar
 
     public class AcademicCalendarUpdateDto
     {
+        public Guid Id { get; set; }
         public string AcademicYear { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public DateTime StartDate { get; set; }

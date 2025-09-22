@@ -119,7 +119,9 @@ namespace Services.MapperProfiles
 			CreateMap<CreateTripDto, Trip>();
 			CreateMap<UpdateTripDto, Trip>();
 			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();
+			CreateMap<ScheduleSnapshotDto, ScheduleSnapshot>();
 			CreateMap<TripStop, TripStopDto>();
+			CreateMap<TripStopDto, TripStop>();
 
 			// RouteSchedule mappings
 			CreateMap<RouteSchedule, RouteScheduleDto>();
@@ -131,8 +133,11 @@ namespace Services.MapperProfiles
 			CreateMap<AcademicCalendarCreateDto, AcademicCalendar>();
 			CreateMap<AcademicCalendarUpdateDto, AcademicCalendar>();
 			CreateMap<AcademicSemester, AcademicSemesterDto>();
+			CreateMap<AcademicSemesterDto, AcademicSemester>();
 			CreateMap<SchoolHoliday, SchoolHolidayDto>();
+			CreateMap<SchoolHolidayDto, SchoolHoliday>();
 			CreateMap<SchoolDay, SchoolDayDto>();
+			CreateMap<SchoolDayDto, SchoolDay>();
 		}
     }
 }

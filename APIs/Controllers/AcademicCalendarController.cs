@@ -99,8 +99,12 @@ namespace APIs.Controllers
         {
             try
             {
+                if (updateDto.Id != id)
+                {
+                    return BadRequest(new { message = "ID mismatch between route and request body" });
+                }
+
                 var calendar = _mapper.Map<AcademicCalendar>(updateDto);
-                calendar.Id = id;
 
                 var updatedCalendar = await _academicCalendarService.UpdateAcademicCalendarAsync(calendar);
                 if (updatedCalendar == null)
