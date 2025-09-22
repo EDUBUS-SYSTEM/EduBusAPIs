@@ -210,10 +210,45 @@ builder.Services.AddAutoMapper(typeof(MappingProfile));
 var jwt = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwt["Key"];
 
+// Debug logging for JWT configuration
+Console.WriteLine($"=== JWT Configuration Debug ===");
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+Console.WriteLine($"Jwt:Key from config section: {(string.IsNullOrEmpty(jwtKey) ? "NOT FOUND" : "FOUND")}");
+
+// Check all possible JWT environment variables
+var envVars = new[]
+{
+    ("Jwt_Key", builder.Configuration["Jwt_Key"]),
+    ("JWT_KEY", builder.Configuration["JWT_KEY"]),
+    ("Jwt__Key", builder.Configuration["Jwt__Key"]),
+    ("JWT__KEY", builder.Configuration["JWT__KEY"])
+};
+
+Console.WriteLine("Checking environment variables:");
+foreach (var (name, value) in envVars)
+{
+    Console.WriteLine($"  {name}: {(string.IsNullOrEmpty(value) ? "NOT FOUND" : "FOUND")}");
+    if (!string.IsNullOrEmpty(value))
+    {
+        jwtKey = value;
+        Console.WriteLine($"  ✅ Using JWT Key from {name}");
+        break;
+    }
+}
+
 if (string.IsNullOrEmpty(jwtKey))
 {
-    throw new InvalidOperationException("JWT Key is not configured. Please set Jwt:Key in user-secrets (Dev) or environment variables (Prod).");
+    var environment = builder.Environment.EnvironmentName;
+    var errorMessage = environment == "Development" 
+        ? "JWT Key is not configured. Please run: dotnet user-secrets set \"Jwt:Key\" \"your-secret-key\""
+        : "JWT Key is not configured. Please set environment variable Jwt__Key (with double underscore) in Azure App Service.";
+    
+    Console.WriteLine($"❌ {errorMessage}");
+    throw new InvalidOperationException(errorMessage);
 }
+
+Console.WriteLine($"✅ JWT Key configured successfully");
+Console.WriteLine($"=== End JWT Debug ===");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
