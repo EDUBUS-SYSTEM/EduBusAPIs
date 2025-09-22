@@ -21,7 +21,6 @@ using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
 using Services.Models.Configuration;
-using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,12 +31,12 @@ BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresent
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddUserSecrets<Program>(optional: true)   
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 // Configure settings with reload on change
 builder.Services.Configure<LeaveRequestSettings>(
-    builder.Configuration.GetSection("LeaveRequestSettings"));                
+    builder.Configuration.GetSection("LeaveRequestSettings"));
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -58,7 +57,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
-    
+
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
@@ -107,20 +106,6 @@ builder.Services.AddScoped<IDatabaseFactory, DatabaseFactory>();
 
 // --- SQL Server Configuration ---
 var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
-
-if (!string.IsNullOrEmpty(sqlConnectionString) && sqlConnectionString.Contains("database.windows.net"))
-{
-    // Add connection pooling parameters for Azure SQL Database
-    var connectionStringBuilder = new SqlConnectionStringBuilder(sqlConnectionString)
-    {
-        MaxPoolSize = 10,
-        MinPoolSize = 1,
-        Pooling = true,
-        MultipleActiveResultSets = false
-    };
-    sqlConnectionString = connectionStringBuilder.ConnectionString;
-}
-
 builder.Services.AddDbContext<EduBusSqlContext>(options =>
     options.UseSqlServer(
         sqlConnectionString,
@@ -128,14 +113,12 @@ builder.Services.AddDbContext<EduBusSqlContext>(options =>
         {
             sqlOptions.UseNetTopologySuite();
             sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
                 errorNumbersToAdd: null
             );
-            sqlOptions.CommandTimeout(30);
         }
-    ),
-    poolSize: 10
+    )
 );
 
 // --- MongoDB Configuration ---
@@ -226,45 +209,10 @@ builder.Services.AddAutoMapper(typeof(MappingProfile));
 var jwt = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwt["Key"];
 
-// Debug logging for JWT configuration
-Console.WriteLine($"=== JWT Configuration Debug ===");
-Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
-Console.WriteLine($"Jwt:Key from config section: {(string.IsNullOrEmpty(jwtKey) ? "NOT FOUND" : "FOUND")}");
-
-// Check all possible JWT environment variables
-var envVars = new[]
-{
-    ("Jwt_Key", builder.Configuration["Jwt_Key"]),
-    ("JWT_KEY", builder.Configuration["JWT_KEY"]),
-    ("Jwt__Key", builder.Configuration["Jwt__Key"]),
-    ("JWT__KEY", builder.Configuration["JWT__KEY"])
-};
-
-Console.WriteLine("Checking environment variables:");
-foreach (var (name, value) in envVars)
-{
-    Console.WriteLine($"  {name}: {(string.IsNullOrEmpty(value) ? "NOT FOUND" : "FOUND")}");
-    if (!string.IsNullOrEmpty(value))
-    {
-        jwtKey = value;
-        Console.WriteLine($"  ✅ Using JWT Key from {name}");
-        break;
-    }
-}
-
 if (string.IsNullOrEmpty(jwtKey))
 {
-    var environment = builder.Environment.EnvironmentName;
-    var errorMessage = environment == "Development" 
-        ? "JWT Key is not configured. Please run: dotnet user-secrets set \"Jwt:Key\" \"your-secret-key\""
-        : "JWT Key is not configured. Please set environment variable Jwt__Key (with double underscore) in Azure App Service.";
-    
-    Console.WriteLine($"❌ {errorMessage}");
-    throw new InvalidOperationException(errorMessage);
+    throw new InvalidOperationException("JWT Key is not configured. Please set Jwt:Key in user-secrets (Dev) or environment variables (Prod).");
 }
-
-Console.WriteLine($"✅ JWT Key configured successfully");
-Console.WriteLine($"=== End JWT Debug ===");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -323,7 +271,7 @@ app.UseStaticFiles();
 // Map SignalR Hub with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
 {
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
 });
 
