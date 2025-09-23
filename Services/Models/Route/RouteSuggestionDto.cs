@@ -44,12 +44,4 @@ namespace Services.Models.Route
         public TimeSpan ArrivalTime { get; set; }
         public List<RouteStudentInfo> Students { get; set; } = new List<RouteStudentInfo>();
     }
-    public class VRPSettings
-    {
-        public int DefaultTimeLimitSeconds { get; set; } = 30;
-        public bool UseTimeWindows { get; set; } = true;
-        public string OptimizationType { get; set; } = "Distance";
-        public int ServiceTimeSeconds { get; set; } = 300; // 5 minutes per pickup
-    }
-    
 }

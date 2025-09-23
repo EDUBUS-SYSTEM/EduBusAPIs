@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Route;
-using System.ComponentModel.DataAnnotations;
 
 namespace WebAPI.Controllers
 {
@@ -20,29 +19,12 @@ namespace WebAPI.Controllers
             _routeSuggestionService = routeSuggestionService;
         }
 
-        [HttpPost("suggestions")]
-        public async Task<ActionResult<RouteSuggestionResponse>> GenerateRouteSuggestions(
-            [FromBody] RouteSuggestionRequest request)
+        [HttpGet("suggestions")]
+        public async Task<ActionResult<RouteSuggestionResponse>> GenerateRouteSuggestions()
         {
             try
             {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                // Validate latitude/longitude if provided
-                if (request.SchoolLatitude.HasValue &&
-                    (request.SchoolLatitude < -90 || request.SchoolLatitude > 90))
-                {
-                    return BadRequest("Invalid latitude. Must be between -90 and 90.");
-                }
-
-                if (request.SchoolLongitude.HasValue &&
-                    (request.SchoolLongitude < -180 || request.SchoolLongitude > 180))
-                {
-                    return BadRequest("Invalid longitude. Must be between -180 and 180.");
-                }
-
-                var response = await _routeSuggestionService.GenerateRouteSuggestionsAsync(request);
+                var response = await _routeSuggestionService.GenerateRouteSuggestionsAsync();
 
                 return response.Success ? Ok(response) : BadRequest(response);
             }

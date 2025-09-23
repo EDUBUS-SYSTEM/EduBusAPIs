@@ -7,7 +7,7 @@ namespace Services.Contracts
         /// <summary>
         /// Generate route suggestions for student pickup
         /// </summary>
-        Task<RouteSuggestionResponse> GenerateRouteSuggestionsAsync(RouteSuggestionRequest request);
+        Task<RouteSuggestionResponse> GenerateRouteSuggestionsAsync();
         
         /// <summary>
         /// Optimize existing route

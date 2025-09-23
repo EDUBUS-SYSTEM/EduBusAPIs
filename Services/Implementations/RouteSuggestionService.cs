@@ -39,7 +39,7 @@ namespace Services.Implementations
             _logger = logger;
         }
 
-        public async Task<RouteSuggestionResponse> GenerateRouteSuggestionsAsync(RouteSuggestionRequest request)
+        public async Task<RouteSuggestionResponse> GenerateRouteSuggestionsAsync()
         {
             try
             {
@@ -48,7 +48,7 @@ namespace Services.Implementations
                 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
                 // Get data for VRP
-                var vrpData = await PrepareVRPDataAsync(request);
+                var vrpData = await PrepareVRPDataAsync();
                 if (!vrpData.IsValid)
                 {
                     return new RouteSuggestionResponse
@@ -96,12 +96,7 @@ namespace Services.Implementations
                     };
                 }
 
-                var request = new RouteSuggestionRequest
-                {
-                    ServiceDate = DateTime.Today
-                };
-
-                return await GenerateRouteSuggestionsAsync(request);
+                return await GenerateRouteSuggestionsAsync();
             }
             catch (Exception ex)
             {
@@ -116,7 +111,7 @@ namespace Services.Implementations
 
         #region Private Helper Methods
 
-        private async Task<VRPData> PrepareVRPDataAsync(RouteSuggestionRequest request)
+        private async Task<VRPData> PrepareVRPDataAsync()
         {
             try
             {
@@ -149,8 +144,8 @@ namespace Services.Implementations
                     Vehicles = vehicles,
                     SchoolLocation = new Location
                     {
-                        Latitude = request.SchoolLatitude ?? 16.0544, // Da Nang coordinates
-                        Longitude = request.SchoolLongitude ?? 108.2022
+                        Latitude = _vrpSettings.SchoolLatitude,
+                        Longitude = _vrpSettings.SchoolLongitude
                     }
                 };
 
@@ -231,7 +226,7 @@ namespace Services.Implementations
                 // Add time windows if configured
                 if (_vrpSettings.UseTimeWindows)
                 {
-                    AddTimeWindowConstraints(routing, manager, data);
+                    //AddTimeWindowConstraints(routing, manager, data);
                 }
 
                 // Search parameters from configuration
