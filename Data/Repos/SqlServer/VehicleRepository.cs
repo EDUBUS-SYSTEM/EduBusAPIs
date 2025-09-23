@@ -1,5 +1,6 @@
 ﻿using Data.Contexts.SqlServer;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,6 +49,13 @@ namespace Data.Repos.SqlServer
                 .Skip((page - 1) * perPage)
                 .Take(perPage)
                 .ToListAsync();
+        }
+        public async Task<bool> IsVehicleActiveAsync(Guid vehicleId)
+        {
+            return await _context.Vehicles
+                .AnyAsync(v => v.Id == vehicleId &&
+                              !v.IsDeleted &&
+                              v.Status == VehicleStatus.Active);
         }
     }
 }

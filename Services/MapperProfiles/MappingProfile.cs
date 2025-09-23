@@ -9,6 +9,7 @@ using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
+using Services.Models.Route;
 
 using Utils;
 
@@ -112,6 +113,11 @@ namespace Services.MapperProfiles
             CreateMap<Transaction, TransactionDetailResponse>();
             CreateMap<TransportFeeItem, TransportFeeItemResponse>();
             CreateMap<PaymentEventLog, PaymentEventResponse>();
+
+            // Route mapping
+            CreateMap<Route, RouteDto>();
+            CreateMap<PickupPointInfo, PickupPointInfoDto>();
+            CreateMap<LocationInfo, LocationInfoDto>();
         }
     }
 }

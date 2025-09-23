@@ -12,5 +12,7 @@ namespace Data.Repos.Interfaces
             int perPage,
             string? sortBy,
             string sortOrder);
+        Task<bool> IsVehicleActiveAsync(Guid vehicleId);
     }
+
 }

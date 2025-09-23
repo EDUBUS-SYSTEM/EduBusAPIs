@@ -161,6 +161,8 @@ builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
+builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
+builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 
@@ -183,6 +185,7 @@ builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 //Route Services
+builder.Services.AddScoped<IRouteService, RouteService>();
 builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
 
 // Payment Services

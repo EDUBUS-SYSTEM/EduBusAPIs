@@ -4,15 +4,16 @@ using MongoDB.Driver;
 
 namespace Data.Repos.MongoDB
 {
-    public class RouteRepository : MongoRepository<Route>, IMongoRepository<Route>
+    public class ScheduleRepository : MongoRepository<Schedule>, IMongoRepository<Schedule>
     {
-        public RouteRepository(IMongoDatabase database) : base(database, "routes")
+        public ScheduleRepository(IMongoDatabase database) : base(database, "schedules")
         {
         }
-        public override async Task<Route?> DeleteAsync(Guid id)
+
+        public override async Task<Schedule?> DeleteAsync(Guid id)
         {
-            var filter = Builders<Route>.Filter.Eq(x => x.Id, id);
-            var update = Builders<Route>.Update
+            var filter = Builders<Schedule>.Filter.Eq(x => x.Id, id);
+            var update = Builders<Schedule>.Update
                 .Set(x => x.IsDeleted, true)
                 .Set(x => x.IsActive, false)
                 .Set(x => x.UpdatedAt, DateTime.UtcNow);

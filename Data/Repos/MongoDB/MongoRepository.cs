@@ -47,8 +47,8 @@ namespace Data.Repos.MongoDB
 
                 // Use reflection to update all properties except Id, CreatedAt, and IsDeleted
                 var properties = typeof(T).GetProperties()
-                    .Where(p => p.Name != nameof(BaseMongoDocument.Id) && 
-                               p.Name != nameof(BaseMongoDocument.CreatedAt) && 
+                    .Where(p => p.Name != nameof(BaseMongoDocument.Id) &&
+                               p.Name != nameof(BaseMongoDocument.CreatedAt) &&
                                p.Name != nameof(BaseMongoDocument.IsDeleted));
 
                 foreach (var property in properties)
