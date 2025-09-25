@@ -1,12 +1,13 @@
 ﻿// 3. Service Implementation
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
-using Services.Contracts;
-using Services.Models.Route;
+using Google.OrTools.ConstraintSolver;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Google.OrTools.ConstraintSolver;
-using Data.Models.Enums;
+using NetTopologySuite.Operation.Distance;
+using Services.Contracts;
+using Services.Models.Route;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -226,7 +227,7 @@ namespace Services.Implementations
                 // Add time windows if configured
                 if (_vrpSettings.UseTimeWindows)
                 {
-                    //AddTimeWindowConstraints(routing, manager, data);
+                    AddTimeWindowConstraints(routing, manager, data);
                 }
 
                 // Search parameters from configuration
@@ -265,16 +266,28 @@ namespace Services.Implementations
         {
             // Create time callback for service time
             var timeCallbackIndex = routing.RegisterTransitCallback((fromIndex, toIndex) => {
-                // Only add service time when arriving at pickup points (not depot)
+                if (fromIndex == toIndex) return 0;
+
+                // Calculate travel time from distance
+                var fromLocation = GetLocationFromIndex(fromIndex, data);
+                var toLocation = GetLocationFromIndex(toIndex, data);
+                var distance = CalculateHaversineDistance(fromLocation, toLocation);
+
+                // Convert distance to travel time using configured average speed
+                var travelTimeSeconds = (long)(distance / _vrpSettings.AverageSpeedKmh * 3600); // km/h to seconds
+
+                // Add service time if arriving at pickup point
                 var toNode = manager.IndexToNode(toIndex);
-                return toNode == 0 ? 0 : _vrpSettings.ServiceTimeSeconds;
+                var serviceTime = toNode == 0 ? 0 : _vrpSettings.ServiceTimeSeconds;
+
+                return travelTimeSeconds + serviceTime;
             });
 
             // Add time dimension
             routing.AddDimension(
                 timeCallbackIndex,
-                300, // 5 minutes slack
-                8400, // 2 hours max route duration
+                _vrpSettings.SlackTimeSeconds, // Use configured slack time
+                _vrpSettings.MaxRouteDurationSeconds, // Use configured max route duration
                 false, // start cumul to zero
                 "Time"
             );
@@ -282,18 +295,18 @@ namespace Services.Implementations
             var timeDimension = routing.GetMutableDimension("Time");
 
             // Set time windows for pickup points (6:30 AM - 7:45 AM)
-            for (int i = 1; i < data.PickupPoints.Count + 1; i++) // Skip depot (index 0)
-            {
-                var index = manager.NodeToIndex(i);
-                timeDimension.CumulVar(index).SetRange(
-                    TimeToSeconds(6, 30), // 6:30 AM
-                    TimeToSeconds(7, 45)  // 7:45 AM
-                );
-            }
+            //for (int i = 1; i < data.PickupPoints.Count + 1; i++) // Skip depot (index 0)
+            //{
+            //    var index = manager.NodeToIndex(i);
+            //    timeDimension.CumulVar(index).SetRange(
+            //        TimeToSeconds(6, 30), // 6:30 AM
+            //        TimeToSeconds(7, 45)  // 7:45 AM
+            //    );
+            //}
 
-            // School arrival deadline (8:00 AM)
-            var schoolIndex = manager.NodeToIndex(0);
-            timeDimension.CumulVar(schoolIndex).SetMax(TimeToSeconds(8, 0));
+            //// School arrival deadline (8:00 AM)
+            //var schoolIndex = manager.NodeToIndex(0);
+            //timeDimension.CumulVar(schoolIndex).SetMax(TimeToSeconds(8, 0));
         }
 
 
@@ -373,7 +386,6 @@ namespace Services.Implementations
             var pickupPoints = new List<RoutePickupPointInfoDto>();
             var totalStudents = 0;
             var totalDistance = 0.0;
-            var currentTime = TimeSpan.FromHours(6.5); // Start at 6:30 AM
 
             Location previousLocation = data.SchoolLocation;
 
@@ -392,6 +404,11 @@ namespace Services.Implementations
                     var coordinates = GetCoordinatesFromPickupPoint(pickupPoint);
                     var currentLocation = new Location { Latitude = coordinates.lat, Longitude = coordinates.lng };
 
+                    // Calculate ACTUAL travel time
+                    var distance = CalculateHaversineDistance(previousLocation, currentLocation);
+                    var travelTimeSeconds = (long)(distance / _vrpSettings.AverageSpeedKmh * 3600);
+                    var serviceTimeSeconds = _vrpSettings.ServiceTimeSeconds;
+
                     var pickupPointInfo = new RoutePickupPointInfoDto
                     {
                         PickupPointId = pickupPoint.Id,
@@ -401,7 +418,6 @@ namespace Services.Implementations
                         Longitude = coordinates.lng,
                         SequenceOrder = pickupPoints.Count + 1,
                         StudentCount = students.Count,
-                        ArrivalTime = currentTime,
                         Students = students.Select(s => new RouteStudentInfo
                         {
                             Id = s.Id,
@@ -413,23 +429,17 @@ namespace Services.Implementations
 
                     pickupPoints.Add(pickupPointInfo);
                     totalStudents += students.Count;
-
-                    // Calculate distance from previous point
-                    totalDistance += CalculateHaversineDistance(previousLocation, currentLocation);
+                    totalDistance += distance;
 
                     // Update previous location
                     previousLocation = currentLocation;
 
-                    // Add travel time + service time
-                    currentTime = currentTime.Add(TimeSpan.FromMinutes(10)); // Travel time
-                    currentTime = currentTime.Add(TimeSpan.FromSeconds(_vrpSettings.ServiceTimeSeconds)); // Service time
                 }
             }
 
             routeSuggestion.PickupPoints = pickupPoints;
             routeSuggestion.TotalStudents = totalStudents;
             routeSuggestion.TotalDistance = totalDistance;
-            routeSuggestion.TotalDuration = currentTime.Subtract(TimeSpan.FromHours(6.5));
             routeSuggestion.EstimatedCost = CalculateEstimatedCost(totalDistance, totalStudents);
 
             // Assign vehicle
@@ -492,7 +502,23 @@ namespace Services.Implementations
             var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
             return R * c;
         }
+        private Location GetLocationFromIndex(long index, VRPData data)
+        {
+            if (index == 0) return data.SchoolLocation; 
 
+            var pickupPointIndex = (int)index - 1;
+            if (pickupPointIndex >= 0 && pickupPointIndex < data.PickupPoints.Count)
+            {
+                var pickupPoint = data.PickupPoints[pickupPointIndex];
+                return new Location
+                {
+                    Latitude = pickupPoint.Geog.Y,
+                    Longitude = pickupPoint.Geog.X
+                };
+            }
+
+            return data.SchoolLocation;
+        }
         private double ToRadians(double degrees)
         {
             return degrees * (Math.PI / 180);

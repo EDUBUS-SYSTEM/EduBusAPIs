@@ -12,7 +12,6 @@ namespace Services.Models.Route
         public RouteVehicleInfo? Vehicle { get; set; }
         public int TotalStudents { get; set; }
         public double TotalDistance { get; set; } // in kilometers
-        public TimeSpan TotalDuration { get; set; }
         public decimal EstimatedCost { get; set; }
         public DateTime GeneratedAt { get; set; } = DateTime.UtcNow; // Thêm property này
     }
