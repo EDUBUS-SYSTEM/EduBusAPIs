@@ -7,6 +7,7 @@ using Services.Models.Parent;
 using Services.Models.Payment;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
+using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
 
@@ -112,6 +113,11 @@ namespace Services.MapperProfiles
             CreateMap<Transaction, TransactionDetailResponse>();
             CreateMap<TransportFeeItem, TransportFeeItemResponse>();
             CreateMap<PaymentEventLog, PaymentEventResponse>();
+            
+            // UnitPrice mapping
+            CreateMap<UnitPrice, UnitPriceResponseDto>();
+            CreateMap<CreateUnitPriceDto, UnitPrice>();
+            CreateMap<UpdateUnitPriceDto, UnitPrice>();
         }
     }
 }

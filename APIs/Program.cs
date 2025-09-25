@@ -149,11 +149,13 @@ builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRe
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Payment Repositories
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ITransportFeeItemRepository, TransportFeeItemRepository>();
 builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
@@ -180,10 +182,12 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IPayOSService, PayOSService>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 
 // PayOS Configuration
 builder.Services.Configure<Services.Models.Payment.PayOSConfig>(

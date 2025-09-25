@@ -15,7 +15,9 @@ public partial class TransportFeeItem : BaseDomain
 
     public TransportFeeItemStatus Status { get; set; }
     public Guid? TransactionId { get; set; }
+    public Guid? UnitPriceId { get; set; }
 
     public virtual Student Student { get; set; } = null!;
     public virtual Transaction? Transaction { get; set; }
+    public virtual UnitPrice? UnitPrice { get; set; }
 }
