@@ -16,7 +16,9 @@ namespace Services.Models.Route
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
         public bool IsDeleted { get; set; }
-    }
+		public int VehicleCapacity { get; set; }
+        public string VehicleNumberPlate {  get; set; }
+	}
 
     public class PickupPointInfoDto
     {

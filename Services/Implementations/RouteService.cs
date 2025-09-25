@@ -41,10 +41,6 @@ namespace Services.Implementations
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
 
-            // Validate that route has at least one pickup point
-            if (request.PickupPoints == null || !request.PickupPoints.Any())
-                throw new InvalidOperationException("Route must have at least one pickup point");
-
             // Validate that vehicle exists
             var isVehicleActive = await _vehicleRepository.IsVehicleActiveAsync(request.VehicleId);
             if (!isVehicleActive)
@@ -273,20 +269,60 @@ namespace Services.Implementations
             if (route == null || route.IsDeleted)
                 return null;
 
-            return _mapper.Map<RouteDto>(route);
-        }
+			var routeDto = _mapper.Map<RouteDto>(route);
+
+			// Fetch vehicle capacity
+			var vehicle = await _vehicleRepository.FindAsync(route.VehicleId);
+			if (vehicle != null)
+			{
+				routeDto.VehicleCapacity = vehicle.Capacity;
+                routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+			}
+
+			return routeDto;
+		}
 
         public async Task<IEnumerable<RouteDto>> GetAllRoutesAsync()
         {
             var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted);
-            return routes.Select(r => _mapper.Map<RouteDto>(r));
-        }
+            var routeDtos = routes.Select(r => _mapper.Map<RouteDto>(r)).ToList();
+
+			var vehicleIds = routeDtos.Select(r => r.VehicleId).Distinct().ToList();
+			var vehicles = await _vehicleRepository.FindByConditionAsync(v => vehicleIds.Contains(v.Id));
+
+			foreach (var routeDto in routeDtos)
+			{
+				var vehicle = vehicles.FirstOrDefault(v => v.Id == routeDto.VehicleId);
+				if (vehicle != null)
+				{
+					routeDto.VehicleCapacity = vehicle.Capacity;
+					routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+				}
+			}
+
+            return routeDtos;
+		}
 
         public async Task<IEnumerable<RouteDto>> GetActiveRoutesAsync()
         {
             var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted && r.IsActive);
-            return routes.Select(r => _mapper.Map<RouteDto>(r));
-        }
+			var routeDtos = routes.Select(r => _mapper.Map<RouteDto>(r)).ToList();
+
+			var vehicleIds = routeDtos.Select(r => r.VehicleId).Distinct().ToList();
+			var vehicles = await _vehicleRepository.FindByConditionAsync(v => vehicleIds.Contains(v.Id));
+
+			foreach (var routeDto in routeDtos)
+			{
+				var vehicle = vehicles.FirstOrDefault(v => v.Id == routeDto.VehicleId);
+				if (vehicle != null)
+				{
+					routeDto.VehicleCapacity = vehicle.Capacity;
+					routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+				}
+			}
+
+			return routeDtos;
+		}
 
         public async Task<RouteDto?> UpdateRouteAsync(Guid id, UpdateRouteRequest request)
         {
@@ -328,9 +364,6 @@ namespace Services.Implementations
 
             if (request.PickupPoints != null)
             {
-                // Validate that route has at least one pickup point
-                if (!request.PickupPoints.Any())
-                    throw new InvalidOperationException("Route must have at least one pickup point");
 
                 // Validate that all pickup points exist and are assigned to active students
                 var pickupPointIds = request.PickupPoints.Select(pp => pp.PickupPointId).ToList();
