@@ -11,7 +11,7 @@ namespace Services.Backgrounds
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<AutoReplacementSuggestionService> _logger;
-        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(15); // Check every 15 minutes
+        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(30); // Check every 30 minutes to reduce load
 
         public AutoReplacementSuggestionService(
             IServiceScopeFactory scopeFactory,
@@ -52,6 +52,7 @@ namespace Services.Backgrounds
                 var leaveRepo = serviceProvider.GetRequiredService<IDriverLeaveRepository>();
 
                 // Get all pending leave requests that need replacement suggestions
+                // Limit to 5 requests per batch to prevent connection overload
                 var pendingLeaves = await leaveRepo.FindByConditionAsync(
                     l => l.Status == LeaveStatus.Pending && 
                          l.AutoReplacementEnabled && 
@@ -59,11 +60,14 @@ namespace Services.Backgrounds
                          l.StartDate > DateTime.UtcNow.AddHours(-24) && // Only process leaves starting within 24 hours
                          l.StartDate <= DateTime.UtcNow.AddDays(7) // And not too far in the future
                 );
+                
+                // Limit batch size to prevent connection pool exhaustion
+                var limitedLeaves = pendingLeaves.Take(3).ToList();
 
                 var processedCount = 0;
                 var suggestionCount = 0;
 
-                foreach (var leave in pendingLeaves)
+                foreach (var leave in limitedLeaves)
                 {
                     try
                     {
@@ -146,6 +150,9 @@ namespace Services.Backgrounds
                         }
 
                         processedCount++;
+                        
+                        // Add delay between operations to prevent connection overload
+                        await Task.Delay(3000, CancellationToken.None);
                     }
                     catch (Exception ex)
                     {

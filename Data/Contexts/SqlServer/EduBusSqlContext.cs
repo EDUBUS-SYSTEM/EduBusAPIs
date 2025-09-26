@@ -42,6 +42,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<UnitPrice> UnitPrices { get; set; }
 
+        public virtual DbSet<PaymentEventLog> PaymentEventLogs { get; set; }
+
         public virtual DbSet<UserAccount> UserAccounts { get; set; }
 
         public virtual DbSet<Vehicle> Vehicles { get; set; }
@@ -54,11 +56,15 @@ namespace Data.Contexts.SqlServer
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
-                sql => sql.UseNetTopologySuite()
-            );
+        {
+            if (!optionsBuilder.IsConfigured)
+            {
+                optionsBuilder.UseSqlServer(
+                    "Server=(localdb)\\MSSQLLocalDB;Database=edubus_dev;Trusted_Connection=True;Encrypt=False",
+                    sql => sql.UseNetTopologySuite()
+                );
+            }
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -283,7 +289,6 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.ParentEmail)
                      .HasMaxLength(320)
                      .IsRequired();
-                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.LastName).HasMaxLength(200);
                 entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
@@ -354,12 +359,16 @@ namespace Data.Contexts.SqlServer
                 entity.HasIndex(e => e.TransactionCode, "UQ_Transactions_TransactionCode").IsUnique();
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
-                entity.Property(e => e.Amount).HasColumnType("decimal(19, 4)");
+                entity.Property(e => e.Amount).HasColumnType("decimal(19, 0)");
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.TransactionCode).HasMaxLength(100);
+                entity.Property(e => e.QrExpiredAtUtc).HasPrecision(3);
+                entity.Property(e => e.PaidAtUtc).HasPrecision(3);
+                entity.Property(e => e.Status).HasConversion<int>();
+                entity.Property(e => e.Provider).HasConversion<int>();
 
                 entity.HasOne(d => d.Parent).WithMany(p => p.Transactions)
                     .HasForeignKey(d => d.ParentId)
@@ -373,13 +382,13 @@ namespace Data.Contexts.SqlServer
                 entity.HasIndex(e => e.TransactionId, "IX_TransportFeeItems_TransactionId");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
-                entity.Property(e => e.Amount).HasColumnType("decimal(19, 4)");
-                entity.Property(e => e.Content).HasMaxLength(1000);
+                entity.Property(e => e.UnitPriceVndPerKm).HasColumnType("decimal(19, 0)");
+                entity.Property(e => e.Subtotal).HasColumnType("decimal(19, 0)");
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.Status).HasMaxLength(50);
+                entity.Property(e => e.Status).HasConversion<int>();
 
                 entity.HasOne(d => d.Student).WithMany(p => p.TransportFeeItems)
                     .HasForeignKey(d => d.StudentId)
@@ -388,6 +397,18 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne(d => d.Transaction).WithMany(p => p.TransportFeeItems)
                     .HasForeignKey(d => d.TransactionId)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<PaymentEventLog>(entity =>
+            {
+                entity.HasIndex(e => e.TransactionId, "IX_PaymentEventLogs_TransactionId");
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.AtUtc).HasPrecision(3);
+                entity.Property(e => e.Status).HasConversion<int>();
+                entity.Property(e => e.Source).HasConversion<int>();
             });
 
             modelBuilder.Entity<UnitPrice>(entity =>

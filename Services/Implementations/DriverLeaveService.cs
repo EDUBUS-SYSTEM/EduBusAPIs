@@ -5,6 +5,7 @@ using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
 using Microsoft.Extensions.Logging;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -309,7 +310,7 @@ namespace Services.Implementations
                     DriverEmail = d.Email,
                     DriverPhone = d.PhoneNumber,
                     VehicleId = v.Id,
-                    VehiclePlate = Utils.SecurityHelper.DecryptFromBytes(v.HashedLicensePlate),
+                    VehiclePlate = SecurityHelper.DecryptFromBytes(v.HashedLicensePlate),
                     VehicleCapacity = v.Capacity,
                     Score = 50,
                     Reason = "Available in time window",

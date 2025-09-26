@@ -13,7 +13,6 @@ namespace Services.Models.Student
         public Guid? ParentId { get; set; }
         public string FirstName { get; set; } = null!;
         public string LastName { get; set; } = null!;
-        public bool IsActive { get; set; } = true;
         public string ParentEmail { get; set; } = string.Empty;
         public StudentStatus Status { get; set; } = StudentStatus.Available;
         public DateTime? ActivatedAt { get; set; }

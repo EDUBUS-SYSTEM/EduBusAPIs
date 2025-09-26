@@ -21,7 +21,6 @@ using Services.MapperProfiles;
 using APIs.Hubs;
 using Data.Models;
 using Services.Models.Configuration;
-using System.Security.Authentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,12 +31,12 @@ BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresent
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddUserSecrets<Program>(optional: true)   
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 // Configure settings with reload on change
 builder.Services.Configure<LeaveRequestSettings>(
-    builder.Configuration.GetSection("LeaveRequestSettings"));                
+    builder.Configuration.GetSection("LeaveRequestSettings"));
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -58,7 +57,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
-    
+
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
@@ -151,6 +150,11 @@ builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepo
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
 
+// Payment Repositories
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<ITransportFeeItemRepository, TransportFeeItemRepository>();
+builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository>();
+
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
@@ -185,6 +189,17 @@ builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
 builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
+
+// Payment Services
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IPayOSService, PayOSService>();
+
+// PayOS Configuration
+builder.Services.Configure<Services.Models.Payment.PayOSConfig>(
+    builder.Configuration.GetSection("PayOS"));
+
+// PayOS HttpClient
+builder.Services.AddHttpClient<IPayOSService, PayOSService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
@@ -237,6 +252,16 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EduBus APIs v1");
+        c.RoutePrefix = "swagger";
+        c.DocumentTitle = "EduBus APIs - Production";
+    });
+}
 
 if (!app.Environment.IsDevelopment())
 {
@@ -259,10 +284,13 @@ else
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Serve static files from wwwroot
+app.UseStaticFiles();
+
 // Map SignalR Hub with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
 {
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
 });
 
