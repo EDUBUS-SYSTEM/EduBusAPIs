@@ -16,12 +16,14 @@ namespace Services.Implementations
 		private readonly ILogger<ScheduleService> _logger;
 
 		private readonly INotificationService _notificationService;
+		private readonly IAcademicCalendarService _academicCalendarService;
 
-		public ScheduleService(IDatabaseFactory databaseFactory, ILogger<ScheduleService> logger, INotificationService notificationService)
+		public ScheduleService(IDatabaseFactory databaseFactory, ILogger<ScheduleService> logger, INotificationService notificationService, IAcademicCalendarService academicCalendarService)
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
 			_notificationService = notificationService;
+			_academicCalendarService = academicCalendarService;
 		}
 
 		public async Task<IEnumerable<Schedule>> QuerySchedulesAsync(
@@ -130,6 +132,27 @@ namespace Services.Implementations
 				if (string.IsNullOrWhiteSpace(schedule.EndTime))
 					throw new ArgumentException("End time is required");
 
+				// Auto-fill effective dates from academic year if provided
+				if (!string.IsNullOrWhiteSpace(schedule.AcademicYear))
+				{
+					try
+					{
+						var academicCalendar = await _academicCalendarService.GetAcademicCalendarByYearAsync(schedule.AcademicYear);
+						if (academicCalendar != null)
+						{
+							schedule.EffectiveFrom = academicCalendar.StartDate;
+							schedule.EffectiveTo = academicCalendar.EndDate;
+							_logger.LogInformation("Auto-filled effective dates from academic year {AcademicYear}: {StartDate} to {EndDate}", 
+								schedule.AcademicYear, academicCalendar.StartDate, academicCalendar.EndDate);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to auto-fill effective dates from academic year {AcademicYear}", schedule.AcademicYear);
+						// Continue with manual dates if academic year lookup fails
+					}
+				}
+
 				ValidateSchedule(schedule);
 
 				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
@@ -193,6 +216,9 @@ namespace Services.Implementations
 				if (existingDup.Any())
 					throw new InvalidOperationException("A schedule with the same time/rule already exists in the overlapping effective window.");
 
+				// Always preserve existing TimeOverrides - don't overwrite them
+				schedule.TimeOverrides = existingSchedule.TimeOverrides ?? new List<ScheduleTimeOverride>();
+
 				var updated = await repository.UpdateAsync(schedule);
 
 				if (updated != null && (
@@ -201,30 +227,38 @@ namespace Services.Implementations
 					!string.Equals(existingSchedule.EndTime, schedule.EndTime, StringComparison.Ordinal) ||
 					!string.Equals(existingSchedule.RRule, schedule.RRule, StringComparison.Ordinal)))
 				{
-					await _notificationService.CreateAdminNotificationAsync(new CreateAdminNotificationDto
+					try
 					{
-						Title = "Schedule Change Notification",
-						Message = $"Schedule '{schedule.Name}' has been updated.",
-						NotificationType = NotificationType.ScheduleChange,
-						Priority = 2,
-						RelatedEntityId = schedule.Id,
-						RelatedEntityType = "Schedule",
-						ActionRequired = false,
-						ActionUrl = null,
-						ExpiresAt = null,
-						Metadata = new Dictionary<string, object>
-				{
-					{ "scheduleId", schedule.Id },
-					{ "oldName", existingSchedule.Name },
-					{ "newName", schedule.Name },
-					{ "oldStartTime", existingSchedule.StartTime },
-					{ "newStartTime", schedule.StartTime },
-					{ "oldEndTime", existingSchedule.EndTime },
-					{ "newEndTime", schedule.EndTime },
-					{ "oldRRule", existingSchedule.RRule },
-					{ "newRRule", schedule.RRule }
-				}
-					});
+						await _notificationService.CreateAdminNotificationAsync(new CreateAdminNotificationDto
+						{
+							Title = "Schedule Change Notification",
+							Message = $"Schedule '{schedule.Name}' has been updated.",
+							NotificationType = NotificationType.ScheduleChange,
+							Priority = 2,
+							RelatedEntityId = schedule.Id,
+							RelatedEntityType = "Schedule",
+							ActionRequired = false,
+							ActionUrl = null,
+							ExpiresAt = null,
+							Metadata = new Dictionary<string, object>
+							{
+								{ "scheduleId", schedule.Id.ToString() },
+								{ "oldName", existingSchedule.Name },
+								{ "newName", schedule.Name },
+								{ "oldStartTime", existingSchedule.StartTime },
+								{ "newStartTime", schedule.StartTime },
+								{ "oldEndTime", existingSchedule.EndTime },
+								{ "newEndTime", schedule.EndTime },
+								{ "oldRRule", existingSchedule.RRule },
+								{ "newRRule", schedule.RRule }
+							}
+						});
+					}
+					catch (Exception notificationEx)
+					{
+						_logger.LogWarning(notificationEx, "Failed to create notification for schedule update {ScheduleId}", schedule.Id);
+						// Don't fail the schedule update if notification fails
+					}
 				}
 
 				return updated;
@@ -375,6 +409,13 @@ namespace Services.Implementations
 				if (string.IsNullOrWhiteSpace(timeOverride.StartTime) || string.IsNullOrWhiteSpace(timeOverride.EndTime))
 					throw new ArgumentException("Start time and end time are required for override");
 
+				// Validate date is within schedule effective range
+				if (timeOverride.Date.Date < schedule.EffectiveFrom.Date)
+					throw new ArgumentException($"Override date {timeOverride.Date:yyyy-MM-dd} must be on or after schedule effective from date {schedule.EffectiveFrom:yyyy-MM-dd}");
+				
+				if (schedule.EffectiveTo.HasValue && timeOverride.Date.Date > schedule.EffectiveTo.Value.Date)
+					throw new ArgumentException($"Override date {timeOverride.Date:yyyy-MM-dd} must be on or before schedule effective to date {schedule.EffectiveTo.Value:yyyy-MM-dd}");
+
 				// Check if override already exists for this date
 				var existingOverride = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == timeOverride.Date.Date);
 				if (existingOverride != null)
@@ -417,6 +458,13 @@ namespace Services.Implementations
 					if (string.IsNullOrWhiteSpace(timeOverride.StartTime) || string.IsNullOrWhiteSpace(timeOverride.EndTime))
 						throw new ArgumentException($"Start time and end time are required for override on {timeOverride.Date:yyyy-MM-dd}");
 
+					// Validate date is within schedule effective range
+					if (timeOverride.Date.Date < schedule.EffectiveFrom.Date)
+						throw new ArgumentException($"Override date {timeOverride.Date:yyyy-MM-dd} must be on or after schedule effective from date {schedule.EffectiveFrom:yyyy-MM-dd}");
+					
+					if (schedule.EffectiveTo.HasValue && timeOverride.Date.Date > schedule.EffectiveTo.Value.Date)
+						throw new ArgumentException($"Override date {timeOverride.Date:yyyy-MM-dd} must be on or before schedule effective to date {schedule.EffectiveTo.Value:yyyy-MM-dd}");
+
 					// Check if override already exists for this date
 					var existingOverride = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == timeOverride.Date.Date);
 					if (existingOverride != null)
@@ -454,6 +502,13 @@ namespace Services.Implementations
 				if (schedule == null)
 					return null;
 
+				// Validate date is within schedule effective range
+				if (date.Date < schedule.EffectiveFrom.Date)
+					throw new ArgumentException($"Override date {date:yyyy-MM-dd} must be on or after schedule effective from date {schedule.EffectiveFrom:yyyy-MM-dd}");
+				
+				if (schedule.EffectiveTo.HasValue && date.Date > schedule.EffectiveTo.Value.Date)
+					throw new ArgumentException($"Override date {date:yyyy-MM-dd} must be on or before schedule effective to date {schedule.EffectiveTo.Value:yyyy-MM-dd}");
+
 				var overrideToRemove = schedule.TimeOverrides.FirstOrDefault(o => o.Date.Date == date.Date);
 				if (overrideToRemove != null)
 				{
@@ -461,7 +516,8 @@ namespace Services.Implementations
 					return await repository.UpdateAsync(schedule);
 				}
 
-				return schedule;
+				// If no override found for this date, throw exception
+				throw new ArgumentException($"No time override found for date {date:yyyy-MM-dd} in schedule {schedule.Name}");
 			}
 			catch (Exception ex)
 			{

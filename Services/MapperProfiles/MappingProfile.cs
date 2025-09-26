@@ -112,7 +112,8 @@ namespace Services.MapperProfiles
 			// Schedule mappings
 			CreateMap<Schedule, ScheduleDto>();
 			CreateMap<CreateScheduleDto, Schedule>();
-			CreateMap<UpdateScheduleDto, Schedule>();
+			CreateMap<UpdateScheduleDto, Schedule>()
+				.ForMember(dest => dest.TimeOverrides, opt => opt.Ignore());
 
 			// Trip mappings
 			CreateMap<Trip, TripDto>();

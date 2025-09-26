@@ -110,6 +110,9 @@ namespace Services.Implementations
                 if (academicCalendar.EndDate <= academicCalendar.StartDate)
                     throw new ArgumentException("End date must be greater than start date");
 
+                // Validate that dates are within the academic year range
+                ValidateAcademicYearDates(academicCalendar.AcademicYear, academicCalendar.StartDate, academicCalendar.EndDate);
+
                 ValidateAcademicCalendar(academicCalendar);
 
                 var repository = _databaseFactory.GetRepositoryByType<IAcademicCalendarRepository>(DatabaseType.MongoDb);
@@ -149,6 +152,9 @@ namespace Services.Implementations
 
                 if (academicCalendar.EndDate <= academicCalendar.StartDate)
                     throw new ArgumentException("End date must be greater than start date");
+
+                // Validate that dates are within the academic year range
+                ValidateAcademicYearDates(academicCalendar.AcademicYear, academicCalendar.StartDate, academicCalendar.EndDate);
 
                 ValidateAcademicCalendar(academicCalendar);
 
@@ -431,6 +437,25 @@ namespace Services.Implementations
             }
         }
 
+        private static void ValidateAcademicYearDates(string academicYear, DateTime startDate, DateTime endDate)
+        {
+            // Parse academic year (e.g., "2029-2030")
+            var yearParts = academicYear.Split('-');
+            if (yearParts.Length != 2)
+                throw new ArgumentException("Academic year must be in format 'YYYY-YYYY'");
+
+            if (!int.TryParse(yearParts[0], out int startYear) || !int.TryParse(yearParts[1], out int endYear))
+                throw new ArgumentException("Academic year must contain valid years");
+
+            // Check if start date is within the academic year range
+            if (startDate.Year < startYear || startDate.Year > endYear)
+                throw new ArgumentException($"Start date year ({startDate.Year}) must be within academic year range ({startYear}-{endYear})");
+
+            // Check if end date is within the academic year range
+            if (endDate.Year < startYear || endDate.Year > endYear)
+                throw new ArgumentException($"End date year ({endDate.Year}) must be within academic year range ({startYear}-{endYear})");
+        }
+
         private static void ValidateAcademicCalendar(AcademicCalendar calendar)
         {
             // Validate semesters
@@ -445,8 +470,8 @@ namespace Services.Implementations
                 if (semester.EndDate <= semester.StartDate)
                     throw new ArgumentException($"Semester '{semester.Name}' end date must be greater than start date");
 
-                // Check if semester is within academic calendar range
-                if (semester.StartDate < calendar.StartDate || semester.EndDate > calendar.EndDate)
+                // Check if semester is within academic calendar range (compare dates only)
+                if (semester.StartDate.Date < calendar.StartDate.Date || semester.EndDate.Date > calendar.EndDate.Date)
                     throw new ArgumentException($"Semester '{semester.Name}' must be within academic calendar date range");
             }
 
@@ -458,12 +483,16 @@ namespace Services.Implementations
 
                 if (holiday.EndDate < holiday.StartDate)
                     throw new ArgumentException($"Holiday '{holiday.Name}' end date must be greater than or equal to start date");
+
+                // Check if holiday is within academic calendar range (compare dates only)
+                if (holiday.StartDate.Date < calendar.StartDate.Date || holiday.EndDate.Date > calendar.EndDate.Date)
+                    throw new ArgumentException($"Holiday '{holiday.Name}' must be within academic calendar date range");
             }
 
             // Validate school days
             foreach (var schoolDay in calendar.SchoolDays)
             {
-                if (schoolDay.Date < calendar.StartDate || schoolDay.Date > calendar.EndDate)
+                if (schoolDay.Date.Date < calendar.StartDate.Date || schoolDay.Date.Date > calendar.EndDate.Date)
                     throw new ArgumentException($"School day on {schoolDay.Date:yyyy-MM-dd} must be within academic calendar date range");
             }
         }

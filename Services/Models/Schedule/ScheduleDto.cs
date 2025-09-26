@@ -1,4 +1,6 @@
-﻿namespace Services.Models.Schedule
+﻿using Data.Models;
+
+namespace Services.Models.Schedule
 {
 	public class ScheduleDto
 	{
@@ -8,6 +10,7 @@
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
+		public string AcademicYear { get; set; } = string.Empty;
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
@@ -24,6 +27,7 @@
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
+		public string AcademicYear { get; set; } = string.Empty;
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
@@ -39,10 +43,12 @@
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
+		public string AcademicYear { get; set; } = string.Empty;
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
 		public string ScheduleType { get; set; } = string.Empty;
 		public bool IsActive { get; set; }
+		public List<ScheduleTimeOverride> TimeOverrides { get; set; } = new List<ScheduleTimeOverride>();
 	}
 }
