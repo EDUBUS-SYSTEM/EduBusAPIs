@@ -20,6 +20,9 @@ namespace Data.Models
         [BsonElement("timezone")]
         public string Timezone { get; set; } = string.Empty;
 
+        [BsonElement("academicYear")]
+        public string AcademicYear { get; set; } = string.Empty;
+
         [BsonElement("effectiveFrom")]
         public DateTime EffectiveFrom { get; set; }
 
@@ -34,5 +37,32 @@ namespace Data.Models
 
         [BsonElement("isActive")]
         public bool IsActive { get; set; } = true;
+
+        [BsonElement("timeOverrides")]
+        public List<ScheduleTimeOverride> TimeOverrides { get; set; } = new List<ScheduleTimeOverride>();
+    }
+
+    public class ScheduleTimeOverride
+    {
+        [BsonElement("date")]
+        public DateTime Date { get; set; }
+
+        [BsonElement("startTime")]
+        public string StartTime { get; set; } = string.Empty;
+
+        [BsonElement("endTime")]
+        public string EndTime { get; set; } = string.Empty;
+
+        [BsonElement("reason")]
+        public string Reason { get; set; } = string.Empty;
+
+        [BsonElement("createdBy")]
+        public string CreatedBy { get; set; } = string.Empty;
+
+        [BsonElement("createdAt")]
+        public DateTime CreatedAt { get; set; }
+
+        [BsonElement("isCancelled")]
+        public bool IsCancelled { get; set; } = false;
     }
 }

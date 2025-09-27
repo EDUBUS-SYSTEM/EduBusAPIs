@@ -18,8 +18,16 @@ public class PickupPointRequestDocument : BaseMongoDocument
     public string AdminNotes { get; set; } = "";
     public DateTime? ReviewedAt { get; set; }
     public Guid? ReviewedByAdminId { get; set; }
+    public Guid? PickupPointId { get; set; }  // ID of created pickup point
 
-    // Quotation detail (snapshot at submission time)
-    public decimal UnitPriceVndPerKm { get; set; } = 50000m;
-    public decimal EstimatedPriceVnd { get; set; }
+    // Pricing information (snapshot at submission time)
+    public decimal UnitPricePerKm { get; set; }
+    public decimal TotalFee { get; set; }
+    
+    // Semester information (snapshot at submission time)
+    public string SemesterName { get; set; } = "";
+    public string AcademicYear { get; set; } = "";
+    public DateTime SemesterStartDate { get; set; }
+    public DateTime SemesterEndDate { get; set; }
+    public int TotalSchoolDays { get; set; }
 }

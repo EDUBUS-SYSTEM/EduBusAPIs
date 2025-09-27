@@ -16,8 +16,6 @@ public partial class Transaction : BaseDomain
     public DateTime? QrExpiredAtUtc { get; set; }
     public DateTime? PaidAtUtc { get; set; }
     public string? PickupPointRequestId { get; set; }
-    public Guid? ScheduleId { get; set; }
-    public string? Metadata { get; set; }
 
     public virtual Parent Parent { get; set; } = null!;
     public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
