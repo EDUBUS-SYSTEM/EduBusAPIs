@@ -18,5 +18,6 @@ namespace Services.Contracts
         Task<VehicleResponse?> UpdateAsync(Guid id, VehicleUpdateRequest dto);
         Task<VehicleResponse?> PartialUpdateAsync(Guid id, VehiclePartialUpdateRequest dto);
         Task<bool> DeleteAsync(Guid id);
-    }
+		Task<VehicleListResponse> GetUnassignedVehiclesAsync(Guid? excludeRouteId = null);
+	}
 }

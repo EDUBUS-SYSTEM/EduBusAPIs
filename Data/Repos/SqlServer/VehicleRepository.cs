@@ -22,7 +22,8 @@ namespace Data.Repos.SqlServer
             int page,
             int perPage,
             string? sortBy,
-            string sortOrder)
+            string sortOrder,
+            List<Guid>? exceptionIds)
         {
             var query = _context.Vehicles
                 .Where(v => !v.IsDeleted)
@@ -36,6 +37,11 @@ namespace Data.Repos.SqlServer
 
             if (adminId.HasValue)
                 query = query.Where(v => v.AdminId == adminId.Value);
+
+            if(exceptionIds != null && exceptionIds.Count > 0)
+            {
+                query = query.Where(v => !exceptionIds.Contains(v.Id));
+            }
 
             query = sortBy switch
             {
