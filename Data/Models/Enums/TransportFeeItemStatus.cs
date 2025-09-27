@@ -8,4 +8,8 @@ public enum TransportFeeItemStatus
     Cancelled = 3
 }
 
-
+public enum TransportFeeItemType
+{
+    Register = 0,
+    Extend = 1
+}

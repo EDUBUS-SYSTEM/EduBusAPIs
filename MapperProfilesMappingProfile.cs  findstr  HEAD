@@ -1,0 +1,64 @@
+[1mdiff --cc Services/MapperProfiles/MappingProfile.cs[m
+[1mindex cd5252e,527d908..0000000[m
+[1m--- a/Services/MapperProfiles/MappingProfile.cs[m
+[1m+++ b/Services/MapperProfiles/MappingProfile.cs[m
+[36m@@@ -5,13 -4,12 +5,14 @@@[m [musing Services.Models.Driver[m
+  using Services.Models.DriverVehicle;[m
+  using Services.Models.Notification;[m
+  using Services.Models.Parent;[m
+[32m +using Services.Models.RouteSchedule;[m
+[32m +using Services.Models.Schedule;[m
+[32m+ using Services.Models.Payment;[m
+  using Services.Models.Student;[m
+  using Services.Models.StudentGrade;[m
+[32m +using Services.Models.Trip;[m
+  using Services.Models.UserAccount;[m
+  using Services.Models.Vehicle;[m
+[31m -[m
+  using Utils;[m
+  [m
+  namespace Services.MapperProfiles[m
+[36m@@@ -109,36 -107,11 +110,42 @@@[m
+              CreateMap<CreateNotificationDto, Notification>();[m
+              CreateMap<Notification, NotificationResponse>();[m
+  [m
+[32m +			// Schedule mappings[m
+[32m +			CreateMap<Schedule, ScheduleDto>();[m
+[32m +			CreateMap<CreateScheduleDto, Schedule>();[m
+[32m +			CreateMap<UpdateScheduleDto, Schedule>()[m
+[32m +				.ForMember(dest => dest.TimeOverrides, opt => opt.Ignore());[m
+[32m +[m
+[32m +			// Trip mappings[m
+[32m +			CreateMap<Trip, TripDto>();[m
+[32m +			CreateMap<CreateTripDto, Trip>();[m
+[32m +			CreateMap<UpdateTripDto, Trip>();[m
+[32m +			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();[m
+[32m +			CreateMap<ScheduleSnapshotDto, ScheduleSnapshot>();[m
+[32m +			CreateMap<TripStop, TripStopDto>();[m
+[32m +			CreateMap<TripStopDto, TripStop>();[m
+[32m +[m
+[32m +			// RouteSchedule mappings[m
+[32m +			CreateMap<RouteSchedule, RouteScheduleDto>();[m
+[32m +			CreateMap<CreateRouteScheduleDto, RouteSchedule>();[m
+[32m +			CreateMap<UpdateRouteScheduleDto, RouteSchedule>();[m
+[32m +[m
+[32m +			// AcademicCalendar mappings[m
+[32m +			CreateMap<AcademicCalendar, AcademicCalendarDto>();[m
+[32m +			CreateMap<AcademicCalendarCreateDto, AcademicCalendar>();[m
+[32m +			CreateMap<AcademicCalendarUpdateDto, AcademicCalendar>();[m
+[32m +			CreateMap<AcademicSemester, AcademicSemesterDto>();[m
+[32m +			CreateMap<AcademicSemesterDto, AcademicSemester>();[m
+[32m +			CreateMap<SchoolHoliday, SchoolHolidayDto>();[m
+[32m +			CreateMap<SchoolHolidayDto, SchoolHoliday>();[m
+[32m +			CreateMap<SchoolDay, SchoolDayDto>();[m
+[32m +			CreateMap<SchoolDayDto, SchoolDay>();[m
+[31m- 		}[m
+[32m++		[m
+[32m+             // Payment mapping[m
+[32m+             CreateMap<Transaction, TransactionSummaryResponse>();[m
+[32m+             CreateMap<Transaction, TransactionDetailResponse>();[m
+[32m+             CreateMap<TransportFeeItem, TransportFeeItemResponse>();[m
+[32m+             CreateMap<PaymentEventLog, PaymentEventResponse>();[m
+[32m+         }[m
+      }[m
+  }[m

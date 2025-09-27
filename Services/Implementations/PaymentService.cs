@@ -18,6 +18,7 @@ public class PaymentService : IPaymentService
     private readonly IStudentRepository _studentRepository;
     private readonly IPickupPointRequestRepository _pickupPointRequestRepository;
     private readonly IPayOSService _payOSService;
+    private readonly IPickupPointEnrollmentService _pickupPointEnrollmentService;
     private readonly IMapper _mapper;
     private readonly ILogger<PaymentService> _logger;
     private readonly PayOSConfig _config;
@@ -29,6 +30,7 @@ public class PaymentService : IPaymentService
         IStudentRepository studentRepository,
         IPickupPointRequestRepository pickupPointRequestRepository,
         IPayOSService payOSService,
+        IPickupPointEnrollmentService pickupPointEnrollmentService,
         IMapper mapper,
         ILogger<PaymentService> logger,
         IOptions<PayOSConfig> config)
@@ -39,6 +41,7 @@ public class PaymentService : IPaymentService
         _studentRepository = studentRepository;
         _pickupPointRequestRepository = pickupPointRequestRepository;
         _payOSService = payOSService;
+        _pickupPointEnrollmentService = pickupPointEnrollmentService;
         _mapper = mapper;
         _logger = logger;
         _config = config.Value;
@@ -454,13 +457,10 @@ public class PaymentService : IPaymentService
                 var transportFeeItem = new TransportFeeItem
                 {
                     StudentId = studentId,
-                    Description = $"Phí vận chuyển học sinh {student.FirstName} {student.LastName}",
+                    Description = $"Transport fee for student {student.FirstName} {student.LastName}",
                     DistanceKm = distance,
                     UnitPriceVndPerKm = unitPrice,
-                    QuantityKm = quantity,
                     Subtotal = subtotal,
-                    PeriodMonth = DateTime.UtcNow.Month,
-                    PeriodYear = DateTime.UtcNow.Year,
                     Status = TransportFeeItemStatus.Unbilled
                 };
 
@@ -479,15 +479,9 @@ public class PaymentService : IPaymentService
                 Status = TransactionStatus.Notyet,
                 Amount = totalAmount,
                 Currency = "VND",
-                Description = $"Phí vận chuyển học sinh - Yêu cầu điểm đón {pickupPointRequestId}",
+                Description = $"Transport fee for student - Pickup point request {pickupPointRequestId}",
                 Provider = PaymentProvider.PayOS,
-                PickupPointRequestId = pickupPointRequestId,
-                ScheduleId = scheduleId,
-                Metadata = System.Text.Json.JsonSerializer.Serialize(new { 
-                    StudentCount = studentIds.Count(),
-                    DistanceKm = pickupPointRequest.DistanceKm,
-                    CreatedFrom = "PickupPointRequest"
-                })
+                PickupPointRequestId = pickupPointRequestId
             };
 
             // Save transaction first
@@ -566,6 +560,9 @@ public class PaymentService : IPaymentService
             }
         }
 
-        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated after payment");
+        // Assign pickup point after successful payment
+        await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transactionId);
+
+        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated and pickup point assigned after payment");
     }
 }

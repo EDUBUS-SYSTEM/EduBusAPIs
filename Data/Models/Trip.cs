@@ -31,6 +31,21 @@ namespace Data.Models
 
         [BsonElement("stops")]
         public List<TripStop> Stops { get; set; } = new List<TripStop>();
+
+        [BsonElement("overrideInfo")]
+        public OverrideInfo? OverrideInfo { get; set; }
+
+        [BsonElement("isOverride")]
+        public bool IsOverride { get; set; } = false;
+
+        [BsonElement("overrideReason")]
+        public string OverrideReason { get; set; } = string.Empty;
+
+        [BsonElement("overrideCreatedBy")]
+        public string OverrideCreatedBy { get; set; } = string.Empty;
+
+        [BsonElement("overrideCreatedAt")]
+        public DateTime OverrideCreatedAt { get; set; }
     }
 
     public class ScheduleSnapshot
@@ -49,5 +64,35 @@ namespace Data.Models
 
         [BsonElement("rrule")]
         public string RRule { get; set; } = string.Empty;
+    }
+
+    public class OverrideInfo
+    {
+        [BsonElement("scheduleId")]
+        public string ScheduleId { get; set; } = string.Empty;
+
+        [BsonElement("overrideType")]
+        public string OverrideType { get; set; } = string.Empty; // "TIME", "CANCELLATION", "DELAY"
+
+        [BsonElement("originalStartTime")]
+        public string OriginalStartTime { get; set; } = string.Empty;
+
+        [BsonElement("originalEndTime")]
+        public string OriginalEndTime { get; set; } = string.Empty;
+
+        [BsonElement("newStartTime")]
+        public string NewStartTime { get; set; } = string.Empty;
+
+        [BsonElement("newEndTime")]
+        public string NewEndTime { get; set; } = string.Empty;
+
+        [BsonElement("overrideReason")]
+        public string OverrideReason { get; set; } = string.Empty;
+
+        [BsonElement("overrideCreatedAt")]
+        public DateTime OverrideCreatedAt { get; set; }
+
+        [BsonElement("overrideCreatedBy")]
+        public string OverrideCreatedBy { get; set; } = string.Empty;
     }
 }

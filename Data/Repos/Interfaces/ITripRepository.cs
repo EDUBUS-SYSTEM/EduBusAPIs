@@ -1,0 +1,19 @@
+﻿using Data.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Data.Repos.Interfaces
+{
+	public interface ITripRepository : IMongoRepository<Trip>
+	{
+		Task<IEnumerable<Trip>> GetTripsByRouteAsync(Guid routeId);
+		Task<IEnumerable<Trip>> GetTripsByDateAsync(DateTime serviceDate);
+		Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
+		Task<IEnumerable<Trip>> GetTripsByStatusAsync(string status);
+		Task<IEnumerable<Trip>> GetTripsByDriverAsync(Guid driverId);
+		Task<IEnumerable<Trip>> GetUpcomingTripsAsync(DateTime fromDate, int days = 7);
+	}
+}

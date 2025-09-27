@@ -56,15 +56,11 @@ namespace Data.Contexts.SqlServer
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        {
-            if (!optionsBuilder.IsConfigured)
-            {
-                optionsBuilder.UseSqlServer(
-                    "Server=(localdb)\\MSSQLLocalDB;Database=edubus_dev;Trusted_Connection=True;Encrypt=False",
-                    sql => sql.UseNetTopologySuite()
-                );
-            }
-        }
+#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+            => optionsBuilder.UseSqlServer(
+                "Server=localhost,49898;Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
+                sql => sql.UseNetTopologySuite()
+            );
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -413,24 +409,28 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<UnitPrice>(entity =>
             {
-                entity.HasIndex(e => e.AdminId, "IX_UnitPrices_AdminId");
+                entity.HasIndex(e => e.ByAdminId, "IX_UnitPrices_ByAdminId");
 
-                entity.HasIndex(e => e.StartTimeUtc, "IX_UnitPrices_ValidFrom");
+                entity.HasIndex(e => e.EffectiveFrom, "IX_UnitPrices_EffectiveFrom");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
-                entity.Property(e => e.DepartureTime).HasPrecision(0);
-                entity.Property(e => e.EndTimeUtc).HasPrecision(3);
+                entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.PricePerKm)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+                entity.Property(e => e.EffectiveFrom).HasPrecision(3);
+                entity.Property(e => e.EffectiveTo).HasPrecision(3);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.ScheduleType).HasMaxLength(50);
-                entity.Property(e => e.StartTimeUtc).HasPrecision(3);
-                entity.Property(e => e.UpdatedAt)
-                    .HasPrecision(3);
+                entity.Property(e => e.ByAdminName).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
-                entity.HasOne(d => d.Admin).WithMany(p => p.UnitPrices)
-                    .HasForeignKey(d => d.AdminId)
+                entity.HasOne(d => d.ByAdmin).WithMany(p => p.UnitPrices)
+                    .HasForeignKey(d => d.ByAdminId)
                     .OnDelete(DeleteBehavior.ClientSetNull);
             });
 

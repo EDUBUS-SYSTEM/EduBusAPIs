@@ -7,5 +7,8 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.Interfaces
 {
-    public interface IPickupPointRepository : ISqlRepository<PickupPoint> { }
+    public interface IPickupPointRepository : ISqlRepository<PickupPoint> 
+    {
+        Task<List<(PickupPoint PickupPoint, int AssignedStudentCount)>> GetPickupPointsWithStudentCountAsync();
+    }
 }

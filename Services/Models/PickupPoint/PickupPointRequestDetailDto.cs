@@ -20,8 +20,15 @@ namespace Services.Models.PickupPoint
         public string Reason { get; set; } = string.Empty;
         
         // Pricing information
-        public decimal UnitPriceVndPerKm { get; set; }
-        public decimal EstimatedPriceVnd { get; set; }
+        public decimal UnitPricePerKm { get; set; }
+        public decimal TotalFee { get; set; }
+        
+        // Semester information
+        public string SemesterName { get; set; } = string.Empty;
+        public string AcademicYear { get; set; } = string.Empty;
+        public DateTime SemesterStartDate { get; set; }
+        public DateTime SemesterEndDate { get; set; }
+        public int TotalSchoolDays { get; set; }
         
         // Status and review information
         public string Status { get; set; } = "Pending";
