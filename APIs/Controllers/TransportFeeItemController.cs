@@ -3,12 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.TransportFeeItem;
 using Data.Models.Enums;
+using Constants;
 
 namespace APIs.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    [Authorize]
     public class TransportFeeItemController : ControllerBase
     {
         private readonly ITransportFeeItemService _transportFeeItemService;
@@ -22,6 +22,7 @@ namespace APIs.Controllers
         /// Get transport fee item detail by ID
         /// </summary>
         [HttpGet("{id}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransportFeeItemDetailResponse>> GetDetail(Guid id)
         {
             try
@@ -43,6 +44,7 @@ namespace APIs.Controllers
         /// Get list of transport fee items with filtering and pagination
         /// </summary>
         [HttpGet]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<TransportFeeItemListResponse>> GetList([FromQuery] TransportFeeItemListRequest request)
         {
             try
@@ -60,6 +62,7 @@ namespace APIs.Controllers
         /// Create a new transport fee item
         /// </summary>
         [HttpPost]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<Data.Models.TransportFeeItem>> Create([FromBody] CreateTransportFeeItemRequest request)
         {
             try
@@ -84,6 +87,7 @@ namespace APIs.Controllers
         /// Update transport fee item status
         /// </summary>
         [HttpPut("{id}/status")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateStatus(Guid id, [FromBody] UpdateTransportFeeItemStatusRequest request)
         {
             try
@@ -110,6 +114,7 @@ namespace APIs.Controllers
         /// Update multiple transport fee items status
         /// </summary>
         [HttpPut("status/batch")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateStatusBatch([FromBody] UpdateStatusBatchRequest request)
         {
             try
@@ -133,6 +138,7 @@ namespace APIs.Controllers
         /// Get transport fee items by transaction ID
         /// </summary>
         [HttpGet("transaction/{transactionId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByTransactionId(Guid transactionId)
         {
             try
@@ -150,6 +156,7 @@ namespace APIs.Controllers
         /// Get transport fee items by student ID
         /// </summary>
         [HttpGet("student/{studentId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByStudentId(Guid studentId)
         {
             try
@@ -167,6 +174,7 @@ namespace APIs.Controllers
         /// Get transport fee items by parent email
         /// </summary>
         [HttpGet("parent/{parentEmail}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByParentEmail(string parentEmail)
         {
             try
@@ -184,6 +192,7 @@ namespace APIs.Controllers
         /// Get total amount by transaction ID
         /// </summary>
         [HttpGet("transaction/{transactionId}/total")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<decimal>> GetTotalAmountByTransactionId(Guid transactionId)
         {
             try
@@ -201,6 +210,7 @@ namespace APIs.Controllers
         /// Get count by status
         /// </summary>
         [HttpGet("count/{status}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<int>> GetCountByStatus(TransportFeeItemStatus status)
         {
             try
@@ -218,6 +228,7 @@ namespace APIs.Controllers
         /// Delete transport fee item (soft delete)
         /// </summary>
         [HttpDelete("{id}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> Delete(Guid id)
         {
             try

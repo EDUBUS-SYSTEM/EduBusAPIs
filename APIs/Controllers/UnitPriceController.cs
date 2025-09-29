@@ -3,12 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.UnitPrice;
 using System.Security.Claims;
+using Constants;
 
 namespace APIs.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = Roles.Admin)]
 public class UnitPriceController : ControllerBase
 {
     private readonly IUnitPriceService _unitPriceService;
@@ -73,6 +74,7 @@ public class UnitPriceController : ControllerBase
     }
 
     [HttpGet("current-effective")]
+    [AllowAnonymous]
     public async Task<ActionResult<UnitPriceResponseDto>> GetCurrentEffectiveUnitPrice()
     {
         var unitPrice = await _unitPriceService.GetCurrentEffectiveUnitPriceAsync();

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Services.Contracts;
 using Services.Models.Transaction;
 using Data.Models.Enums;
+using Constants;
 
 namespace APIs.Controllers
 {
@@ -21,6 +22,7 @@ namespace APIs.Controllers
         /// Create transaction from approved pickup point request
         /// </summary>
         [HttpPost("create-from-pickup-point")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<CreateTransactionFromPickupPointResponse>> CreateFromPickupPoint(
             CreateTransactionFromPickupPointRequest request)
         {
@@ -47,6 +49,7 @@ namespace APIs.Controllers
         /// Get transaction detail by ID
         /// </summary>
         [HttpGet("{transactionId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionDetailResponseDto>> GetTransactionDetail(Guid transactionId)
         {
             try
@@ -68,6 +71,7 @@ namespace APIs.Controllers
         /// Get transaction list with filtering
         /// </summary>
         [HttpGet]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionList(
             [FromQuery] TransactionListRequest request)
         {
@@ -86,6 +90,7 @@ namespace APIs.Controllers
         /// Update transaction status
         /// </summary>
         [HttpPut("{transactionId}/status")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateTransactionStatus(
             Guid transactionId, 
             [FromBody] UpdateTransactionStatusRequest request)
@@ -157,6 +162,7 @@ namespace APIs.Controllers
         /// Delete transaction (soft delete)
         /// </summary>
         [HttpDelete("{transactionId}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> DeleteTransaction(Guid transactionId)
         {
             try
@@ -178,6 +184,7 @@ namespace APIs.Controllers
         /// Update transaction details
         /// </summary>
         [HttpPut("{transactionId}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateTransaction(
             Guid transactionId, 
             [FromBody] UpdateTransactionRequest request)
@@ -201,6 +208,7 @@ namespace APIs.Controllers
         /// Get transactions by parent ID
         /// </summary>
         [HttpGet("parent/{parentId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionsByParent(
             Guid parentId,
             [FromQuery] int page = 1,
@@ -235,6 +243,7 @@ namespace APIs.Controllers
         /// Get transactions by student ID
         /// </summary>
         [HttpGet("student/{studentId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionsByStudent(
             Guid studentId,
             [FromQuery] int page = 1,
@@ -263,6 +272,7 @@ namespace APIs.Controllers
         /// Get transaction by transport fee item ID
         /// </summary>
         [HttpGet("by-transport-fee-item/{transportFeeItemId}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionDetailResponseDto>> GetTransactionByTransportFeeItemId(Guid transportFeeItemId)
         {
             try
