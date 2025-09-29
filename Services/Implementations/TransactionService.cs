@@ -267,9 +267,11 @@ namespace Services.Implementations
                 TransactionCode = t.TransactionCode,
                 Status = t.Status,
                 Amount = t.Amount,
+                Currency = t.Currency,
                 Description = t.Description,
                 CreatedAt = t.CreatedAt,
                 PaidAtUtc = t.PaidAtUtc,
+                ParentId = t.ParentId,
                 StudentCount = 0 // Will be calculated separately if needed
             }).ToList();
 
