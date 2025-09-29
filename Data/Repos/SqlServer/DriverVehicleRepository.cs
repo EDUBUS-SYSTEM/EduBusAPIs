@@ -145,12 +145,13 @@ namespace Data.Repos.SqlServer
             // Drivers with no overlapping assignments in the window
             var newEndVal = endTime;
             var overlappingDriverIds = await _context.DriverVehicles
-                .Where(dv => !dv.IsDeleted && dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue))
+                .Where(dv => !dv.IsDeleted  && dv.Status != DriverVehicleStatus.Cancelled && dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue))
                 .Select(dv => dv.DriverId)
                 .Distinct()
                 .ToListAsync();
 
             var drivers = await _context.Drivers
+                .Include(d => d.DriverLicense)
                 .Where(d => !d.IsDeleted && !overlappingDriverIds.Contains(d.Id))
                 .ToListAsync();
 
@@ -321,5 +322,41 @@ namespace Data.Repos.SqlServer
             return await query.OrderByDescending(dv => dv.StartTimeUtc).ToListAsync();
         }
 
+        public async Task<Dictionary<Guid, DriverVehicle?>> GetPrimaryVehiclesForDriversAsync(IEnumerable<Guid> driverIds)
+        {
+            var driverIdsList = driverIds.ToList();
+            if (!driverIdsList.Any()) return new Dictionary<Guid, DriverVehicle?>();
+
+            var now = DateTime.UtcNow;
+            var primaryVehicles = await _context.DriverVehicles
+                .Include(dv => dv.Vehicle)
+                .Where(dv => driverIdsList.Contains(dv.DriverId) &&
+                           !dv.IsDeleted &&
+                           dv.IsPrimaryDriver &&
+                           dv.StartTimeUtc <= now &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now))
+                .ToListAsync();
+
+            var result = new Dictionary<Guid, DriverVehicle?>();
+            foreach (var driverId in driverIdsList)
+            {
+                result[driverId] = primaryVehicles.FirstOrDefault(pv => pv.DriverId == driverId);
+            }
+
+            return result;
+        }
+
+        public async Task<DriverVehicle?> GetPrimaryVehicleForDriverAsync(Guid driverId)
+        {
+            var now = DateTime.UtcNow;
+            return await _context.DriverVehicles
+                .Include(dv => dv.Vehicle)
+                .Where(dv => dv.DriverId == driverId &&
+                           !dv.IsDeleted &&
+                           dv.IsPrimaryDriver &&
+                           dv.StartTimeUtc <= now &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now))
+                .FirstOrDefaultAsync();
+        }
     }
 }

@@ -16,6 +16,11 @@ namespace Services.Contracts
         Task<DriverAssignmentResponse?> CancelAssignmentAsync(Guid assignmentId, string reason, Guid adminId);
         Task<BasicSuccessResponse?> DeleteAssignmentAsync(Guid assignmentId, Guid adminId);
 
+        // Available drivers methods
+        Task<IEnumerable<GetAvailableDriverDto>> GetAvailableDriversAsync(DateTime startDate, DateTime endDate);
+        
+        // Get vehicle for driver replacement
+        Task<Guid?> GetVehicleForDriverReplacementAsync(Guid driverId);
 
         Task<IEnumerable<AssignmentConflictDto>> DetectAssignmentConflictsAsync(Guid vehicleId, DateTime startTime, DateTime endTime);
         Task<ReplacementSuggestionResponse> SuggestReplacementAsync(Guid assignmentId, Guid adminId);

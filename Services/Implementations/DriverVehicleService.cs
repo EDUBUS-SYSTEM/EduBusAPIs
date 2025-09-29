@@ -7,7 +7,7 @@ using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.UserAccount;
 using Utils;
-
+using Services.Models.Common;
 namespace Services.Implementations
 {
     public class DriverVehicleService : IDriverVehicleService
@@ -62,6 +62,56 @@ namespace Services.Implementations
                 HasHealthCertificate = d.HealthCertificateFileId.HasValue
             });
         }
+
+        public async Task<IEnumerable<GetAvailableDriverDto>> GetAvailableDriversAsync(DateTime startDate, DateTime endDate)
+        {
+            // Validate input parameters
+            if (startDate >= endDate)
+                throw new ArgumentException("Start date must be before end date");
+            
+            if (startDate < DateTime.UtcNow.Date)
+                throw new ArgumentException("Start date cannot be in the past");
+
+            // Tìm tài xế khả dụng trong khoảng thời gian
+            var availableDrivers = await _driverVehicleRepo.FindAvailableDriversAsync(startDate, endDate, null);
+
+            return availableDrivers.Select(d => new GetAvailableDriverDto
+            {
+                Id = d.Id,
+                FullName = $"{d.FirstName} {d.LastName}",
+                Email = d.Email,
+                PhoneNumber = d.PhoneNumber,
+                Status = d.Status,
+                LicenseNumber = d.DriverLicense != null
+                    ? SecurityHelper.DecryptFromBytes(d.DriverLicense.HashedLicenseNumber)
+                    : null,
+                LicenseExpiryDate = null, 
+                HasValidLicense = d.DriverLicense != null,
+                HasHealthCertificate = d.HealthCertificateFileId.HasValue,
+                YearsOfExperience = d.DriverLicense != null ? 
+                    (int)Math.Max(0, (DateTime.UtcNow - d.DriverLicense.DateOfIssue).TotalDays / 365) : 0,
+                LastActiveDate = d.LastActiveDate,
+                IsAvailable = true,
+                AvailabilityReason = "Available in specified time range",
+                CheckedAt = DateTime.UtcNow
+            });
+        }
+
+        public async Task<Guid?> GetVehicleForDriverReplacementAsync(Guid driverId)
+        {
+            try
+            {
+                // Lấy primary vehicle của tài xế
+                var primaryVehicle = await _driverVehicleRepo.GetPrimaryVehicleForDriverAsync(driverId);
+                return primaryVehicle?.VehicleId;
+            }
+            catch (Exception ex)
+            {
+                // Log error if needed
+                return null;
+            }
+        }
+
         public async Task<DriverAssignmentResponse?> AssignDriverAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId)
         {
             var vehicle = await _vehicleRepo.FindAsync(vehicleId);

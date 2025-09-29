@@ -8,14 +8,20 @@ namespace Services.Models.Driver
         public Guid DriverId { get; set; }
         public string DriverName { get; set; } = string.Empty;
         public string DriverEmail { get; set; } = string.Empty;
+        public string DriverPhoneNumber { get; set; } = string.Empty;
+        public string DriverLicenseNumber { get; set; } = string.Empty;
         public LeaveType LeaveType { get; set; }
         public DateTime StartDate { get; set; }
         public DateTime EndDate { get; set; }
         public string Reason { get; set; } = string.Empty;
         public LeaveStatus Status { get; set; }
         public DateTime RequestedAt { get; set; }
-        
-        // Approval information
+
+        // Primary vehicle information
+        public Guid? PrimaryVehicleId { get; set; }
+        public string? PrimaryVehicleLicensePlate { get; set; }
+
+        // Approval information 
         public Guid? ApprovedByAdminId { get; set; }
         public string? ApprovedByAdminName { get; set; }
         public DateTime? ApprovedAt { get; set; }
@@ -31,6 +37,5 @@ namespace Services.Models.Driver
         
         // Additional information
         public string? AdditionalInformation { get; set; }
-        public int TotalDays { get; set; }
     }
 }

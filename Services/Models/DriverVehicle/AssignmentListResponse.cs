@@ -1,3 +1,5 @@
+using Services.Models.Common;
+
 namespace Services.Models.DriverVehicle
 {
     public class AssignmentListResponse
@@ -9,15 +11,7 @@ namespace Services.Models.DriverVehicle
         public object? Error { get; set; }
     }
 
-    public class PaginationInfo
-    {
-        public int CurrentPage { get; set; }
-        public int PerPage { get; set; }
-        public int TotalItems { get; set; }
-        public int TotalPages { get; set; }
-        public bool HasNextPage { get; set; }
-        public bool HasPreviousPage { get; set; }
-    }
+    
 
     public class FilterSummary
     {

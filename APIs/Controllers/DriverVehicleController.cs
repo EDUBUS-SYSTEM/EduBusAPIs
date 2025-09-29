@@ -76,28 +76,6 @@ namespace APIs.Controllers
         }
 
         /// <summary>
-        /// Get driver current assignments - Driver can view own, Admin can view any
-        /// </summary>
-        [HttpGet("driver/{driverId}/assignments/current")]
-        public async Task<ActionResult<AssignmentListResponse>> GetDriverCurrentAssignments(Guid driverId)
-        {
-            try
-            {
-                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, driverId))
-                {
-                    return Forbid();
-                }
-
-                var result = await _driverVehicleService.GetDriverAssignmentsAsync(driverId, isActive: true, page: 1, perPage: 50);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { success = false, error = "An error occurred while retrieving current assignments." });
-            }
-        }
-
-        /// <summary>
         /// Get driver upcoming assignments - Driver can view own, Admin can view any
         /// </summary>
         [HttpGet("driver/{driverId}/assignments/upcoming")]
@@ -116,6 +94,28 @@ namespace APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { success = false, error = "An error occurred while retrieving upcoming assignments." });
+            }
+        }
+
+        /// <summary>
+        /// Get driver current assignments - Driver can view own, Admin can view any
+        /// </summary>
+        [HttpGet("driver/{driverId}/assignments/current")]
+        public async Task<ActionResult<AssignmentListResponse>> GetDriverCurrentAssignments(Guid driverId)
+        {
+            try
+            {
+                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, driverId))
+                {
+                    return Forbid();
+                }
+
+                var result = await _driverVehicleService.GetDriverAssignmentsAsync(driverId, isActive: true, page: 1, perPage: 50);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving current assignments." });
             }
         }
 
@@ -333,6 +333,34 @@ namespace APIs.Controllers
                 return StatusCode(500, new { success = false, error = "An error occurred while accepting suggestion." });
             }
         }
+
+        /// <summary>
+        /// Get available drivers for custom date range - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet("drivers/available")]
+        public async Task<ActionResult<IEnumerable<GetAvailableDriverDto>>> GetAvailableDrivers(
+            [FromQuery] DateTime startDate, 
+            [FromQuery] DateTime endDate)
+        {
+            try
+            {
+                var result = await _driverVehicleService.GetAvailableDriversAsync(startDate, endDate);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { success = false, error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving available drivers." });
+            }
+        }
+
+        #endregion
+
+        #region Assignment Approval and Status Management (Admin only)
 
         /// <summary>
         /// Approve assignment - Admin only

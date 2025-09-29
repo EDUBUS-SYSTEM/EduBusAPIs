@@ -72,7 +72,8 @@ namespace Services.MapperProfiles
             CreateMap<DriverLeaveRequest, DriverLeaveResponse>()
                 .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"))
                 .ForMember(dest => dest.DriverEmail, opt => opt.MapFrom(src => src.Driver.Email))
-                .ForMember(dest => dest.TotalDays, opt => opt.MapFrom(src => (src.EndDate - src.StartDate).Days + 1));
+                .ForMember(dest => dest.ApprovedByAdminName, opt => opt.MapFrom(src => 
+                    src.ApprovedByAdmin != null ? $"{src.ApprovedByAdmin.FirstName} {src.ApprovedByAdmin.LastName}" : null));
             CreateMap<ApproveLeaveRequestDto, DriverLeaveRequest>();
             CreateMap<RejectLeaveRequestDto, DriverLeaveRequest>();
             CreateMap<UpdateLeaveRequestDto, DriverLeaveRequest>();

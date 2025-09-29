@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Driver;
+using Services.Models.DriverVehicle;
 using Services.Models.UserAccount;
 using Data.Models;
 using Data.Models.Enums;
@@ -20,17 +21,20 @@ namespace APIs.Controllers
         private readonly IFileService _fileService;
         private readonly IDriverLeaveService _driverLeaveService;
         private readonly IDriverWorkingHoursService _driverWorkingHoursService;
+        private readonly IDriverVehicleService _driverVehicleService;
         
         public DriverController(
             IDriverService driverService, 
             IFileService fileService,
             IDriverLeaveService driverLeaveService,
-            IDriverWorkingHoursService driverWorkingHoursService)
+            IDriverWorkingHoursService driverWorkingHoursService,
+            IDriverVehicleService driverVehicleService)
         {
             _driverService = driverService;
             _fileService = fileService;
             _driverLeaveService = driverLeaveService;
             _driverWorkingHoursService = driverWorkingHoursService;
+            _driverVehicleService = driverVehicleService;
         }
 
         [Authorize(Roles = Roles.Admin)]
@@ -337,6 +341,45 @@ namespace APIs.Controllers
         }
 
         /// <summary>
+        /// Get all driver leave requests with pagination, search and filters - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet("leaves")]
+        public async Task<ActionResult<DriverLeaveListResponse>> GetAllLeaveRequests(
+            [FromQuery] DriverLeaveListRequest request)
+        {
+            try
+            {
+                // Validate request
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(new DriverLeaveListResponse
+                    {
+                        Success = false,
+                        Error = ModelState
+                    });
+                }
+
+                var result = await _driverLeaveService.GetLeaveRequestsAsync(request);
+                
+                if (!result.Success)
+                {
+                    return StatusCode(500, result);
+                }
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new DriverLeaveListResponse
+                {
+                    Success = false,
+                    Error = new { message = "An error occurred while retrieving leave requests." }
+                });
+            }
+        }
+
+        /// <summary>
         /// Create leave request - Driver can create own, Admin can create for any
         /// </summary>
         [HttpPost("{id}/leaves")]
@@ -366,9 +409,10 @@ namespace APIs.Controllers
 
         /// <summary>
         /// Approve leave request - Admin only
+        /// Optional: Assign replacement driver during approval
         /// </summary>
         [Authorize(Roles = Roles.Admin)]
-        [HttpPut("leaves/{leaveId}/approve")]
+        [HttpPatch("leaves/{leaveId}/approve")]
         public async Task<ActionResult<DriverLeaveResponse>> ApproveLeaveRequest(Guid leaveId, [FromBody] ApproveLeaveRequestDto request)
         {
             try
@@ -378,12 +422,62 @@ namespace APIs.Controllers
                     return Unauthorized("Admin ID not found.");
 
                 Guid adminId = Guid.Parse(adminIdClaim.Value);
+                
+                // Approve leave request
                 var leave = await _driverLeaveService.ApproveLeaveRequestAsync(leaveId, request, adminId);
+                
+                // Tạo assignment cho replacement driver (nếu có)
+                if (request.ReplacementDriverId.HasValue)
+                {
+                    try
+                    {
+                        // Validate replacement driver exists
+                        var replacementDriver = await _driverService.GetDriverByIdAsync(request.ReplacementDriverId.Value);
+                        if (replacementDriver == null)
+                            return BadRequest("Replacement driver not found.");
+                        
+                        // Check if replacement driver is available during leave period
+                        var isAvailable = await _driverService.IsDriverAvailableAsync(
+                            request.ReplacementDriverId.Value, 
+                            leave.StartDate, 
+                            leave.EndDate);
+                            
+                        if (!isAvailable)
+                            return BadRequest("Replacement driver is not available during the leave period.");
+                        
+                        // Determine vehicle ID - always use current driver's vehicle
+                        var vehicleId = await _driverVehicleService.GetVehicleForDriverReplacementAsync(leave.DriverId);
+                        if (!vehicleId.HasValue)
+                            return BadRequest("Current driver has no active vehicle assignment.");
+                        
+                        // Create assignment for replacement driver
+                        var assignmentRequest = new DriverAssignmentRequest
+                        {
+                            DriverId = request.ReplacementDriverId.Value,
+                            StartTimeUtc = leave.StartDate,
+                            EndTimeUtc = leave.EndDate,
+                            IsPrimaryDriver = false
+                        };
+                        
+                        var assignment = await _driverVehicleService.AssignDriverWithValidationAsync(
+                            vehicleId.Value, 
+                            assignmentRequest, 
+                            adminId);
+                        
+                        if (assignment?.Success != true)
+                            return BadRequest("Failed to create replacement assignment.");
+                    }
+                    catch (Exception ex)
+                    {
+                        return BadRequest($"Leave approved but failed to create replacement assignment: {ex.Message}");
+                    }
+                }
+                
                 return Ok(leave);
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(ex.Message);
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {
@@ -395,7 +489,7 @@ namespace APIs.Controllers
         /// Reject leave request - Admin only
         /// </summary>
         [Authorize(Roles = Roles.Admin)]
-        [HttpPut("leaves/{leaveId}/reject")]
+        [HttpPatch("leaves/{leaveId}/reject")]
         public async Task<ActionResult<DriverLeaveResponse>> RejectLeaveRequest(Guid leaveId, [FromBody] RejectLeaveRequestDto request)
         {
             try

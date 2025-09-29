@@ -42,5 +42,7 @@ namespace Data.Repos.Interfaces
             string sortOrder = "desc");
         
         Task<IEnumerable<DriverVehicle>> GetDriverAssignmentsAsync(Guid driverId, bool? isActive = null, DateTime? startDate = null, DateTime? endDate = null);
+        Task<Dictionary<Guid, DriverVehicle?>> GetPrimaryVehiclesForDriversAsync(IEnumerable<Guid> driverIds);
+        Task<DriverVehicle?> GetPrimaryVehicleForDriverAsync(Guid driverId);
     }
 }
