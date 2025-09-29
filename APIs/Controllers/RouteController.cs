@@ -203,7 +203,45 @@ namespace WebAPI.Controllers
             }
         }
 
-        [HttpDelete("{id:guid}")]
+		/// <summary>
+		/// Update multiple routes at once (all or nothing)
+		/// </summary>
+		/// <param name="request">Bulk route update request</param>
+		/// <returns>Bulk update result</returns>
+		[HttpPut("bulk")]
+		public async Task<ActionResult<UpdateBulkRouteResponse>> UpdateBulkRoutes([FromBody] UpdateBulkRouteRequest request)
+		{
+			try
+			{
+				if (!ModelState.IsValid)
+					return BadRequest(ModelState);
+
+				var response = await _routeService.UpdateBulkRoutesAsync(request);
+
+				if (response.Success)
+				{
+					return Ok(response);
+				}
+				else
+				{
+					return BadRequest(response);
+				}
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error" });
+			}
+		}
+
+		[HttpDelete("{id:guid}")]
         public async Task<ActionResult> DeleteRoute([FromRoute] Guid id)
         {
             try

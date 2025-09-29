@@ -444,8 +444,175 @@ namespace Services.Implementations
             return updatedRoute != null;
         }
 
-        // check pickupoint is exist
-        private async Task<Dictionary<Guid, PickupPoint>> ValidatePickupPointsAsync(List<Guid> pickupPointIds)
+		public async Task<UpdateBulkRouteResponse> UpdateBulkRoutesAsync(UpdateBulkRouteRequest request)
+		{
+			if (request == null)
+				throw new ArgumentNullException(nameof(request));
+
+			if (request.Routes == null || !request.Routes.Any())
+				throw new ArgumentException("Routes list cannot be null or empty", nameof(request));
+
+			var response = new UpdateBulkRouteResponse
+			{
+				TotalRoutes = request.Routes.Count,
+				Success = false
+			};
+
+			try
+			{
+				// First, validate all routes before making any changes
+				var validationErrors = await ValidateBulkUpdateRoutesAsync(request.Routes);
+				if (validationErrors.Any())
+				{
+					response.ErrorMessage = $"Validation failed: {string.Join(", ", validationErrors)}";
+					return response;
+				}
+
+				// Get all routes that need to be updated
+				var routeIds = request.Routes.Select(r => r.RouteId).ToList();
+				var existingRoutes = await _routeRepository.FindByConditionAsync(r => routeIds.Contains(r.Id));
+				var existingRoutesDict = existingRoutes.ToDictionary(r => r.Id);
+
+				// Prepare all updates
+				var updatedRoutes = new List<Route>();
+				foreach (var routeItem in request.Routes)
+				{
+					if (!existingRoutesDict.TryGetValue(routeItem.RouteId, out var existingRoute))
+					{
+						throw new InvalidOperationException($"Route with ID {routeItem.RouteId} not found");
+					}
+
+					// Update route properties
+					if (!string.IsNullOrEmpty(routeItem.RouteName))
+						existingRoute.RouteName = routeItem.RouteName;
+
+					if (routeItem.VehicleId.HasValue)
+					{
+						// Validate that vehicle exists and is active
+						var isVehicleActive = await _vehicleRepository.IsVehicleActiveAsync(routeItem.VehicleId.Value);
+						if (!isVehicleActive)
+							throw new InvalidOperationException($"Vehicle with ID {routeItem.VehicleId.Value} does not exist or is not active");
+
+						await ValidateVehicleNotInOtherRoutesAsync(routeItem.VehicleId.Value, routeItem.RouteId);
+						existingRoute.VehicleId = routeItem.VehicleId.Value;
+					}
+
+					if (routeItem.PickupPoints != null)
+					{
+						// Validate that all pickup points exist and are assigned to active students
+						var pickupPointIds = routeItem.PickupPoints.Select(pp => pp.PickupPointId).ToList();
+						var validPickupPoints = await ValidatePickupPointsAsync(pickupPointIds);
+
+						// Validate pickup points are not used in other active routes (exclude current route)
+						await ValidatePickupPointsNotInOtherRoutesAsync(pickupPointIds, routeItem.RouteId);
+
+						// Validate sequence order uniqueness within the route
+						ValidateSequenceOrderUniqueness(routeItem.PickupPoints);
+
+						existingRoute.PickupPoints = routeItem.PickupPoints.Select(pp =>
+						{
+							var pickupPoint = validPickupPoints[pp.PickupPointId];
+							return new PickupPointInfo
+							{
+								PickupPointId = pp.PickupPointId,
+								SequenceOrder = pp.SequenceOrder,
+								Location = new LocationInfo
+								{
+									Latitude = pickupPoint.Geog.Y,
+									Longitude = pickupPoint.Geog.X,
+									Address = pickupPoint.Location
+								}
+							};
+						}).ToList();
+					}
+
+					existingRoute.UpdatedAt = DateTime.UtcNow;
+					updatedRoutes.Add(existingRoute);
+				}
+
+				// Perform all updates in a single batch operation
+				// Since MongoDB doesn't have built-in transaction support in this repository,
+				// we'll use a different approach: validate everything first, then update all at once
+				var updateTasks = updatedRoutes.Select(route => _routeRepository.UpdateAsync(route));
+				var updatedRouteResults = await Task.WhenAll(updateTasks);
+
+				// Check if all updates were successful
+				var failedUpdates = updatedRouteResults.Where(r => r == null).Count();
+				if (failedUpdates > 0)
+				{
+					throw new InvalidOperationException($"{failedUpdates} routes failed to update");
+				}
+
+				// Map to DTOs and populate vehicle information
+				var routeDtos = new List<RouteDto>();
+				foreach (var updatedRoute in updatedRouteResults)
+				{
+					if (updatedRoute != null)
+					{
+						var routeDto = _mapper.Map<RouteDto>(updatedRoute);
+						var vehicle = await _vehicleRepository.FindAsync(updatedRoute.VehicleId);
+						if (vehicle != null)
+						{
+							routeDto.VehicleCapacity = vehicle.Capacity;
+							routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+						}
+						routeDtos.Add(routeDto);
+					}
+				}
+
+				response.UpdatedRoutes = routeDtos;
+				response.Success = true;
+			}
+			catch (Exception ex)
+			{
+				response.ErrorMessage = ex.Message;
+				response.Success = false;
+			}
+
+			return response;
+		}
+
+		private async Task<List<string>> ValidateBulkUpdateRoutesAsync(List<UpdateBulkRouteItem> routes)
+		{
+			var errors = new List<string>();
+
+			// Check for duplicate route IDs
+			var duplicateIds = routes.GroupBy(r => r.RouteId)
+				.Where(g => g.Count() > 1)
+				.Select(g => g.Key.ToString());
+
+			if (duplicateIds.Any())
+			{
+				errors.Add($"Duplicate route IDs found: {string.Join(", ", duplicateIds)}");
+			}
+
+			// Check for duplicate route names within the request
+			var routeNames = routes.Where(r => !string.IsNullOrEmpty(r.RouteName))
+				.GroupBy(r => r.RouteName!.ToLower())
+				.Where(g => g.Count() > 1)
+				.Select(g => g.Key);
+
+			if (routeNames.Any())
+			{
+				errors.Add($"Duplicate route names found: {string.Join(", ", routeNames)}");
+			}
+
+			// Validate that all route IDs exist
+			var routeIds = routes.Select(r => r.RouteId).ToList();
+			var existingRoutes = await _routeRepository.FindByConditionAsync(r => routeIds.Contains(r.Id));
+			var existingRouteIds = existingRoutes.Select(r => r.Id).ToHashSet();
+
+			var nonExistentIds = routeIds.Where(id => !existingRouteIds.Contains(id)).ToList();
+			if (nonExistentIds.Any())
+			{
+				errors.Add($"Routes not found: {string.Join(", ", nonExistentIds)}");
+			}
+
+			return errors;
+		}
+
+		// check pickupoint is exist
+		private async Task<Dictionary<Guid, PickupPoint>> ValidatePickupPointsAsync(List<Guid> pickupPointIds)
         {
             // Get pickup points that exist and are not deleted
             var existingPickupPoints = await _pickupPointRepository.FindByConditionAsync(pp => 

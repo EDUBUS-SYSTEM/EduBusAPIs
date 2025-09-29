@@ -10,7 +10,8 @@ namespace Services.Contracts
         Task<IEnumerable<RouteDto>> GetAllRoutesAsync();
         Task<IEnumerable<RouteDto>> GetActiveRoutesAsync();
         Task<RouteDto?> UpdateRouteAsync(Guid id, UpdateRouteRequest request);
-        Task<bool> SoftDeleteRouteAsync(Guid id);
+		Task<UpdateBulkRouteResponse> UpdateBulkRoutesAsync(UpdateBulkRouteRequest request);
+		Task<bool> SoftDeleteRouteAsync(Guid id);
         Task<bool> ActivateRouteAsync(Guid id);
         Task<bool> DeactivateRouteAsync(Guid id);
     }
