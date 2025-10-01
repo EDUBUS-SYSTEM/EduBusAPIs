@@ -20,5 +20,6 @@ namespace Data.Repos.Interfaces
         Task<bool> ExistsAsync(Guid id);
         Task<T?> FindOneAndUpdateAsync(FilterDefinition<T> filter, UpdateDefinition<T> update);
         Task<T?> FindOneAndDeleteAsync(FilterDefinition<T> filter);
-    }
+		Task<IEnumerable<T>> BulkUpdateAsync(IEnumerable<T> documents);
+	}
 }

@@ -187,6 +187,7 @@ builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 //Route Services
 builder.Services.AddScoped<IRouteService, RouteService>();
 builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
+builder.Services.AddScoped<IPickupPointService, PickupPointService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();

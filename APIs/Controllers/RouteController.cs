@@ -203,6 +203,44 @@ namespace WebAPI.Controllers
             }
         }
 
+
+		/// <summary>
+		/// Update route basic information (name and vehicle only) without modifying pickup points
+		/// </summary>
+		/// <param name="id">Route ID</param>
+		/// <param name="request">Basic route update request</param>
+		/// <returns>Updated route</returns>
+		[HttpPut("{id:guid}/basic")]
+		public async Task<ActionResult<RouteDto>> UpdateRouteBasic([FromRoute] Guid id, [FromBody] UpdateRouteBasicRequest request)
+		{
+			try
+			{
+				if (id == Guid.Empty)
+					return BadRequest("Invalid route ID");
+
+				if (!ModelState.IsValid)
+					return BadRequest(ModelState);
+
+				var route = await _routeService.UpdateRouteBasicAsync(id, request);
+				if (route == null)
+					return NotFound("Route not found");
+
+				return Ok(route);
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(ex.Message);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error" });
+			}
+		}
+
 		/// <summary>
 		/// Update multiple routes at once (all or nothing)
 		/// </summary>

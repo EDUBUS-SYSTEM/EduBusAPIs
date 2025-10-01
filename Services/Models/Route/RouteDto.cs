@@ -25,7 +25,8 @@ namespace Services.Models.Route
         public Guid PickupPointId { get; set; }
         public int SequenceOrder { get; set; }
         public LocationInfoDto Location { get; set; } = new LocationInfoDto();
-    }
+		public int StudentCount { get; set; }
+	}
 
     public class LocationInfoDto
     {
