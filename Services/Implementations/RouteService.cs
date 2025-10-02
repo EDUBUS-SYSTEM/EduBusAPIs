@@ -690,6 +690,158 @@ namespace Services.Implementations
 			return routeDto;
 		}
 
+		public async Task<ReplaceAllRoutesResponse> ReplaceAllRoutesAsync(ReplaceAllRoutesRequest request)
+		{
+			if (request == null)
+				throw new ArgumentNullException(nameof(request));
+
+			if (request.Routes == null || !request.Routes.Any())
+				throw new ArgumentException("Routes list cannot be null or empty", nameof(request));
+
+			var response = new ReplaceAllRoutesResponse
+			{
+				TotalNewRoutes = request.Routes.Count,
+				Success = false
+			};
+
+			try
+			{
+				// ✅ STEP 1: Validate all new routes first (before making any changes)
+				var validationErrors = ValidateBulkRouteDuplicates(request.Routes);
+				if (validationErrors.Any())
+				{
+					response.ErrorMessage = $"Validation failed: {string.Join(", ", validationErrors.Select(e => e.ErrorMessage))}";
+					return response;
+				}
+
+				// Validate each route individually
+				var routesToCreate = new List<Route>();
+				for (int i = 0; i < request.Routes.Count; i++)
+				{
+					var routeRequest = request.Routes[i];
+
+					// Prepare route object
+					var newRoute = new Route
+					{
+						Id = Guid.NewGuid(),
+						RouteName = routeRequest.RouteName,
+						VehicleId = routeRequest.VehicleId,
+						IsActive = true,
+						IsDeleted = false
+					};
+
+					// Add pickup points if provided
+					if (routeRequest.PickupPoints?.Any() == true)
+					{
+						var pickupPointIds = routeRequest.PickupPoints.Select(pp => pp.PickupPointId).ToList();
+						var validPickupPoints = await ValidatePickupPointsAsync(pickupPointIds);
+
+						ValidateSequenceOrderUniqueness(routeRequest.PickupPoints);
+
+						newRoute.PickupPoints = routeRequest.PickupPoints.Select(pp =>
+						{
+							var pickupPoint = validPickupPoints[pp.PickupPointId];
+							return new PickupPointInfo
+							{
+								PickupPointId = pp.PickupPointId,
+								SequenceOrder = pp.SequenceOrder,
+								Location = new LocationInfo
+								{
+									Latitude = pickupPoint.Geog.Y,
+									Longitude = pickupPoint.Geog.X,
+									Address = pickupPoint.Location
+								}
+							};
+						}).ToList();
+					}
+
+					routesToCreate.Add(newRoute);
+				}
+
+				// ✅ STEP 2: Get all existing routes for bulk deletion
+				var existingRoutes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted);
+				var existingRouteIds = existingRoutes.Select(r => r.Id).ToList();
+
+				// ✅ STEP 3: Bulk delete all existing routes (single database call)
+				var deletedCount = 0;
+				if (existingRouteIds.Any())
+				{
+					var deleteResult = await _routeRepository.BulkDeleteAsync(existingRouteIds);
+					deletedCount = (int)deleteResult.ModifiedCount;
+				}
+
+				response.DeletedRoutes = deletedCount;
+
+				// ✅ STEP 4: Bulk create all new routes (single database call)
+				var createdRoutes = await _routeRepository.BulkCreateAsync(routesToCreate);
+				var createdRoutesList = createdRoutes.ToList();
+
+				// ✅ STEP 5: Convert to DTOs and populate additional information
+				var routeDtos = new List<RouteDto>();
+
+				// Get all vehicle information in one query
+				var vehicleIds = createdRoutesList.Select(r => r.VehicleId).Distinct().ToList();
+				var vehicles = await _vehicleRepository.FindByConditionAsync(v => vehicleIds.Contains(v.Id));
+				var vehicleDict = vehicles.ToDictionary(v => v.Id);
+
+				// Get all pickup point IDs for student count queries
+				var allPickupPointIds = createdRoutesList
+					.SelectMany(r => r.PickupPoints)
+					.Select(pp => pp.PickupPointId)
+					.Distinct()
+					.ToList();
+
+				// Get student counts in one query
+				var studentCounts = new Dictionary<Guid, int>();
+				if (allPickupPointIds.Any())
+				{
+					var students = await _studentRepository.FindByConditionAsync(s =>
+						allPickupPointIds.Contains(s.CurrentPickupPointId ?? Guid.Empty) &&
+						s.Status == StudentStatus.Active &&
+						!s.IsDeleted);
+
+					studentCounts = students
+						.Where(s => s.CurrentPickupPointId.HasValue)
+						.GroupBy(s => s.CurrentPickupPointId!.Value)
+						.ToDictionary(g => g.Key, g => g.Count());
+				}
+
+				// Build DTOs
+				foreach (var route in createdRoutesList)
+				{
+					var routeDto = _mapper.Map<RouteDto>(route);
+
+					// Add vehicle information
+					if (vehicleDict.TryGetValue(route.VehicleId, out var vehicle))
+					{
+						routeDto.VehicleCapacity = vehicle.Capacity;
+						routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+					}
+
+					// Add student counts and sort pickup points
+					foreach (var pickupPoint in routeDto.PickupPoints)
+					{
+						pickupPoint.StudentCount = studentCounts.GetValueOrDefault(pickupPoint.PickupPointId, 0);
+					}
+					routeDto.PickupPoints = routeDto.PickupPoints.OrderBy(pp => pp.SequenceOrder).ToList();
+
+					routeDtos.Add(routeDto);
+				}
+
+				// ✅ STEP 6: Prepare successful response
+				response.CreatedRoutes = routeDtos;
+				response.SuccessfulRoutes = routeDtos.Count;
+				response.Success = true;
+
+				return response;
+			}
+			catch (Exception ex)
+			{
+				response.ErrorMessage = $"Failed to replace routes: {ex.Message}";
+				return response;
+			}
+		}
+
 		private async Task<List<string>> ValidateBulkUpdateContextAsync(List<UpdateBulkRouteItem> routes)
 		{
 			var errors = new List<string>();

@@ -279,6 +279,41 @@ namespace WebAPI.Controllers
 			}
 		}
 
+		/// <summary>
+		/// Replace all existing routes with new ones using bulk operations
+		/// (Delete all existing routes first, then create new ones in bulk)
+		/// </summary>
+		/// <param name="request">Replace all routes request</param>
+		/// <returns>Replace operation result</returns>
+		[HttpPost("replace-all")]
+		public async Task<ActionResult<ReplaceAllRoutesResponse>> ReplaceAllRoutes([FromBody] ReplaceAllRoutesRequest request)
+		{
+			try
+			{
+				if (!ModelState.IsValid)
+					return BadRequest(ModelState);
+
+				var response = await _routeService.ReplaceAllRoutesAsync(request);
+
+				if (response.Success)
+				{
+					return Ok(response);
+				}
+				else
+				{
+					return BadRequest(Problem(title: "Replace all routes failed", detail: response.ErrorMessage));
+				}
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(Problem(title: "Invalid request data", detail: ex.Message));
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", detail = ex.Message });
+			}
+		}
+
 		[HttpDelete("{id:guid}")]
         public async Task<ActionResult> DeleteRoute([FromRoute] Guid id)
         {

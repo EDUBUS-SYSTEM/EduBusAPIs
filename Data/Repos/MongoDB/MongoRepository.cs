@@ -163,6 +163,55 @@ namespace Data.Repos.MongoDB
             return await _collection.FindOneAndDeleteAsync(combinedFilter);
         }
 
+		public virtual async Task<IEnumerable<T>> BulkCreateAsync(IEnumerable<T> documents)
+		{
+			if (documents == null || !documents.Any())
+				return new List<T>();
+
+			var documentsList = documents.ToList();
+			var now = DateTime.UtcNow;
+
+			// Set creation timestamps
+			foreach (var document in documentsList)
+			{
+				document.CreatedAt = now;
+				document.UpdatedAt = now;
+				document.IsDeleted = false;
+			}
+
+			// Insert all documents in a single operation
+			await _collection.InsertManyAsync(documentsList);
+
+			return documentsList;
+		}
+
+		public virtual async Task<BulkWriteResult> BulkDeleteAsync(IEnumerable<Guid> ids)
+		{
+			if (ids == null || !ids.Any())
+			{
+				// Return an empty result when no IDs provided
+				var emptyOps = new List<WriteModel<T>>();
+				return await _collection.BulkWriteAsync(emptyOps);
+			}
+
+			var idsList = ids.ToList();
+			var bulkOps = new List<WriteModel<T>>();
+			var now = DateTime.UtcNow;
+
+			foreach (var id in idsList)
+			{
+				var filter = Builders<T>.Filter.Eq(x => x.Id, id);
+				var update = Builders<T>.Update
+					.Set(x => x.IsDeleted, true)
+					.Set(x => x.UpdatedAt, now);
+
+				bulkOps.Add(new UpdateOneModel<T>(filter, update));
+			}
+
+			// Execute bulk write operation
+			return await _collection.BulkWriteAsync(bulkOps);
+		}
+
 		public virtual async Task<IEnumerable<T>> BulkUpdateAsync(IEnumerable<T> documents)
 		{
 			if (documents == null || !documents.Any())

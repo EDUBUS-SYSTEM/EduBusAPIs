@@ -15,5 +15,6 @@ namespace Services.Contracts
 		Task<bool> SoftDeleteRouteAsync(Guid id);
         Task<bool> ActivateRouteAsync(Guid id);
         Task<bool> DeactivateRouteAsync(Guid id);
-    }
+		Task<ReplaceAllRoutesResponse> ReplaceAllRoutesAsync(ReplaceAllRoutesRequest request);
+	}
 }
