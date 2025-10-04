@@ -1,0 +1,17 @@
+                // Chỉ đếm số đơn chưa duyệt
+                var pendingLeavesCount = await _leaveRepo.GetQueryable()
+                    .Where(l => !l.IsDeleted && l.Status == LeaveStatus.Pending)
+                    .CountAsync();
+
+                // Map to response DTOs
+                var leaveResponses = leaves.Select(l => _mapper.Map<DriverLeaveResponse>(l)).ToList();
+
+                return new DriverLeaveListResponse
+                {
+                    Success = true,
+                    Data = leaveResponses,
+                    Pagination = pagination,
+                    PendingLeavesCount = pendingLeavesCount
+                };
+
+

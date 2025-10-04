@@ -8,8 +8,10 @@ namespace Services.Models.Vehicle
 {
     public class VehicleListResponse
     {
-        public bool Success { get; set; }
-        public IEnumerable<VehicleDto> Data { get; set; } = new List<VehicleDto>();
-        public object? Error { get; set; }
+        public List<VehicleDto> Vehicles { get; set; } = new List<VehicleDto>();
+        public int TotalCount { get; set; }
+        public int Page { get; set; }
+        public int PerPage { get; set; }
+        public int TotalPages { get; set; }
     }
 }

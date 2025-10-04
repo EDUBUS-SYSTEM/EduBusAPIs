@@ -15,6 +15,16 @@ namespace Data.Repos.SqlServer
             _context = context;
         }
 
+        public override async Task<DriverLeaveRequest?> FindAsync(Guid id)
+        {
+            return await _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Include(l => l.ApprovedByAdmin)
+                .Include(l => l.SuggestedReplacementDriver)
+                .Include(l => l.SuggestedReplacementVehicle)
+                .FirstOrDefaultAsync(l => l.Id == id && !l.IsDeleted);
+        }
+
         public async Task<IEnumerable<DriverLeaveRequest>> GetByDriverIdAsync(Guid driverId, DateTime? fromDate, DateTime? toDate)
         {
             var query = _context.DriverLeaveRequests

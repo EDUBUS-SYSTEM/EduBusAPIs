@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -6,7 +6,8 @@ using Services.Contracts;
 using Services.Models.Driver;
 using Microsoft.Extensions.Logging;
 using Utils;
-
+using Microsoft.EntityFrameworkCore;
+using Services.Models.Common;
 namespace Services.Implementations
 {
     public class DriverLeaveService : IDriverLeaveService
@@ -164,6 +165,30 @@ namespace Services.Implementations
             var entity = await _leaveRepo.FindAsync(leaveId);
             if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
             
+            // Validate that leave request is in Pending status
+            if (entity.Status != LeaveStatus.Pending)
+            {
+                throw new InvalidOperationException($"Cannot approve leave request. Current status: {entity.Status}. Only pending leave requests can be approved.");
+            }
+            
+            // Validate that approval is before the leave start date
+            var today = DateTime.UtcNow.Date;
+            if (entity.StartDate <= today)
+            {
+                throw new InvalidOperationException($"Cannot approve leave request. Leave start date ({entity.StartDate:yyyy-MM-dd}) must be after today ({today:yyyy-MM-dd}).");
+            }
+            
+            // Lưu thông tin replacement driver nếu có
+            if (dto.ReplacementDriverId.HasValue)
+            {
+                entity.SuggestedReplacementDriverId = dto.ReplacementDriverId.Value;
+                entity.SuggestionGeneratedAt = DateTime.UtcNow;
+            }
+            
+            // TODO: Commented out validation for EffectiveFrom/EffectiveTo as these properties are not being used effectively
+            // The validation only checks if dates match but doesn't provide real value
+            // Consider removing these properties entirely or implementing proper functionality
+            /*
             if (dto.EffectiveFrom.HasValue && dto.EffectiveFrom.Value != entity.StartDate)
             {
                 throw new InvalidOperationException("EffectiveFrom date must match the leave request start date.");
@@ -173,23 +198,31 @@ namespace Services.Implementations
             {
                 throw new InvalidOperationException("EffectiveTo date must match the leave request end date.");
             }
+            */
             
-            entity.Status = dto.IsApproved ? LeaveStatus.Approved : LeaveStatus.Rejected;
+            //entity.Status = dto.IsApproved ? LeaveStatus.Approved : LeaveStatus.Rejected;
+            entity.Status = LeaveStatus.Approved;
             entity.ApprovedAt = DateTime.UtcNow;
             entity.ApprovedByAdminId = adminId;
-            entity.ApprovalNote = dto.Note;
+            entity.ApprovalNote = dto.Notes;
             var updated = await _leaveRepo.UpdateAsync(entity);
             
             // Send notification to driver about approval/rejection
             try
             {
                 var driver = await _driverRepo.FindAsync(entity.DriverId);
-                var statusText = dto.IsApproved ? "approved" : "rejected";
+                var statusText = entity.Status.ToString();
                 var message = $"Your leave request for {entity.LeaveType} from {entity.StartDate:yyyy-MM-dd} to {entity.EndDate:yyyy-MM-dd} has been {statusText}.";
                 
-                if (!string.IsNullOrEmpty(dto.Note))
+                if (!string.IsNullOrEmpty(dto.Notes))
                 {
-                    message += $" Note: {dto.Note}";
+                    message += $" Note: {dto.Notes}";
+                }
+                
+                if (dto.ReplacementDriverId.HasValue)
+                {
+                    var replacementDriver = await _driverRepo.FindAsync(dto.ReplacementDriverId.Value);
+                    message += $" Replacement driver: {replacementDriver?.FirstName} {replacementDriver?.LastName}";
                 }
                 
                 var metadata = new Dictionary<string, object>
@@ -198,7 +231,8 @@ namespace Services.Implementations
                     ["driverId"] = entity.DriverId,
                     ["adminId"] = adminId,
                     ["status"] = entity.Status.ToString(),
-                    ["approvalNote"] = dto.Note ?? ""
+                    ["approvalNote"] = dto.Notes ?? "",
+                    ["replacementDriverId"] = dto.ReplacementDriverId?.ToString() ?? ""
                 };
                 
                 await _notificationService.CreateDriverLeaveNotificationAsync(
@@ -223,6 +257,16 @@ namespace Services.Implementations
             var entity = await _leaveRepo.FindAsync(leaveId);
             if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
             
+            // Validate that leave request is in Pending status
+            if (entity.Status != LeaveStatus.Pending)
+            {
+                throw new InvalidOperationException($"Cannot reject leave request. Current status: {entity.Status}. Only pending leave requests can be rejected.");
+            }
+            
+            // TODO: Commented out validation for SuggestedAlternativeStartDate/SuggestedAlternativeEndDate
+            // These properties are not being used effectively - validation exists but no storage or notification
+            // Consider implementing proper functionality or removing these properties entirely
+            /*
             if (dto.SuggestedAlternativeStartDate.HasValue && dto.SuggestedAlternativeEndDate.HasValue)
             {
                 var today = DateTime.UtcNow.Date;
@@ -246,6 +290,7 @@ namespace Services.Implementations
             {
                 throw new InvalidOperationException("Both suggested alternative start date and end date must be provided together.");
             }
+            */
             
             entity.Status = LeaveStatus.Rejected;
             entity.ApprovedAt = DateTime.UtcNow;
@@ -374,7 +419,116 @@ namespace Services.Implementations
         public async Task<IEnumerable<DriverLeaveResponse>> GetLeavesByStatusAsync(LeaveStatus status)
         {
             var list = await _leaveRepo.GetLeavesByStatusAsync(status);
-            return list.Select(_mapper.Map<DriverLeaveResponse>);
+            return list.Select(l => _mapper.Map<DriverLeaveResponse>(l));
+        }
+
+        public async Task<DriverLeaveListResponse> GetLeaveRequestsAsync(DriverLeaveListRequest request)
+        {
+            try
+            {
+                // Build query with filters
+                var query = _leaveRepo.GetQueryable()
+                    .Include(l => l.Driver)
+                    .ThenInclude(d => d.DriverLicense)
+                    .Include(l => l.ApprovedByAdmin)
+                    .Where(l => !l.IsDeleted);
+
+                // Apply search filter
+                if (!string.IsNullOrEmpty(request.SearchTerm))
+                {
+                    var searchTerm = request.SearchTerm.ToLower();
+                    query = query.Where(l =>
+                        l.Driver.Email.ToLower().Contains(searchTerm) ||
+                        l.Driver.FirstName.ToLower().Contains(searchTerm) ||
+                        l.Driver.LastName.ToLower().Contains(searchTerm) ||
+                        (l.Driver.FirstName + " " + l.Driver.LastName).ToLower().Contains(searchTerm));
+                }
+
+                // Apply status filter
+                if (request.Status.HasValue)
+                {
+                    query = query.Where(l => l.Status == request.Status.Value);
+                }
+
+                // Apply leave type filter
+                if (request.LeaveType.HasValue)
+                {
+                    query = query.Where(l => l.LeaveType == request.LeaveType.Value);
+                }
+
+                // Get total count for pagination
+                var totalItems = await query.CountAsync();
+
+                // Apply sorting - chỉ có 2 option: gần nhất (desc) hoặc xa nhất (asc)
+                query = request.SortOrder.ToLower() switch
+                {
+                    "asc" => query.OrderBy(l => l.RequestedAt),      // Xa nhất
+                    "desc" => query.OrderByDescending(l => l.RequestedAt), // Gần nhất (mặc định)
+                    _ => query.OrderByDescending(l => l.RequestedAt) // Default: gần nhất
+                };
+
+                // Apply pagination
+                var skip = (request.Page - 1) * request.PerPage;
+                var leaves = await query
+                    .Skip(skip)
+                    .Take(request.PerPage)
+                    .ToListAsync();
+
+                // Calculate pagination info
+                var totalPages = (int)Math.Ceiling((double)totalItems / request.PerPage);
+                var pagination = new PaginationInfo
+                {
+                    CurrentPage = request.Page,
+                    PerPage = request.PerPage,
+                    TotalItems = totalItems,
+                    TotalPages = totalPages,
+                    HasNextPage = request.Page < totalPages,
+                    HasPreviousPage = request.Page > 1
+                };
+
+                
+                var pendingLeavesCount = await _leaveRepo.GetQueryable()
+                    .Where(l => !l.IsDeleted && l.Status == LeaveStatus.Pending)
+                    .CountAsync();
+
+                // Get primary vehicles for all drivers in the result
+                var driverIds = leaves.Select(l => l.DriverId).Distinct().ToList();
+                var primaryVehicles = await _driverVehicleRepo.GetPrimaryVehiclesForDriversAsync(driverIds);
+
+                // Map to response DTOs with vehicle information
+                var leaveResponses = leaves.Select(l => {
+                    var response = _mapper.Map<DriverLeaveResponse>(l);
+
+                    // Add primary vehicle information
+                    var primaryVehicle = primaryVehicles.GetValueOrDefault(l.DriverId);
+                    if (primaryVehicle != null)
+                    {
+                        response.DriverLicenseNumber = SecurityHelper.DecryptFromBytes(l.Driver.DriverLicense?.HashedLicenseNumber);
+                        response.PrimaryVehicleId = primaryVehicle.VehicleId;
+                        response.PrimaryVehicleLicensePlate = SecurityHelper.DecryptFromBytes(primaryVehicle.Vehicle.HashedLicensePlate);
+                    }
+
+                    return response;
+                }).ToList();
+
+
+                return new DriverLeaveListResponse
+                {
+                    Success = true,
+                    Data = leaveResponses,
+                    Pagination = pagination,
+                    PendingLeavesCount = pendingLeavesCount
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving leave requests with pagination");
+                return new DriverLeaveListResponse
+                {
+                    Success = false,
+                    Error = new { message = "An error occurred while retrieving leave requests.", details = ex.Message }
+                };
+            }
         }
     }
 }

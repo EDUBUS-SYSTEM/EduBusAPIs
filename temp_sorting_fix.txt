@@ -1,0 +1,9 @@
+                // Apply sorting - chỉ có 2 option: gần nhất (desc) hoặc xa nhất (asc)
+                query = request.SortOrder.ToLower() switch
+                {
+                    "asc" => query.OrderBy(l => l.RequestedAt),      // Xa nhất
+                    "desc" => query.OrderByDescending(l => l.RequestedAt), // Gần nhất (mặc định)
+                    _ => query.OrderByDescending(l => l.RequestedAt) // Default: gần nhất
+                };
+
+
