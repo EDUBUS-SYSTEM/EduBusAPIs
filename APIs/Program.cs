@@ -149,11 +149,13 @@ builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRe
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Payment Repositories
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ITransportFeeItemRepository, TransportFeeItemRepository>();
 builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
@@ -161,6 +163,11 @@ builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepositor
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
+
+builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
+builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<IRouteScheduleRepository, RouteScheduleRepository>();
+builder.Services.AddScoped<IAcademicCalendarRepository, AcademicCalendarRepository>();
 
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -180,10 +187,18 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
+builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
+builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IPayOSService, PayOSService>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<ITransportFeeItemService, TransportFeeItemService>();
 
 // PayOS Configuration
 builder.Services.Configure<Services.Models.Payment.PayOSConfig>(
@@ -286,6 +301,23 @@ app.MapHub<NotificationHub>("/notificationHub", options =>
 });
 
 app.MapControllers();
+
+// Seed Mongo Schedules (idempotent)
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
+    try
+    {
+        var mongoContext = services.GetRequiredService<Data.Contexts.MongoDB.EduBusMongoContext>();
+        await Data.SeedConfiguration.ScheduleSeed.SeedAsync(mongoContext, logger);
+        await Data.SeedConfiguration.AcademicCalendarSeed.SeedAsync(mongoContext, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error seeding schedules");
+    }
+}
 
 // Map Health Check endpoints
 app.MapHealthChecks("/health/live", new HealthCheckOptions

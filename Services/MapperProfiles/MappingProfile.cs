@@ -1,15 +1,19 @@
 ﻿using AutoMapper;
 using Data.Models;
+using Services.Models.AcademicCalendar;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
 using Services.Models.Payment;
+using Services.Models.RouteSchedule;
+using Services.Models.Schedule;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
+using Services.Models.Trip;
+using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
-
 using Utils;
 
 namespace Services.MapperProfiles
@@ -112,6 +116,42 @@ namespace Services.MapperProfiles
             CreateMap<Transaction, TransactionDetailResponse>();
             CreateMap<TransportFeeItem, TransportFeeItemResponse>();
             CreateMap<PaymentEventLog, PaymentEventResponse>();
+
+			// Schedule mappings
+			CreateMap<Schedule, ScheduleDto>();
+			CreateMap<CreateScheduleDto, Schedule>();
+			CreateMap<UpdateScheduleDto, Schedule>()
+				.ForMember(dest => dest.TimeOverrides, opt => opt.Ignore());
+
+			// Trip mappings
+			CreateMap<Trip, TripDto>();
+			CreateMap<CreateTripDto, Trip>();
+			CreateMap<UpdateTripDto, Trip>();
+			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();
+			CreateMap<ScheduleSnapshotDto, ScheduleSnapshot>();
+			CreateMap<TripStop, TripStopDto>();
+			CreateMap<TripStopDto, TripStop>();
+
+			// RouteSchedule mappings
+			CreateMap<RouteSchedule, RouteScheduleDto>();
+			CreateMap<CreateRouteScheduleDto, RouteSchedule>();
+			CreateMap<UpdateRouteScheduleDto, RouteSchedule>();
+
+			// AcademicCalendar mappings
+			CreateMap<AcademicCalendar, AcademicCalendarDto>();
+			CreateMap<AcademicCalendarCreateDto, AcademicCalendar>();
+			CreateMap<AcademicCalendarUpdateDto, AcademicCalendar>();
+			CreateMap<AcademicSemester, AcademicSemesterDto>();
+			CreateMap<AcademicSemesterDto, AcademicSemester>();
+			CreateMap<SchoolHoliday, SchoolHolidayDto>();
+			CreateMap<SchoolHolidayDto, SchoolHoliday>();
+			CreateMap<SchoolDay, SchoolDayDto>();
+			CreateMap<SchoolDayDto, SchoolDay>();
+            
+            // UnitPrice mapping
+            CreateMap<UnitPrice, UnitPriceResponseDto>();
+            CreateMap<CreateUnitPriceDto, UnitPrice>();
+            CreateMap<UpdateUnitPriceDto, UnitPrice>();
         }
     }
 }

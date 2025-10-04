@@ -31,11 +31,13 @@ namespace Services.Models.PickupPoint
 
         [MaxLength(500)]
         public string Reason { get; set; } = string.Empty;
-
-        [Range(1, 1_000_000_000, ErrorMessage = "Unit price must be between 1 and 1,000,000,000 VND.")]
-        public decimal UnitPriceVndPerKm { get; set; } = 50_000m;
-
-        [Range(1, 1_000_000_000, ErrorMessage = "Estimated price must be between 1 and 1,000,000,000 VND.")]
-        public decimal EstimatedPriceVnd { get; set; }
+        
+        // Semester information (will be populated by backend)
+        public string SemesterName { get; set; } = string.Empty;
+        public string AcademicYear { get; set; } = string.Empty;
+        public DateTime SemesterStartDate { get; set; }
+        public DateTime SemesterEndDate { get; set; }
+        public int TotalSchoolDays { get; set; }
+        public decimal TotalFee { get; set; }
     }
 }
