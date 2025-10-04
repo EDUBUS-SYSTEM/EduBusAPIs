@@ -352,10 +352,10 @@ namespace Services.Implementations
         public async Task<bool> IsDriverAvailableAsync(Guid driverId, DateTime startTime, DateTime endTime)
         {
             // Check working hours (simple day and time window)
-            var day = startTime.DayOfWeek;
-            var wh = await _driverWorkingHoursRepository.GetByDriverAndDayAsync(driverId, day);
-            var withinWorkingHours = wh != null && wh.IsAvailable && wh.StartTime <= startTime.TimeOfDay && endTime.TimeOfDay <= wh.EndTime;
-            if (!withinWorkingHours) return false;
+            //var day = startTime.DayOfWeek;
+            //var wh = await _driverWorkingHoursRepository.GetByDriverAndDayAsync(driverId, day);
+            //var withinWorkingHours = wh != null && wh.IsAvailable && wh.StartTime <= startTime.TimeOfDay && endTime.TimeOfDay <= wh.EndTime;
+            //if (!withinWorkingHours) return false;
             // Check overlapping assignments
             var hasConflict = await _driverVehicleRepository.HasTimeConflictAsync(driverId, startTime, endTime);
             return !hasConflict;

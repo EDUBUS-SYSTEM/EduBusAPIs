@@ -459,7 +459,7 @@ namespace APIs.Controllers
                             IsPrimaryDriver = false
                         };
                         
-                        var assignment = await _driverVehicleService.AssignDriverWithValidationAsync(
+                        var assignment = await _driverVehicleService.AssignDriverAsync(
                             vehicleId.Value, 
                             assignmentRequest, 
                             adminId);
