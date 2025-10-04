@@ -8,5 +8,6 @@ namespace Data.Repos.Interfaces
         Task<AcademicCalendar?> GetAcademicCalendarByYearAsync(string academicYear);
         Task<IEnumerable<AcademicCalendar>> GetAcademicCalendarsInDateRangeAsync(DateTime startDate, DateTime endDate);
         Task<bool> IsAcademicYearExistsAsync(string academicYear);
+        Task<List<AcademicCalendar>> GetActiveAsync();
     }
 }

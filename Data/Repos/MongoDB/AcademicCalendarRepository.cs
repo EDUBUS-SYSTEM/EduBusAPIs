@@ -56,5 +56,16 @@ namespace Data.Repos.MongoDB
             var calendars = await FindByFilterAsync(filter);
             return calendars.Any();
         }
+
+        public async Task<List<AcademicCalendar>> GetActiveAsync()
+        {
+            var filter = Builders<AcademicCalendar>.Filter.And(
+                Builders<AcademicCalendar>.Filter.Eq(ac => ac.IsDeleted, false),
+                Builders<AcademicCalendar>.Filter.Eq(ac => ac.IsActive, true)
+            );
+
+            var calendars = await FindByFilterAsync(filter);
+            return calendars.ToList();
+        }
     }
 }

@@ -11,6 +11,7 @@ using Services.Models.Schedule;
 using Services.Models.Student;
 using Services.Models.StudentGrade;
 using Services.Models.Trip;
+using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
 using Utils;
@@ -146,6 +147,11 @@ namespace Services.MapperProfiles
 			CreateMap<SchoolHolidayDto, SchoolHoliday>();
 			CreateMap<SchoolDay, SchoolDayDto>();
 			CreateMap<SchoolDayDto, SchoolDay>();
-		}
+            
+            // UnitPrice mapping
+            CreateMap<UnitPrice, UnitPriceResponseDto>();
+            CreateMap<CreateUnitPriceDto, UnitPrice>();
+            CreateMap<UpdateUnitPriceDto, UnitPrice>();
+        }
     }
 }
