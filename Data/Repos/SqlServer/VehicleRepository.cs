@@ -1,5 +1,6 @@
 ﻿using Data.Contexts.SqlServer;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,7 +22,8 @@ namespace Data.Repos.SqlServer
             int page,
             int perPage,
             string? sortBy,
-            string sortOrder)
+            string sortOrder,
+            List<Guid>? exceptionIds)
         {
             var query = _context.Vehicles
                 .Where(v => !v.IsDeleted)
@@ -36,6 +38,11 @@ namespace Data.Repos.SqlServer
             if (adminId.HasValue)
                 query = query.Where(v => v.AdminId == adminId.Value);
 
+            if(exceptionIds != null && exceptionIds.Count > 0)
+            {
+                query = query.Where(v => !exceptionIds.Contains(v.Id));
+            }
+
             query = sortBy switch
             {
                 "capacity" => (sortOrder == "asc") ? query.OrderBy(v => v.Capacity) : query.OrderByDescending(v => v.Capacity),
@@ -48,6 +55,13 @@ namespace Data.Repos.SqlServer
                 .Skip((page - 1) * perPage)
                 .Take(perPage)
                 .ToListAsync();
+        }
+        public async Task<bool> IsVehicleActiveAsync(Guid vehicleId)
+        {
+            return await _context.Vehicles
+                .AnyAsync(v => v.Id == vehicleId &&
+                              !v.IsDeleted &&
+                              v.Status == VehicleStatus.Active);
         }
     }
 }
