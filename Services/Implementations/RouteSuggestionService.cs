@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -449,7 +450,7 @@ namespace Services.Implementations
                 routeSuggestion.Vehicle = new RouteVehicleInfo
                 {
                     VehicleId = vehicle.Id,
-                    LicensePlate = "***", // Hashed in database
+                    LicensePlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate), 
                     Capacity = vehicle.Capacity,
                     AssignedStudents = totalStudents,
                     UtilizationPercentage = vehicle.Capacity > 0 ? (double)totalStudents / vehicle.Capacity * 100 : 0
