@@ -12,7 +12,7 @@ namespace Data.Models
         public bool IsActive { get; set; } = true;
 
         [BsonElement("vehicle_id")]
-        public int VehicleId { get; set; }
+        public Guid VehicleId { get; set; }
 
         [BsonElement("pickup_points")]
         public List<PickupPointInfo> PickupPoints { get; set; } = new List<PickupPointInfo>();

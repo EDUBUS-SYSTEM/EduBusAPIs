@@ -155,12 +155,23 @@ namespace APIs.Controllers
             }
         }
 
-        #region Enhanced Driver-Vehicle Assignment
+		/// <summary>
+		/// Get unassigned vehicles
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpGet("unassigned")]
+		public async Task<ActionResult<VehicleListResponse>> GetUnassignedVehicles([FromQuery] Guid? excludeRouteId = null)
+		{
+			var result = await _vehicleService.GetUnassignedVehiclesAsync(excludeRouteId);
+			return Ok(result);
+		}
 
-        /// <summary>
-        /// Enhanced driver assignment with validation - Admin only
-        /// </summary>
-        [Authorize(Roles = Roles.Admin)]
+		#region Enhanced Driver-Vehicle Assignment
+
+		/// <summary>
+		/// Enhanced driver assignment with validation - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
         [HttpPost("{vehicleId}/drivers/assign-enhanced")]
         public async Task<ActionResult<DriverAssignmentResponse>> AssignDriverWithValidation(Guid vehicleId, [FromBody] DriverAssignmentRequest request)
         {
