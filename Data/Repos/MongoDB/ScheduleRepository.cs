@@ -1,29 +1,48 @@
+﻿using Data.Contexts.MongoDB;
 using Data.Models;
 using Data.Repos.Interfaces;
 using MongoDB.Driver;
 
 namespace Data.Repos.MongoDB
 {
-    public class ScheduleRepository : MongoRepository<Schedule>, IMongoRepository<Schedule>
-    {
-        public ScheduleRepository(IMongoDatabase database) : base(database, "schedules")
-        {
-        }
+	public class ScheduleRepository : MongoRepository<Schedule>, IScheduleRepository
+	{
+		public ScheduleRepository(IMongoDatabase database) : base(database, "schedules")
+		{
+		}
 
-        public override async Task<Schedule?> DeleteAsync(Guid id)
-        {
-            var filter = Builders<Schedule>.Filter.Eq(x => x.Id, id);
-            var update = Builders<Schedule>.Update
-                .Set(x => x.IsDeleted, true)
-                .Set(x => x.IsActive, false)
-                .Set(x => x.UpdatedAt, DateTime.UtcNow);
+		public async Task<IEnumerable<Schedule>> GetActiveSchedulesAsync()
+		{
+			var filter = Builders<Schedule>.Filter.Eq(s => s.IsActive, true) &
+						Builders<Schedule>.Filter.Eq(s => s.IsDeleted, false);
+			return await FindByFilterAsync(filter);
+		}
 
-            var result = await _collection.UpdateOneAsync(filter, update);
-            if (result.ModifiedCount > 0)
-            {
-                return await _collection.Find(filter).FirstOrDefaultAsync();
-            }
-            return null;
-        }
-    }
+		public async Task<IEnumerable<Schedule>> GetSchedulesByTypeAsync(string scheduleType)
+		{
+			var filter = Builders<Schedule>.Filter.Eq(s => s.ScheduleType, scheduleType) &
+						Builders<Schedule>.Filter.Eq(s => s.IsDeleted, false);
+			return await FindByFilterAsync(filter);
+		}
+
+		public async Task<IEnumerable<Schedule>> GetSchedulesInDateRangeAsync(DateTime startDate, DateTime endDate)
+		{
+			var filter = Builders<Schedule>.Filter.And(
+				Builders<Schedule>.Filter.Eq(s => s.IsDeleted, false),
+				Builders<Schedule>.Filter.Lte(s => s.EffectiveFrom, endDate),
+				Builders<Schedule>.Filter.Or(
+					Builders<Schedule>.Filter.Eq(s => s.EffectiveTo, null),
+					Builders<Schedule>.Filter.Gte(s => s.EffectiveTo, startDate)
+				)
+			);
+			return await FindByFilterAsync(filter);
+		}
+
+		public async Task<IEnumerable<Schedule>> GetSchedulesByRouteAsync(Guid routeId)
+		{
+			// This would require joining with RouteSchedule collection
+			// For now, return empty - this should be handled in the service layer
+			return new List<Schedule>();
+		}
+	}
 }
