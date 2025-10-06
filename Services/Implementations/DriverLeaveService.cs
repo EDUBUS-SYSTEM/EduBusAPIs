@@ -503,7 +503,7 @@ namespace Services.Implementations
                     var primaryVehicle = primaryVehicles.GetValueOrDefault(l.DriverId);
                     if (primaryVehicle != null)
                     {
-                        response.DriverLicenseNumber = SecurityHelper.DecryptFromBytes(l.Driver.DriverLicense?.HashedLicenseNumber);
+                        response.DriverLicenseNumber = l.Driver.DriverLicense != null && !l.Driver.DriverLicense.IsDeleted ? SecurityHelper.DecryptFromBytes(l.Driver.DriverLicense.HashedLicenseNumber) : null;
                         response.PrimaryVehicleId = primaryVehicle.VehicleId;
                         response.PrimaryVehicleLicensePlate = SecurityHelper.DecryptFromBytes(primaryVehicle.Vehicle.HashedLicensePlate);
                     }

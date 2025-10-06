@@ -361,19 +361,7 @@ namespace Services.Implementations
             return !hasConflict;
         }
 
-        public async Task<IEnumerable<DriverResponse>> GetAvailableDriversAsync(DateTime startTime, DateTime endTime)
-        {
-            var allDrivers = await _driverRepository.FindAllAsync();
-            var available = new List<DriverResponse>();
-            foreach (var d in allDrivers)
-            {
-                if (await IsDriverAvailableAsync(d.Id, startTime, endTime))
-                {
-                    available.Add(_mapper.Map<DriverResponse>(d));
-                }
-            }
-            return available;
-        }
+        
     }
 }
 

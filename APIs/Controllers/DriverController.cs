@@ -294,25 +294,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get available drivers in time range - Admin only
-        /// </summary>
-        [Authorize(Roles = Roles.Admin)]
-        [HttpGet("available")]
-        public async Task<ActionResult<IEnumerable<DriverResponse>>> GetAvailableDrivers(
-            [FromQuery] DateTime startTime, 
-            [FromQuery] DateTime endTime)
-        {
-            try
-            {
-                var drivers = await _driverService.GetAvailableDriversAsync(startTime, endTime);
-                return Ok(drivers);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "An error occurred while retrieving available drivers.");
-            }
-        }
 
         #endregion
 

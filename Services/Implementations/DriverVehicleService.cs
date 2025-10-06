@@ -82,7 +82,7 @@ namespace Services.Implementations
                 Email = d.Email,
                 PhoneNumber = d.PhoneNumber,
                 Status = d.Status,
-                LicenseNumber = d.DriverLicense != null
+                LicenseNumber = d.DriverLicense != null && !d.DriverLicense.IsDeleted
                     ? SecurityHelper.DecryptFromBytes(d.DriverLicense.HashedLicenseNumber)
                     : null,
                 LicenseExpiryDate = null, 
