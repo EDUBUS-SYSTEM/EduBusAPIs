@@ -10,12 +10,14 @@ namespace Services.Implementations
     public class VehicleService : IVehicleService
     {
         private readonly IVehicleRepository _vehicleRepo;
-        private readonly IMapper _mapper;
+		private readonly IMongoRepository<Route> _routeRepository;
+		private readonly IMapper _mapper;
 
-        public VehicleService(IVehicleRepository vehicleRepo, IMapper mapper)
+        public VehicleService(IVehicleRepository vehicleRepo, IMongoRepository<Route> routeRepository, IMapper mapper)
         {
             _vehicleRepo = vehicleRepo;
-            _mapper = mapper;
+			_routeRepository = routeRepository;
+			_mapper = mapper;
         }
 
         public async Task<VehicleListResponse> GetVehiclesAsync(string? status, int? capacity, Guid? adminId,
@@ -135,5 +137,34 @@ namespace Services.Implementations
             await _vehicleRepo.DeleteAsync(vehicle);
             return true;
         }
-    }
+
+		public async Task<VehicleListResponse> GetUnassignedVehiclesAsync(Guid? excludeRouteId = null)
+		{
+			// Get all vehicle IDs that are assigned to active routes
+			var activeRoutes = await _routeRepository.FindByConditionAsync(r =>
+				!r.IsDeleted && r.IsActive);
+
+			var assignedVehicleIds = activeRoutes
+		        .Where(r => !excludeRouteId.HasValue || r.Id != excludeRouteId.Value) // Exclude the specified route
+		        .Select(r => r.VehicleId)
+		        .Distinct()
+		        .ToList();
+
+			// Get vehicles that are not assigned to any route
+			var vehicles = await _vehicleRepo.GetVehiclesAsync(exceptionIds: assignedVehicleIds);
+
+			var dtos = vehicles.Select(v =>
+			{
+				var dto = _mapper.Map<VehicleDto>(v);
+				dto.LicensePlate = SecurityHelper.DecryptFromBytes(v.HashedLicensePlate);
+				return dto;
+			}).ToList();
+
+			return new VehicleListResponse
+			{
+				Success = true,
+				Data = dtos
+			};
+		}
+	}
 }

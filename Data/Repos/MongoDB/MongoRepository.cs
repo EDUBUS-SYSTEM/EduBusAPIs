@@ -47,8 +47,8 @@ namespace Data.Repos.MongoDB
 
                 // Use reflection to update all properties except Id, CreatedAt, and IsDeleted
                 var properties = typeof(T).GetProperties()
-                    .Where(p => p.Name != nameof(BaseMongoDocument.Id) && 
-                               p.Name != nameof(BaseMongoDocument.CreatedAt) && 
+                    .Where(p => p.Name != nameof(BaseMongoDocument.Id) &&
+                               p.Name != nameof(BaseMongoDocument.CreatedAt) &&
                                p.Name != nameof(BaseMongoDocument.IsDeleted));
 
                 foreach (var property in properties)
@@ -159,5 +159,103 @@ namespace Data.Repos.MongoDB
             );
             return await _collection.FindOneAndDeleteAsync(combinedFilter);
         }
-    }
+
+		public virtual async Task<IEnumerable<T>> BulkCreateAsync(IEnumerable<T> documents)
+		{
+			if (documents == null || !documents.Any())
+				return new List<T>();
+
+			var documentsList = documents.ToList();
+			var now = DateTime.UtcNow;
+
+			// Set creation timestamps
+			foreach (var document in documentsList)
+			{
+				document.CreatedAt = now;
+				document.UpdatedAt = now;
+				document.IsDeleted = false;
+			}
+
+			// Insert all documents in a single operation
+			await _collection.InsertManyAsync(documentsList);
+
+			return documentsList;
+		}
+
+		public virtual async Task<BulkWriteResult> BulkDeleteAsync(IEnumerable<Guid> ids)
+		{
+			if (ids == null || !ids.Any())
+			{
+				// Return an empty result when no IDs provided
+				var emptyOps = new List<WriteModel<T>>();
+				return await _collection.BulkWriteAsync(emptyOps);
+			}
+
+			var idsList = ids.ToList();
+			var bulkOps = new List<WriteModel<T>>();
+			var now = DateTime.UtcNow;
+
+			foreach (var id in idsList)
+			{
+				var filter = Builders<T>.Filter.Eq(x => x.Id, id);
+				var update = Builders<T>.Update
+					.Set(x => x.IsDeleted, true)
+					.Set(x => x.UpdatedAt, now);
+
+				bulkOps.Add(new UpdateOneModel<T>(filter, update));
+			}
+
+			// Execute bulk write operation
+			return await _collection.BulkWriteAsync(bulkOps);
+		}
+
+		public virtual async Task<IEnumerable<T>> BulkUpdateAsync(IEnumerable<T> documents)
+		{
+			if (documents == null || !documents.Any())
+				return new List<T>();
+
+			var documentsList = documents.ToList();
+			var bulkOps = new List<WriteModel<T>>();
+
+			foreach (var document in documentsList)
+			{
+				document.UpdatedAt = DateTime.UtcNow;
+
+				var filter = Builders<T>.Filter.Eq(x => x.Id, document.Id);
+
+				// Create update definition using reflection
+				var update = Builders<T>.Update
+					.Set(x => x.UpdatedAt, document.UpdatedAt);
+
+				// Update all properties except Id, CreatedAt, and IsDeleted
+				var properties = typeof(T).GetProperties()
+					.Where(p => p.Name != nameof(BaseMongoDocument.Id) &&
+							   p.Name != nameof(BaseMongoDocument.CreatedAt) &&
+							   p.Name != nameof(BaseMongoDocument.IsDeleted));
+
+				foreach (var property in properties)
+				{
+					var value = property.GetValue(document);
+					update = update.Set(property.Name, value);
+				}
+
+				bulkOps.Add(new UpdateOneModel<T>(filter, update));
+			}
+
+			// Execute bulk write operation
+			var result = await _collection.BulkWriteAsync(bulkOps);
+
+			if (result.ModifiedCount == documentsList.Count)
+			{
+				// Return updated documents
+				var documentIds = documentsList.Select(d => d.Id).ToList();
+				var filter = Builders<T>.Filter.In(x => x.Id, documentIds);
+				return await _collection.Find(filter).ToListAsync();
+			}
+			else
+			{
+				throw new InvalidOperationException($"Bulk update failed. Expected to update {documentsList.Count} documents, but only updated {result.ModifiedCount}");
+			}
+		}
+	}
 }

@@ -14,6 +14,8 @@ using Services.Models.Trip;
 using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
+using Services.Models.Route;
+
 using Utils;
 
 namespace Services.MapperProfiles
@@ -117,6 +119,10 @@ namespace Services.MapperProfiles
             CreateMap<TransportFeeItem, TransportFeeItemResponse>();
             CreateMap<PaymentEventLog, PaymentEventResponse>();
 
+            // Route mapping
+            CreateMap<Route, RouteDto>();
+            CreateMap<PickupPointInfo, PickupPointInfoDto>();
+            CreateMap<LocationInfo, LocationInfoDto>();
 			// Schedule mappings
 			CreateMap<Schedule, ScheduleDto>();
 			CreateMap<CreateScheduleDto, Schedule>();
