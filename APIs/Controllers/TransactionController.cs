@@ -4,6 +4,7 @@ using Services.Contracts;
 using Services.Models.Transaction;
 using Data.Models.Enums;
 using Constants;
+using Utils;
 
 namespace APIs.Controllers
 {
@@ -12,10 +13,14 @@ namespace APIs.Controllers
     public class TransactionController : ControllerBase
     {
         private readonly ITransactionService _transactionService;
+        private readonly IStudentService _studentService;
+        private readonly ITransportFeeItemService _transportFeeItemService;
 
-        public TransactionController(ITransactionService transactionService)
+        public TransactionController(ITransactionService transactionService, IStudentService studentService, ITransportFeeItemService transportFeeItemService)
         {
             _transactionService = transactionService;
+            _studentService = studentService;
+            _transportFeeItemService = transportFeeItemService;
         }
 
         /// <summary>
@@ -55,6 +60,13 @@ namespace APIs.Controllers
             try
             {
                 var result = await _transactionService.GetTransactionDetailAsync(transactionId);
+                
+                // Security check: Verify parent can access this transaction's data
+                if (!AuthorizationHelper.CanAccessParentData(Request.HttpContext, result.ParentId))
+                {
+                    return Forbid();
+                }
+                
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -220,9 +232,56 @@ namespace APIs.Controllers
                 if (page < 1) page = 1;
                 if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
+                // Security check: Verify parent can access this parent's data
+                if (!AuthorizationHelper.CanAccessParentData(Request.HttpContext, parentId))
+                {
+                    return Forbid();
+                }
+
                 var request = new TransactionListRequest
                 {
                     ParentId = parentId,
+                    Page = page,
+                    PageSize = pageSize
+                };
+                var result = await _transactionService.GetTransactionListAsync(request);
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get current parent's transactions (auto-detect parent from JWT token)
+        /// </summary>
+        [HttpGet("my-transactions")]
+        [Authorize(Roles = Roles.Parent)]
+        public async Task<ActionResult<TransactionListResponseDto>> GetMyTransactions(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                // Validate parameters
+                if (page < 1) page = 1;
+                if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+                // Get current parent ID from JWT token
+                var currentParentId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+                if (!currentParentId.HasValue)
+                {
+                    return Unauthorized(new { message = "Parent ID not found in token" });
+                }
+
+                var request = new TransactionListRequest
+                {
+                    ParentId = currentParentId.Value,
                     Page = page,
                     PageSize = pageSize
                 };
@@ -255,6 +314,16 @@ namespace APIs.Controllers
                 if (page < 1) page = 1;
                 if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
+                // Security check: Verify parent can access this student's data
+                var student = await _studentService.GetStudentByIdAsync(studentId);
+                if (student == null)
+                    return NotFound(new { message = "Student not found" });
+
+                if (!AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                {
+                    return Forbid();
+                }
+
                 var result = await _transactionService.GetTransactionsByStudentAsync(studentId, page, pageSize);
                 return Ok(result);
             }
@@ -277,6 +346,21 @@ namespace APIs.Controllers
         {
             try
             {
+                // Security check: Verify parent can access this transport fee item's data
+                var transportFeeItem = await _transportFeeItemService.GetDetailAsync(transportFeeItemId);
+                if (transportFeeItem == null)
+                    return NotFound(new { message = "Transport fee item not found" });
+
+                // Get student to check parent relationship
+                var student = await _studentService.GetStudentByIdAsync(transportFeeItem.StudentId);
+                if (student == null)
+                    return NotFound(new { message = "Student not found" });
+
+                if (!AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                {
+                    return Forbid();
+                }
+
                 var result = await _transactionService.GetTransactionByTransportFeeItemIdAsync(transportFeeItemId);
                 return Ok(result);
             }

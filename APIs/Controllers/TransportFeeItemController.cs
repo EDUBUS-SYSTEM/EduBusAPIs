@@ -4,6 +4,7 @@ using Services.Contracts;
 using Services.Models.TransportFeeItem;
 using Data.Models.Enums;
 using Constants;
+using Utils;
 
 namespace APIs.Controllers
 {
@@ -12,10 +13,14 @@ namespace APIs.Controllers
     public class TransportFeeItemController : ControllerBase
     {
         private readonly ITransportFeeItemService _transportFeeItemService;
+        private readonly IStudentService _studentService;
+        private readonly ITransactionService _transactionService;
 
-        public TransportFeeItemController(ITransportFeeItemService transportFeeItemService)
+        public TransportFeeItemController(ITransportFeeItemService transportFeeItemService, IStudentService studentService, ITransactionService transactionService)
         {
             _transportFeeItemService = transportFeeItemService;
+            _studentService = studentService;
+            _transactionService = transactionService;
         }
 
         /// <summary>
@@ -28,6 +33,17 @@ namespace APIs.Controllers
             try
             {
                 var result = await _transportFeeItemService.GetDetailAsync(id);
+                
+                // Security check: Verify parent can access this transport fee item's data
+                var student = await _studentService.GetStudentByIdAsync(result.StudentId);
+                if (student == null)
+                    return NotFound("Student not found");
+
+                if (!AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                {
+                    return Forbid();
+                }
+
                 return Ok(result);
             }
             catch (KeyNotFoundException ex)
@@ -143,7 +159,28 @@ namespace APIs.Controllers
         {
             try
             {
+                // First check if transaction exists
+                try
+                {
+                    await _transactionService.GetTransactionDetailAsync(transactionId);
+                }
+                catch (KeyNotFoundException)
+                {
+                    return NotFound("Transaction not found");
+                }
+                
                 var result = await _transportFeeItemService.GetByTransactionIdAsync(transactionId);
+                
+                // Security check: Verify parent can access these transport fee items
+                foreach (var item in result)
+                {
+                    var student = await _studentService.GetStudentByIdAsync(item.StudentId);
+                    if (student != null && !AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                    {
+                        return Forbid();
+                    }
+                }
+
                 return Ok(result);
             }
             catch (Exception ex)
@@ -161,6 +198,16 @@ namespace APIs.Controllers
         {
             try
             {
+                // Security check: Verify parent can access this student's data
+                var student = await _studentService.GetStudentByIdAsync(studentId);
+                if (student == null)
+                    return NotFound("Student not found");
+
+                if (!AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                {
+                    return Forbid();
+                }
+
                 var result = await _transportFeeItemService.GetByStudentIdAsync(studentId);
                 return Ok(result);
             }
@@ -171,15 +218,19 @@ namespace APIs.Controllers
         }
 
         /// <summary>
-        /// Get transport fee items by parent email
+        /// Get transport fee items by parent email (Admin only)
         /// </summary>
         [HttpGet("parent/{parentEmail}")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
+        [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByParentEmail(string parentEmail)
         {
             try
             {
+                // Admin can access any parent's data
                 var result = await _transportFeeItemService.GetByParentEmailAsync(parentEmail);
+                
+                // If no transport fee items found, return empty list
+                // (This could mean parent has no transport fee items or email doesn't exist)
                 return Ok(result);
             }
             catch (Exception ex)
@@ -197,6 +248,29 @@ namespace APIs.Controllers
         {
             try
             {
+                // First check if transaction exists
+                try
+                {
+                    await _transactionService.GetTransactionDetailAsync(transactionId);
+                }
+                catch (KeyNotFoundException)
+                {
+                    return NotFound("Transaction not found");
+                }
+
+                // Security check: Verify parent can access this transaction's data
+                var transportFeeItems = await _transportFeeItemService.GetByTransactionIdAsync(transactionId);
+
+                // Check if parent can access any of the transport fee items
+                foreach (var item in transportFeeItems)
+                {
+                    var student = await _studentService.GetStudentByIdAsync(item.StudentId);
+                    if (student != null && !AuthorizationHelper.CanAccessStudentData(Request.HttpContext, student.ParentId))
+                    {
+                        return Forbid();
+                    }
+                }
+
                 var result = await _transportFeeItemService.GetTotalAmountByTransactionIdAsync(transactionId);
                 return Ok(result);
             }
