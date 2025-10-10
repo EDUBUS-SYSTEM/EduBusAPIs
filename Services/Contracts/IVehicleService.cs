@@ -5,13 +5,8 @@ namespace Services.Contracts
     public interface IVehicleService
     {
         Task<VehicleListResponse> GetVehiclesAsync(
-            string? status,
-            int? capacity,
-            Guid? adminId,
-            int page,
-            int perPage,
-            string? sortBy,
-            string sortOrder);
+        string? status, int? capacity, Guid? adminId, string? search,
+        int page, int perPage, string? sortBy, string sortOrder);
 
         Task<VehicleResponse?> GetByIdAsync(Guid id);
         Task<VehicleResponse> CreateAsync(VehicleCreateRequest dto, Guid adminId);

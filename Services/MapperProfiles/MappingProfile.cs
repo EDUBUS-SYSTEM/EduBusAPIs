@@ -78,7 +78,8 @@ namespace Services.MapperProfiles
             CreateMap<DriverLeaveRequest, DriverLeaveResponse>()
                 .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.Driver.FirstName} {src.Driver.LastName}"))
                 .ForMember(dest => dest.DriverEmail, opt => opt.MapFrom(src => src.Driver.Email))
-                .ForMember(dest => dest.TotalDays, opt => opt.MapFrom(src => (src.EndDate - src.StartDate).Days + 1));
+                .ForMember(dest => dest.ApprovedByAdminName, opt => opt.MapFrom(src => 
+                    src.ApprovedByAdmin != null ? $"{src.ApprovedByAdmin.FirstName} {src.ApprovedByAdmin.LastName}" : null));
             CreateMap<ApproveLeaveRequestDto, DriverLeaveRequest>();
             CreateMap<RejectLeaveRequestDto, DriverLeaveRequest>();
             CreateMap<UpdateLeaveRequestDto, DriverLeaveRequest>();
@@ -108,7 +109,16 @@ namespace Services.MapperProfiles
             CreateMap<Driver, DriverAssignmentSummaryDto>()
                 .ForMember(dest => dest.DriverName, opt => opt.MapFrom(src => $"{src.FirstName} {src.LastName}"))
                 .ForMember(dest => dest.DriverEmail, opt => opt.MapFrom(src => src.Email));
-            
+
+            //DriverVehicle
+            CreateMap<Vehicle, Services.Models.DriverVehicle.VehicleInfoDto>()
+                .ForMember(d => d.LicensePlate, opt => opt.MapFrom(s => SecurityHelper.DecryptFromBytes(s.HashedLicensePlate)))
+                .ForMember(d => d.VehicleType, opt => opt.MapFrom(_ => "Bus")) 
+                .ForMember(d => d.Status, opt => opt.MapFrom(s => s.Status.ToString()))
+                .ForMember(d => d.Description, opt => opt.MapFrom(s => s.StatusNote));
+            CreateMap<UserAccount, Services.Models.DriverVehicle.AdminInfoDto>()
+                .ForMember(d => d.FullName, opt => opt.MapFrom(s => $"{s.FirstName} {s.LastName}"));
+
             // Notification mapping
             CreateMap<CreateNotificationDto, Notification>();
             CreateMap<Notification, NotificationResponse>();

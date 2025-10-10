@@ -2,10 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Vehicle;
-using Services.Models.DriverVehicle;
 using Constants;
 using System.Security.Claims;
-using Services.Models.Driver;
 
 namespace APIs.Controllers
 {
@@ -15,14 +13,10 @@ namespace APIs.Controllers
     public class VehicleController : ControllerBase
     {
         private readonly IVehicleService _vehicleService;
-        private readonly IDriverVehicleService _driveVveicleService;
 
-        public VehicleController(
-            IVehicleService vehicleService,
-            IDriverVehicleService driverVehicleService)
+        public VehicleController(IVehicleService vehicleService)
         {
             _vehicleService = vehicleService;
-            _driveVveicleService = driverVehicleService;
         }
 
         /// <summary>
@@ -31,18 +25,23 @@ namespace APIs.Controllers
         [Authorize(Roles = Roles.Admin)]
         [HttpGet]
         public async Task<ActionResult<VehicleListResponse>> GetVehicles(
-            [FromQuery] string? status,
-            [FromQuery] int? capacity,
-            [FromQuery] Guid? adminId,
-            [FromQuery] int page = 1,
-            [FromQuery] int perPage = 20,
-            [FromQuery] string? sortBy = "createdAt",
-            [FromQuery] string sortOrder = "desc")
+        [FromQuery(Name = "status")] string? status,
+        [FromQuery(Name = "capacity")] int? capacity,
+        [FromQuery(Name = "adminId")] Guid? adminId,
+        [FromQuery(Name = "search")] string? search, 
+        [FromQuery(Name = "page")] int page = 1,
+        [FromQuery(Name = "perPage")] int perPage = 20,
+        [FromQuery(Name = "sortBy")] string? sortBy = "createdAt",
+        [FromQuery(Name = "sortOrder")] string sortOrder = "desc")
         {
-            var result = await _vehicleService.GetVehiclesAsync(status, capacity, adminId, page, perPage, sortBy, sortOrder);
+            page = Math.Max(1, page);
+            perPage = Math.Clamp(perPage, 1, 100); 
+
+            var result = await _vehicleService.GetVehiclesAsync(
+                status, capacity, adminId, search, page, perPage, sortBy, sortOrder); 
+
             return Ok(result);
         }
-
         /// <summary>
         /// Get vehicle by ID
         /// </summary>
@@ -70,6 +69,12 @@ namespace APIs.Controllers
             Guid adminId = Guid.Parse(adminIdClaim.Value);
 
             var result = await _vehicleService.CreateAsync(request, adminId);
+            
+            if (!result.Success)
+            {
+                return BadRequest(new { success = false, error = result.Error, message = result.Message });
+            }
+            
             return CreatedAtAction(nameof(GetVehicleById), new { vehicleId = result.Data!.Id }, result);
         }
 
@@ -84,6 +89,11 @@ namespace APIs.Controllers
             if (updated == null)
                 return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
 
+            if (!updated.Success)
+            {
+                return BadRequest(new { success = false, error = updated.Error, message = updated.Message });
+            }
+
             return Ok(updated);
         }
 
@@ -97,6 +107,11 @@ namespace APIs.Controllers
             var updated = await _vehicleService.PartialUpdateAsync(vehicleId, request);
             if (updated == null)
                 return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
+
+            if (!updated.Success)
+            {
+                return BadRequest(new { success = false, error = updated.Error, message = updated.Message });
+            }
 
             return Ok(updated);
         }

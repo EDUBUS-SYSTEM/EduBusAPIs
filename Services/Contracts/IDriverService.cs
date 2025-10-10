@@ -19,6 +19,5 @@ namespace Services.Contracts
         Task<IEnumerable<DriverResponse>> GetDriversByStatusAsync(DriverStatus status);
         
         Task<bool> IsDriverAvailableAsync(Guid driverId, DateTime startTime, DateTime endTime);
-        Task<IEnumerable<DriverResponse>> GetAvailableDriversAsync(DateTime startTime, DateTime endTime);
     }
 }
