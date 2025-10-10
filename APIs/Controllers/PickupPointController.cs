@@ -213,6 +213,25 @@ namespace APIs.Controllers
 			}
 		}
 
+		/// <summary>
+		/// Get all pickup points with their assigned student status
+		/// </summary>
+		[HttpGet("with-student-status")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(List<PickupPointWithStudentStatusDto>), StatusCodes.Status200OK)]
+		public async Task<IActionResult> GetPickupPointsWithStudentStatus()
+		{
+			try
+			{
+				var result = await _svc.GetPickupPointsWithStudentStatusAsync();
+				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
 		// ===================
 		// Helpers
 		// ===================
