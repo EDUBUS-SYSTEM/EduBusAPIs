@@ -289,11 +289,14 @@ namespace Services.Implementations
 				return dto;
 			}).ToList();
 
-			return new VehicleListResponse
-			{
-				Success = true,
-				Data = dtos
-			};
+		return new VehicleListResponse
+		{
+			Vehicles = dtos,
+			TotalCount = dtos.Count,
+			Page = 1,
+			PerPage = dtos.Count,
+			TotalPages = 1
+		};
 		}
 	}
 }

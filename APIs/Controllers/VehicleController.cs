@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Vehicle;
+using Services.Models.DriverVehicle;
+using Services.Models.Driver;
 using Constants;
 using System.Security.Claims;
 
@@ -13,10 +15,12 @@ namespace APIs.Controllers
     public class VehicleController : ControllerBase
     {
         private readonly IVehicleService _vehicleService;
+        private readonly IDriverVehicleService _driverVehicleService;
 
-        public VehicleController(IVehicleService vehicleService)
+        public VehicleController(IVehicleService vehicleService, IDriverVehicleService driverVehicleService)
         {
             _vehicleService = vehicleService;
+            _driverVehicleService = driverVehicleService;
         }
 
         /// <summary>
@@ -136,7 +140,7 @@ namespace APIs.Controllers
         [HttpGet("{vehicleId}/drivers")]
         public async Task<ActionResult<VehicleDriversResponse>> GetDriversByVehicle(Guid vehicleId, [FromQuery] bool? isActive)
         {
-            var result = await _driveVveicleService.GetDriversByVehicleAsync(vehicleId, isActive);
+            var result = await _driverVehicleService.GetDriversByVehicleAsync(vehicleId, isActive);
             if (result == null)
                 return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
 
@@ -158,7 +162,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.AssignDriverAsync(vehicleId, request, adminId);
+                var result = await _driverVehicleService.AssignDriverAsync(vehicleId, request, adminId);
                 if (result == null)
                     return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
 
@@ -198,7 +202,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.AssignDriverWithValidationAsync(vehicleId, request, adminId);
+                var result = await _driverVehicleService.AssignDriverWithValidationAsync(vehicleId, request, adminId);
                 if (result == null)
                     return NotFound(new { success = false, error = "VEHICLE_NOT_FOUND" });
 
@@ -225,7 +229,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.UpdateAssignmentAsync(assignmentId, request, adminId);
+                var result = await _driverVehicleService.UpdateAssignmentAsync(assignmentId, request, adminId);
                 if (result == null)
                     return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
 
@@ -252,7 +256,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.CancelAssignmentAsync(assignmentId, reason, adminId);
+                var result = await _driverVehicleService.CancelAssignmentAsync(assignmentId, reason, adminId);
                 if (result == null)
                     return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
 
@@ -276,7 +280,7 @@ namespace APIs.Controllers
         {
             try
             {
-                var conflicts = await _driveVveicleService.DetectAssignmentConflictsAsync(vehicleId, startTime, endTime);
+                var conflicts = await _driverVehicleService.DetectAssignmentConflictsAsync(vehicleId, startTime, endTime);
                 return Ok(conflicts);
             }
             catch (Exception ex)
@@ -300,7 +304,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.SuggestReplacementAsync(assignmentId, adminId);
+                var result = await _driverVehicleService.SuggestReplacementAsync(assignmentId, adminId);
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -328,7 +332,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.AcceptReplacementSuggestionAsync(assignmentId, suggestionId, adminId);
+                var result = await _driverVehicleService.AcceptReplacementSuggestionAsync(assignmentId, suggestionId, adminId);
                 return Ok(new { success = result, message = "Replacement suggestion accepted." });
             }
             catch (InvalidOperationException ex)
@@ -356,7 +360,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.ApproveAssignmentAsync(assignmentId, adminId, note);
+                var result = await _driverVehicleService.ApproveAssignmentAsync(assignmentId, adminId, note);
                 if (result == null)
                     return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
 
@@ -383,7 +387,7 @@ namespace APIs.Controllers
 
             try
             {
-                var result = await _driveVveicleService.RejectAssignmentAsync(assignmentId, adminId, reason);
+                var result = await _driverVehicleService.RejectAssignmentAsync(assignmentId, adminId, reason);
                 if (result == null)
                     return NotFound(new { success = false, error = "ASSIGNMENT_NOT_FOUND" });
 
