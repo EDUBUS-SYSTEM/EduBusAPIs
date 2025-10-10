@@ -2,15 +2,21 @@
 
 public partial class UnitPrice : BaseDomain
 {
-    public string ScheduleType { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public string Description { get; set; } = string.Empty;
 
-    public TimeOnly DepartureTime { get; set; }
+    public decimal PricePerKm { get; set; }
 
-    public DateTime StartTimeUtc { get; set; }
+    public DateTime EffectiveFrom { get; set; }
+    public DateTime? EffectiveTo { get; set; } = null;
 
-    public DateTime? EndTimeUtc { get; set; }
+    public bool IsActive { get; set; } = true;
 
-    public Guid AdminId { get; set; }
+    // Admin 
+    public Guid ByAdminId { get; set; }
+    public string ByAdminName { get; set; } = string.Empty;
 
-    public virtual Admin Admin { get; set; } = null!;
+    // Navigation properties
+    public virtual Admin ByAdmin { get; set; } = null!;
+    public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
 }

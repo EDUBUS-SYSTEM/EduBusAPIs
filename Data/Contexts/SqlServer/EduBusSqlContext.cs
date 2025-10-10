@@ -285,7 +285,6 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.ParentEmail)
                      .HasMaxLength(320)
                      .IsRequired();
-                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.LastName).HasMaxLength(200);
                 entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
@@ -410,24 +409,28 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<UnitPrice>(entity =>
             {
-                entity.HasIndex(e => e.AdminId, "IX_UnitPrices_AdminId");
+                entity.HasIndex(e => e.ByAdminId, "IX_UnitPrices_ByAdminId");
 
-                entity.HasIndex(e => e.StartTimeUtc, "IX_UnitPrices_ValidFrom");
+                entity.HasIndex(e => e.EffectiveFrom, "IX_UnitPrices_EffectiveFrom");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.CreatedAt)
                     .HasPrecision(3)
                     .HasDefaultValueSql("(sysutcdatetime())");
-                entity.Property(e => e.DepartureTime).HasPrecision(0);
-                entity.Property(e => e.EndTimeUtc).HasPrecision(3);
+                entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Description).HasMaxLength(500);
+                entity.Property(e => e.PricePerKm)
+                    .HasPrecision(18, 2)
+                    .IsRequired();
+                entity.Property(e => e.EffectiveFrom).HasPrecision(3);
+                entity.Property(e => e.EffectiveTo).HasPrecision(3);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
-                entity.Property(e => e.ScheduleType).HasMaxLength(50);
-                entity.Property(e => e.StartTimeUtc).HasPrecision(3);
-                entity.Property(e => e.UpdatedAt)
-                    .HasPrecision(3);
+                entity.Property(e => e.ByAdminName).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
-                entity.HasOne(d => d.Admin).WithMany(p => p.UnitPrices)
-                    .HasForeignKey(d => d.AdminId)
+                entity.HasOne(d => d.ByAdmin).WithMany(p => p.UnitPrices)
+                    .HasForeignKey(d => d.ByAdminId)
                     .OnDelete(DeleteBehavior.ClientSetNull);
             });
 

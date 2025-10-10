@@ -21,6 +21,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="MimeKit" Version="4.13.0" />
     <PackageReference Include="System.Linq.Dynamic.Core" Version="1.6.7" />
+    <PackageReference Include="Google.OrTools" Version="9.4.1874" />
   </ItemGroup>
 
   <ItemGroup>

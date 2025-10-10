@@ -18,6 +18,7 @@ public class PaymentService : IPaymentService
     private readonly IStudentRepository _studentRepository;
     private readonly IPickupPointRequestRepository _pickupPointRequestRepository;
     private readonly IPayOSService _payOSService;
+    private readonly IPickupPointEnrollmentService _pickupPointEnrollmentService;
     private readonly IMapper _mapper;
     private readonly ILogger<PaymentService> _logger;
     private readonly PayOSConfig _config;
@@ -29,6 +30,7 @@ public class PaymentService : IPaymentService
         IStudentRepository studentRepository,
         IPickupPointRequestRepository pickupPointRequestRepository,
         IPayOSService payOSService,
+        IPickupPointEnrollmentService pickupPointEnrollmentService,
         IMapper mapper,
         ILogger<PaymentService> logger,
         IOptions<PayOSConfig> config)
@@ -39,6 +41,7 @@ public class PaymentService : IPaymentService
         _studentRepository = studentRepository;
         _pickupPointRequestRepository = pickupPointRequestRepository;
         _payOSService = payOSService;
+        _pickupPointEnrollmentService = pickupPointEnrollmentService;
         _mapper = mapper;
         _logger = logger;
         _config = config.Value;
@@ -315,6 +318,7 @@ public class PaymentService : IPaymentService
                 item.UpdatedAt = DateTime.UtcNow;
                 await _transportFeeItemRepository.UpdateAsync(item);
             }
+            await ActivateStudentsForTransactionAsync(transactionId, PaymentEventSource.manual);
 
             // Log event
             var message = $"Transaction marked as paid manually. Note: {request.Note}";
@@ -388,6 +392,7 @@ public class PaymentService : IPaymentService
                     item.UpdatedAt = DateTime.UtcNow;
                     await _transportFeeItemRepository.UpdateAsync(item);
                 }
+                await ActivateStudentsForTransactionAsync(transaction.Id, PaymentEventSource.webhook);
             }
             else
             {
@@ -452,13 +457,10 @@ public class PaymentService : IPaymentService
                 var transportFeeItem = new TransportFeeItem
                 {
                     StudentId = studentId,
-                    Description = $"Phí vận chuyển học sinh {student.FirstName} {student.LastName}",
+                    Description = $"Transport fee for student {student.FirstName} {student.LastName}",
                     DistanceKm = distance,
                     UnitPriceVndPerKm = unitPrice,
-                    QuantityKm = quantity,
                     Subtotal = subtotal,
-                    PeriodMonth = DateTime.UtcNow.Month,
-                    PeriodYear = DateTime.UtcNow.Year,
                     Status = TransportFeeItemStatus.Unbilled
                 };
 
@@ -477,15 +479,9 @@ public class PaymentService : IPaymentService
                 Status = TransactionStatus.Notyet,
                 Amount = totalAmount,
                 Currency = "VND",
-                Description = $"Phí vận chuyển học sinh - Yêu cầu điểm đón {pickupPointRequestId}",
+                Description = $"Transport fee for student - Pickup point request {pickupPointRequestId}",
                 Provider = PaymentProvider.PayOS,
-                PickupPointRequestId = pickupPointRequestId,
-                ScheduleId = scheduleId,
-                Metadata = System.Text.Json.JsonSerializer.Serialize(new { 
-                    StudentCount = studentIds.Count(),
-                    DistanceKm = pickupPointRequest.DistanceKm,
-                    CreatedFrom = "PickupPointRequest"
-                })
+                PickupPointRequestId = pickupPointRequestId
             };
 
             // Save transaction first
@@ -544,5 +540,29 @@ public class PaymentService : IPaymentService
             _logger.LogError(ex, "Error logging payment event for transaction: {TransactionId}", transactionId);
             // Don't throw here to avoid breaking the main flow
         }
+    }
+    private async Task ActivateStudentsForTransactionAsync(Guid transactionId, PaymentEventSource source)
+    {
+        var items = await _transportFeeItemRepository.FindByConditionAsync(tfi => tfi.TransactionId == transactionId);
+        var studentIds = items.Select(i => i.StudentId).Distinct().ToList();
+        if (!studentIds.Any()) return;
+
+        var students = await _studentRepository.GetQueryable()
+            .Where(s => studentIds.Contains(s.Id) && !s.IsDeleted)
+            .ToListAsync();
+
+        foreach (var s in students)
+        {
+            if (s.Status == StudentStatus.Available || s.Status == StudentStatus.Pending)
+            {
+                s.Status = StudentStatus.Active;
+                await _studentRepository.UpdateAsync(s);
+            }
+        }
+
+        // Assign pickup point after successful payment
+        await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transactionId);
+
+        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated and pickup point assigned after payment");
     }
 }

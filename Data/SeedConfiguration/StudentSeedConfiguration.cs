@@ -20,7 +20,7 @@ namespace Data.SeedConfiguration
                 ParentEmail = "parent@edubus.com",
                 FirstName = "Nguyen",
                 LastName = "Van An",
-                IsActive = true,
+                Status = Models.Enums.StudentStatus.Active,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 IsDeleted = false
@@ -35,7 +35,7 @@ namespace Data.SeedConfiguration
                 ParentEmail = "parent@edubus.com",
                 FirstName = "Tran",
                 LastName = "Thi Binh",
-                IsActive = true,
+                Status = Models.Enums.StudentStatus.Active,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 IsDeleted = false
@@ -50,7 +50,7 @@ namespace Data.SeedConfiguration
                 ParentEmail = "parent@edubus.com",
                 FirstName = "Le",
                 LastName = "Van Cuong",
-                IsActive = true,
+                Status = Models.Enums.StudentStatus.Active,
                 CreatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2024, 1, 15, 10, 0, 0, DateTimeKind.Utc),
                 IsDeleted = false

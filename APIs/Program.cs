@@ -1,27 +1,28 @@
+using APIs.Hubs;
 using Data.Contexts.MongoDB;
 using Data.Contexts.SqlServer;
+using Data.Models;
 using Data.Repos.Interfaces;
 using Data.Repos.MongoDB;
 using Data.Repos.SqlServer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
-using Utils;
-using MongoDB.Driver;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using MongoDB.Driver;
 using Services.Contracts;
 using Services.Implementations;
-using Microsoft.OpenApi.Models;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Services.MapperProfiles;
-using APIs.Hubs;
-using Data.Models;
 using Services.Models.Configuration;
+using Services.Models.Route;
 using System.Security.Authentication;
+using System.Text;
+using Utils;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,12 +33,12 @@ BsonSerializer.RegisterSerializer(typeof(Guid), new GuidSerializer(GuidRepresent
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddUserSecrets<Program>(optional: true)   
+    .AddUserSecrets<Program>(optional: true)
     .AddEnvironmentVariables();
 
 // Configure settings with reload on change
 builder.Services.Configure<LeaveRequestSettings>(
-    builder.Configuration.GetSection("LeaveRequestSettings"));                
+    builder.Configuration.GetSection("LeaveRequestSettings"));
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -58,7 +59,7 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
-    
+
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
         policy.WithOrigins(
@@ -150,18 +151,27 @@ builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRe
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Payment Repositories
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
 builder.Services.AddScoped<ITransportFeeItemRepository, TransportFeeItemRepository>();
 builder.Services.AddScoped<IPaymentEventLogRepository, PaymentEventLogRepository>();
+builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Repository Registration for MongoDB
 builder.Services.AddScoped<IFileStorageRepository, FileStorageRepository>();
 builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepository>();
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
+builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
+builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
+
+builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
+builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<IRouteScheduleRepository, RouteScheduleRepository>();
+builder.Services.AddScoped<IAcademicCalendarRepository, AcademicCalendarRepository>();
 
 // Services Registration
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -181,10 +191,22 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IConfigurationService, ConfigurationService>();
 builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentService>();
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
+//Route Services
+builder.Services.AddScoped<IRouteService, RouteService>();
+builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
+builder.Services.AddScoped<IPickupPointService, PickupPointService>();
+builder.Services.AddScoped<IScheduleService, ScheduleService>();
+builder.Services.AddScoped<ITripService, TripService>();
+builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
+builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IPayOSService, PayOSService>();
+builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
+builder.Services.AddScoped<ITransactionService, TransactionService>();
+builder.Services.AddScoped<ITransportFeeItemService, TransportFeeItemService>();
 
 // PayOS Configuration
 builder.Services.Configure<Services.Models.Payment.PayOSConfig>(
@@ -236,6 +258,10 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// Configure VRP settings
+builder.Services.Configure<VRPSettings>(
+    builder.Configuration.GetSection("VRPSettings"));
+
 var app = builder.Build();
 
 // Configure HTTP request pipeline
@@ -243,6 +269,16 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+else
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "EduBus APIs v1");
+        c.RoutePrefix = "swagger";
+        c.DocumentTitle = "EduBus APIs - Production";
+    });
 }
 
 if (!app.Environment.IsDevelopment())
@@ -272,11 +308,28 @@ app.UseStaticFiles();
 // Map SignalR Hub with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
 {
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
 });
 
 app.MapControllers();
+
+// Seed Mongo Schedules (idempotent)
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILoggerFactory>().CreateLogger("Seed");
+    try
+    {
+        var mongoContext = services.GetRequiredService<Data.Contexts.MongoDB.EduBusMongoContext>();
+        await Data.SeedConfiguration.ScheduleSeed.SeedAsync(mongoContext, logger);
+        await Data.SeedConfiguration.AcademicCalendarSeed.SeedAsync(mongoContext, logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error seeding schedules");
+    }
+}
 
 // Map Health Check endpoints
 app.MapHealthChecks("/health/live", new HealthCheckOptions

@@ -11,7 +11,6 @@ public partial class Student : BaseDomain
     public string FirstName { get; set; } = null!;
 
     public string LastName { get; set; } = null!;
-    public bool IsActive { get; set; }
     public StudentStatus Status { get; set; } = StudentStatus.Available;
     public DateTime? ActivatedAt { get; set; }
     public DateTime? DeactivatedAt { get; set; }

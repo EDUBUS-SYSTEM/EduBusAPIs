@@ -58,7 +58,6 @@ namespace Services.Implementations
 
             // Map request -> entity
             var student = _mapper.Map<Student>(request);
-            student.IsActive = true;
             student.Status = StudentStatus.Available;
 
             // Always keep ParentEmail on Student:
@@ -304,7 +303,6 @@ namespace Services.Implementations
 
                     // Always keep ParentEmail on Student (requested behavior)
                     student.ParentEmail = dto.ParentEmail;
-                    student.IsActive = true;
                     student.Status = StudentStatus.Available;
 
                     var created = await _studentRepository.AddAsync(student);
@@ -382,7 +380,6 @@ namespace Services.Implementations
                 throw new KeyNotFoundException("Student not found");
 
             student.Status = StudentStatus.Active;
-            student.IsActive = true;
             student.ActivatedAt = DateTime.UtcNow;
             student.DeactivatedAt = null;
             student.DeactivationReason = null;
@@ -398,7 +395,6 @@ namespace Services.Implementations
                 throw new KeyNotFoundException("Student not found");
 
             student.Status = StudentStatus.Inactive;
-            student.IsActive = false;
             student.DeactivatedAt = DateTime.UtcNow;
             student.DeactivationReason = reason;
 
@@ -415,14 +411,12 @@ namespace Services.Implementations
             if (student.Status == StudentStatus.Deleted)
             {
                 student.Status = StudentStatus.Available;
-                student.IsActive = true;
                 student.DeactivatedAt = null;
                 student.DeactivationReason = null;
             }
             else if (student.Status == StudentStatus.Inactive)
             {
                 student.Status = StudentStatus.Active;
-                student.IsActive = true;
                 student.DeactivatedAt = null;
                 student.DeactivationReason = null;
             }
@@ -438,7 +432,6 @@ namespace Services.Implementations
                 throw new KeyNotFoundException("Student not found");
 
             student.Status = StudentStatus.Deleted;
-            student.IsActive = false;
             student.DeactivatedAt = DateTime.UtcNow;
             student.DeactivationReason = reason;
 
@@ -474,7 +467,6 @@ namespace Services.Implementations
             if (student.Status == StudentStatus.Available || student.Status == StudentStatus.Pending)
             {
                 student.Status = StudentStatus.Active;
-                student.IsActive = true;
                 student.ActivatedAt = DateTime.UtcNow;
                 await _studentRepository.UpdateAsync(student);
             }

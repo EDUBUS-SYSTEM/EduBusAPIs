@@ -17,10 +17,12 @@ namespace APIs.Controllers
 	public class PickupPointController : ControllerBase
 	{
 		private readonly IPickupPointEnrollmentService _svc;
+		private readonly IPickupPointService _pickupPointService;
 
-		public PickupPointController(IPickupPointEnrollmentService svc)
+		public PickupPointController(IPickupPointEnrollmentService svc, IPickupPointService pickupPointService) 
 		{
 			_svc = svc;
+			_pickupPointService = pickupPointService; 
 		}
 
 		[HttpPost("register")]
@@ -191,6 +193,42 @@ namespace APIs.Controllers
 			{
 				return Conflict(Problem(title: "Cannot reject", detail: ex.Message,
 									statusCode: StatusCodes.Status409Conflict));
+			}
+		}
+
+		[HttpGet("unassigned")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(PickupPointsResponse), StatusCodes.Status200OK)]
+		public async Task<IActionResult> GetUnassignedPickupPoints()
+		{
+			try
+			{
+				var result = await _pickupPointService.GetUnassignedPickupPointsAsync();
+				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(StatusCodes.Status500InternalServerError,
+					new { message = "Internal server error", detail = ex.Message });
+			}
+		}
+
+		/// <summary>
+		/// Get all pickup points with their assigned student status
+		/// </summary>
+		[HttpGet("with-student-status")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(List<PickupPointWithStudentStatusDto>), StatusCodes.Status200OK)]
+		public async Task<IActionResult> GetPickupPointsWithStudentStatus()
+		{
+			try
+			{
+				var result = await _svc.GetPickupPointsWithStudentStatusAsync();
+				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
 			}
 		}
 
