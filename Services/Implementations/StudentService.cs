@@ -48,6 +48,19 @@ namespace Services.Implementations
             // Normalize and optionally validate email when not linking by ParentId
             var normalizedEmail = EmailHelper.NormalizeEmail(request.ParentEmail);
 
+            // Auto-map ParentId if ParentEmail exists in parent accounts
+            if (!request.ParentId.HasValue && !string.IsNullOrEmpty(normalizedEmail))
+            {
+                var existingParent = (await _parentRepository.FindByConditionAsync(p => p.Email == normalizedEmail))
+                    .FirstOrDefault();
+                
+                if (existingParent != null)
+                {
+                    request.ParentId = existingParent.Id;
+                    linkedParent = existingParent;
+                }
+            }
+
             if (!request.ParentId.HasValue)
             {
                 if (string.IsNullOrEmpty(normalizedEmail))

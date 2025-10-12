@@ -18,5 +18,7 @@ namespace Services.Models.Student
         public DateTime? ActivatedAt { get; set; }
         public DateTime? DeactivatedAt { get; set; }
         public string? DeactivationReason { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public DateTime? UpdatedAt { get; set; }
     }
 }
