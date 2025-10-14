@@ -183,19 +183,24 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<Schedule?> UpdateScheduleAsync(Schedule schedule)
+	public async Task<Schedule?> UpdateScheduleAsync(Schedule schedule)
+	{
+		try
 		{
-			try
+			var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+			var existingSchedule = await repository.FindAsync(schedule.Id);
+			if (existingSchedule == null)
+				return null;
+
+			if (schedule.UpdatedAt.HasValue && existingSchedule.UpdatedAt != schedule.UpdatedAt.Value)
 			{
-				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
-				var existingSchedule = await repository.FindAsync(schedule.Id);
-				if (existingSchedule == null)
-					return null;
+				throw new InvalidOperationException("Schedule was modified by another user. Please refresh and try again.");
+			}
 
-				if (string.IsNullOrWhiteSpace(schedule.Name))
-					throw new ArgumentException("Schedule name is required");
+			if (string.IsNullOrWhiteSpace(schedule.Name))
+				throw new ArgumentException("Schedule name is required");
 
-				ValidateSchedule(schedule);
+			ValidateSchedule(schedule);
 
 				// prevent duplicates on update (exclude self)
 				var dupFilter = Builders<Schedule>.Filter.And(
@@ -216,10 +221,12 @@ namespace Services.Implementations
 				if (existingDup.Any())
 					throw new InvalidOperationException("A schedule with the same time/rule already exists in the overlapping effective window.");
 
-				// Always preserve existing TimeOverrides - don't overwrite them
-				schedule.TimeOverrides = existingSchedule.TimeOverrides ?? new List<ScheduleTimeOverride>();
+			// Always preserve existing TimeOverrides - don't overwrite them
+			schedule.TimeOverrides = existingSchedule.TimeOverrides ?? new List<ScheduleTimeOverride>();
 
-				var updated = await repository.UpdateAsync(schedule);
+			schedule.UpdatedAt = DateTime.UtcNow;
+
+			var updated = await repository.UpdateAsync(schedule);
 
 				if (updated != null && (
 					!string.Equals(existingSchedule.Name, schedule.Name, StringComparison.Ordinal) ||
