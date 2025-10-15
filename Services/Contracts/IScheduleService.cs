@@ -7,7 +7,7 @@ namespace Services.Contracts
 		Task<IEnumerable<Schedule>> GetAllSchedulesAsync();
 		Task<Schedule?> GetScheduleByIdAsync(Guid id);
 		Task<Schedule> CreateScheduleAsync(Schedule schedule);
-		Task<Schedule?> UpdateScheduleAsync(Schedule schedule);
+		Task<Schedule?> UpdateScheduleAsync(Schedule schedule, DateTime? clientUpdatedAt = null);
 		Task<Schedule?> DeleteScheduleAsync(Guid id);
 		Task<IEnumerable<Schedule>> GetActiveSchedulesAsync();
 		Task<IEnumerable<Schedule>> GetSchedulesByTypeAsync(string scheduleType);
@@ -23,8 +23,10 @@ namespace Services.Contracts
 			string sortBy,
 			string sortOrder);
 		Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride);
+		Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride, DateTime? clientUpdatedAt);
 		Task<Schedule?> AddTimeOverridesBatchAsync(Guid scheduleId, List<ScheduleTimeOverride> timeOverrides);
 		Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date);
+		Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date, DateTime? clientUpdatedAt);
 		Task<Schedule?> RemoveTimeOverridesBatchAsync(Guid scheduleId, List<DateTime> dates);
 		Task<List<ScheduleTimeOverride>> GetTimeOverridesAsync(Guid scheduleId);
 		Task<ScheduleTimeOverride?> GetTimeOverrideAsync(Guid scheduleId, DateTime date);

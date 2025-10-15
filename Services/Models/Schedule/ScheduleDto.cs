@@ -50,5 +50,6 @@ namespace Services.Models.Schedule
 		public string ScheduleType { get; set; } = string.Empty;
 		public bool IsActive { get; set; }
 		public List<ScheduleTimeOverride> TimeOverrides { get; set; } = new List<ScheduleTimeOverride>();
+		public DateTime? UpdatedAt { get; set; }
 	}
 }
