@@ -105,7 +105,7 @@ namespace APIs.Controllers
 				}
 
 				var entity = _mapper.Map<Schedule>(request);
-				var updated = await _scheduleService.UpdateScheduleAsync(entity);
+				var updated = await _scheduleService.UpdateScheduleAsync(entity, request.UpdatedAt);
 				if (updated == null)
 				{
 					return NotFound(new { message = "Schedule not found" });
@@ -181,11 +181,11 @@ namespace APIs.Controllers
 
 		[HttpPut("{id}/overrides")]
 		[Authorize(Roles = Roles.Admin)]
-		public async Task<ActionResult<ScheduleDto>> AddTimeOverride(Guid id, [FromBody] ScheduleTimeOverride timeOverride)
+		public async Task<ActionResult<ScheduleDto>> AddTimeOverride(Guid id, [FromBody] ScheduleTimeOverride timeOverride, [FromQuery] DateTime? updatedAt = null)
 		{
 			try
 			{
-				var updatedSchedule = await _scheduleService.AddTimeOverrideAsync(id, timeOverride);
+				var updatedSchedule = await _scheduleService.AddTimeOverrideAsync(id, timeOverride, updatedAt);
 				if (updatedSchedule == null)
 				{
 					return NotFound(new { message = "Schedule not found" });
@@ -196,6 +196,10 @@ namespace APIs.Controllers
 			catch (ArgumentException ex)
 			{
 				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return Conflict(new { message = ex.Message });
 			}
 			catch (Exception ex)
 			{
@@ -231,17 +235,25 @@ namespace APIs.Controllers
 
 		[HttpDelete("{id}/overrides")]
 		[Authorize(Roles = Roles.Admin)]
-		public async Task<ActionResult<ScheduleDto>> RemoveTimeOverride(Guid id, [FromQuery] DateTime date)
+		public async Task<ActionResult<ScheduleDto>> RemoveTimeOverride(Guid id, [FromQuery] DateTime date, [FromQuery] DateTime? updatedAt = null)
 		{
 			try
 			{
-				var updatedSchedule = await _scheduleService.RemoveTimeOverrideAsync(id, date);
+				var updatedSchedule = await _scheduleService.RemoveTimeOverrideAsync(id, date, updatedAt);
 				if (updatedSchedule == null)
 				{
 					return NotFound(new { message = "Schedule not found" });
 				}
 
 				return Ok(_mapper.Map<ScheduleDto>(updatedSchedule));
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return Conflict(new { message = ex.Message });
 			}
 			catch (Exception ex)
 			{

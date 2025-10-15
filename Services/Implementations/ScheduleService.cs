@@ -183,7 +183,7 @@ namespace Services.Implementations
 			}
 		}
 
-	public async Task<Schedule?> UpdateScheduleAsync(Schedule schedule)
+	public async Task<Schedule?> UpdateScheduleAsync(Schedule schedule, DateTime? clientUpdatedAt = null)
 	{
 		try
 		{
@@ -192,7 +192,7 @@ namespace Services.Implementations
 			if (existingSchedule == null)
 				return null;
 
-			if (schedule.UpdatedAt.HasValue && existingSchedule.UpdatedAt != schedule.UpdatedAt.Value)
+			if (clientUpdatedAt.HasValue && existingSchedule.UpdatedAt != clientUpdatedAt.Value)
 			{
 				throw new InvalidOperationException("Schedule was modified by another user. Please refresh and try again.");
 			}
@@ -403,14 +403,24 @@ namespace Services.Implementations
 				throw new ArgumentException("Invalid RRULE format. Supported patterns: DAILY, WEEKLY, MONTHLY, YEARLY");
 		}
 
-		public async Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride)
+	public async Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride)
+	{
+		return await AddTimeOverrideAsync(scheduleId, timeOverride, null);
+	}
+
+	public async Task<Schedule?> AddTimeOverrideAsync(Guid scheduleId, ScheduleTimeOverride timeOverride, DateTime? clientUpdatedAt)
+	{
+		try
 		{
-			try
+			var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+			var schedule = await repository.FindAsync(scheduleId);
+			if (schedule == null)
+				return null;
+
+			if (clientUpdatedAt.HasValue && schedule.UpdatedAt != clientUpdatedAt.Value)
 			{
-				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
-				var schedule = await repository.FindAsync(scheduleId);
-				if (schedule == null)
-					return null;
+				throw new InvalidOperationException("Schedule was modified by another user. Please refresh and try again.");
+			}
 
 				// Validate time override
 				if (string.IsNullOrWhiteSpace(timeOverride.StartTime) || string.IsNullOrWhiteSpace(timeOverride.EndTime))
@@ -500,14 +510,25 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date)
+	public async Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date)
+	{
+		return await RemoveTimeOverrideAsync(scheduleId, date, null);
+	}
+
+	public async Task<Schedule?> RemoveTimeOverrideAsync(Guid scheduleId, DateTime date, DateTime? clientUpdatedAt)
+	{
+		try
 		{
-			try
+			var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+			var schedule = await repository.FindAsync(scheduleId);
+			if (schedule == null)
+				return null;
+
+			// Optimistic locking check using client's UpdatedAt timestamp
+			if (clientUpdatedAt.HasValue && schedule.UpdatedAt != clientUpdatedAt.Value)
 			{
-				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
-				var schedule = await repository.FindAsync(scheduleId);
-				if (schedule == null)
-					return null;
+				throw new InvalidOperationException("Schedule was modified by another user. Please refresh and try again.");
+			}
 
 				// Validate date is within schedule effective range
 				if (date.Date < schedule.EffectiveFrom.Date)
