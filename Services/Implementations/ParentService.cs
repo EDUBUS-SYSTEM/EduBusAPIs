@@ -44,14 +44,13 @@ namespace Services.Implementations
 
             var createdParent = await _parentRepository.AddAsync(parent);
 
-            // 🔑 Link students theo email
             var studentsNeedingLink = await _studentRepository.FindByConditionAsync(
                 s => s.ParentId == null && s.ParentEmail == dto.Email);
 
             foreach (var student in studentsNeedingLink)
             {
                 student.ParentId = createdParent.Id;
-                student.ParentEmail = string.Empty; // clear sau khi link
+                student.ParentEmail = createdParent.Email;
                 await _studentRepository.UpdateAsync(student);
             }
 
@@ -196,7 +195,6 @@ namespace Services.Implementations
 
                     var createdParent = await _parentRepository.AddAsync(parent);
 
-                    // 🔑 Link students theo email
                     var studentsNeedingLink = await _studentRepository.FindByConditionAsync(
                         s => s.ParentId == null && s.ParentEmail == parentDto.Email);
 

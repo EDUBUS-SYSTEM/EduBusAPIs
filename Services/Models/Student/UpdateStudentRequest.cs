@@ -15,6 +15,7 @@ namespace Services.Models.Student
         [StringLength(50)]
         public string LastName { get; set; } = null!;
 
+        [Required(ErrorMessage = "Parent email is required.")]
         [StringLength(256)]
         [EmailAddress(ErrorMessage = "Invalid email format.")]
         public string ParentEmail { get; set; } = string.Empty;
