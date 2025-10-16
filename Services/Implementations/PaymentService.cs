@@ -1,4 +1,4 @@
-using AutoMapper;
+﻿using AutoMapper;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -158,9 +158,6 @@ public class PaymentService : IPaymentService
     {
         try
         {
-            if (transactionId == Guid.Empty)
-                throw new ArgumentException("Transaction ID cannot be empty");
-
             var transaction = await _transactionRepository.FindAsync(transactionId);
             if (transaction == null)
                 throw new ArgumentException("Transaction not found");
@@ -168,31 +165,31 @@ public class PaymentService : IPaymentService
             if (transaction.Status != TransactionStatus.Notyet)
                 throw new InvalidOperationException("Transaction is not in Notyet status");
 
-            // Always generate new QR code for PayOS integration
-            // Ensure numeric orderCode as PayOS requires
-            long orderCode;
-            if (!long.TryParse(transaction.TransactionCode, out orderCode))
-            {
-                orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                transaction.TransactionCode = orderCode.ToString();
-                transaction.UpdatedAt = DateTime.UtcNow;
-                await _transactionRepository.UpdateAsync(transaction);
-            }
+            // ✅ ALWAYS CREATE NEW orderCode to avoid conflicts with PayOS
+            // PayOS does not allow reusing orderCode, even if cancelled
+            long orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            // Add random suffix to ensure uniqueness (avoid conflicts if 2 requests at same time)
+            var random = new Random();
+            orderCode = orderCode * 1000 + random.Next(0, 999);
+
+            transaction.TransactionCode = orderCode.ToString();
+            transaction.UpdatedAt = DateTime.UtcNow;
+            await _transactionRepository.UpdateAsync(transaction);
 
             // Generate QR using PayOS
             var payOSRequest = new PayOSCreatePaymentRequest
             {
                 OrderCode = orderCode,
                 Amount = (int)transaction.Amount,
-                Description = transaction.Description,
+                Description = transaction.TransactionCode,
                 ReturnUrl = _config.ReturnUrl ?? "https://edubus.app/payment/success",
                 CancelUrl = _config.CancelUrl ?? "https://edubus.app/payment/cancel",
-                // Items optional; remove to satisfy PayOS validation for simple amount-only payments
                 Items = Array.Empty<PayOSItem>()
             };
 
             var payOSResponse = await _payOSService.CreatePaymentAsync(payOSRequest);
-            
+
             if (payOSResponse.Code != "00" || payOSResponse.Data == null)
             {
                 throw new InvalidOperationException($"PayOS error: {payOSResponse.Desc}");
@@ -200,12 +197,15 @@ public class PaymentService : IPaymentService
 
             // Update transaction with PayOS data
             transaction.ProviderTransactionId = payOSResponse.Data.PaymentLinkId;
+            transaction.QrCodeUrl = payOSResponse.Data.CheckoutUrl;
+            transaction.QrContent = payOSResponse.Data.QrCode;
+            transaction.QrExpiredAtUtc = DateTime.UtcNow.AddMinutes(_config.QrExpirationMinutes);
             transaction.UpdatedAt = DateTime.UtcNow;
 
             await _transactionRepository.UpdateAsync(transaction);
 
             // Log event
-            await LogPaymentEventAsync(transactionId, TransactionStatus.Notyet, 
+            await LogPaymentEventAsync(transactionId, TransactionStatus.Notyet,
                 PaymentEventSource.manual, "QR code generated/refreshed");
 
             return new QrResponse
@@ -221,7 +221,6 @@ public class PaymentService : IPaymentService
             throw;
         }
     }
-
     public async Task<IEnumerable<PaymentEventResponse>> GetTransactionEventsAsync(Guid transactionId)
     {
         try
@@ -378,7 +377,11 @@ public class PaymentService : IPaymentService
             {
                 transaction.Status = TransactionStatus.Paid;
                 transaction.PaidAtUtc = DateTime.UtcNow;
-                transaction.ProviderTransactionId = verifiedData.Reference;
+                // Keep existing ProviderTransactionId (PaymentLinkId) and add Reference as additional info
+                if (string.IsNullOrEmpty(transaction.ProviderTransactionId))
+                {
+                    transaction.ProviderTransactionId = verifiedData.Reference;
+                }
                 transaction.Provider = PaymentProvider.PayOS;
                 transaction.UpdatedAt = DateTime.UtcNow;
 
