@@ -223,8 +223,11 @@ public class PaymentController : ControllerBase
     {
         try
         {
-            var success = await _paymentService.HandlePayOSWebhookAsync(payload);
+            _logger.LogInformation("PayOS webhook received: {Payload}", payload);
             
+            // Process webhook and update transaction status
+            var success = await _paymentService.HandlePayOSWebhookAsync(payload);
+
             if (success)
                 return Ok(new { message = "Webhook acknowledged and processed" });
             else

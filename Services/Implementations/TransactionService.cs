@@ -11,6 +11,7 @@ namespace Services.Implementations
     {
         private readonly ITransactionRepository _transactionRepo;
         private readonly ITransportFeeItemService _transportFeeItemService;
+        private readonly ITransportFeeItemRepository _transportFeeItemRepo;
         private readonly IStudentRepository _studentRepo;
         private readonly IUnitPriceRepository _unitPriceRepo;
         private readonly IAcademicCalendarRepository _academicCalendarRepo;
@@ -20,6 +21,7 @@ namespace Services.Implementations
         public TransactionService(
             ITransactionRepository transactionRepo,
             ITransportFeeItemService transportFeeItemService,
+            ITransportFeeItemRepository transportFeeItemRepo,
             IStudentRepository studentRepo,
             IUnitPriceRepository unitPriceRepo,
             IAcademicCalendarRepository academicCalendarRepo,
@@ -28,6 +30,7 @@ namespace Services.Implementations
         {
             _transactionRepo = transactionRepo;
             _transportFeeItemService = transportFeeItemService;
+            _transportFeeItemRepo = transportFeeItemRepo;
             _studentRepo = studentRepo;
             _unitPriceRepo = unitPriceRepo;
             _academicCalendarRepo = academicCalendarRepo;
@@ -154,20 +157,30 @@ namespace Services.Implementations
             if (transaction == null)
                 throw new KeyNotFoundException("Transaction not found");
 
-            var transportFeeItemSummaries = await _transportFeeItemService.GetByTransactionIdAsync(transactionId);
-            var transportFeeItemDetails = transportFeeItemSummaries.Select(item => new TransportFeeItemDetail
+            // Get full TransportFeeItem details instead of summaries
+            var transportFeeItems = await _transportFeeItemRepo.GetByTransactionIdAsync(transactionId);
+            var studentIds = transportFeeItems.Select(i => i.StudentId).ToList();
+            var students = await _studentRepo.GetQueryable()
+                .Where(s => studentIds.Contains(s.Id))
+                .ToListAsync();
+
+            var transportFeeItemDetails = transportFeeItems.Select(item =>
             {
-                Id = item.Id,
-                StudentId = item.StudentId,
-                StudentName = item.StudentName,
-                Description = item.Description,
-                DistanceKm = 0, // Will be populated from TransportFeeItem if needed
-                UnitPricePerKm = 0, // Will be populated from TransportFeeItem if needed
-                Amount = item.Amount,
-                SemesterName = "", // Will be populated from TransportFeeItem if needed
-                AcademicYear = "", // Will be populated from TransportFeeItem if needed
-                Type = TransportFeeItemType.Register, // Default value
-                Status = item.Status
+                var student = students.FirstOrDefault(s => s.Id == item.StudentId);
+                return new TransportFeeItemDetail
+                {
+                    Id = item.Id,
+                    StudentId = item.StudentId,
+                    StudentName = student != null ? $"{student.FirstName} {student.LastName}" : "",
+                    Description = item.Description,
+                    DistanceKm = item.DistanceKm,
+                    UnitPricePerKm = item.UnitPriceVndPerKm,
+                    Amount = item.Subtotal,
+                    SemesterName = item.SemesterName,
+                    AcademicYear = item.AcademicYear,
+                    Type = item.Type,
+                    Status = item.Status
+                };
             }).ToList();
 
             return new TransactionDetailResponseDto
@@ -193,20 +206,30 @@ namespace Services.Implementations
             if (transaction == null)
                 throw new KeyNotFoundException("Transaction not found for the given transport fee item ID");
 
-            var transportFeeItemSummaries = await _transportFeeItemService.GetByTransactionIdAsync(transaction.Id);
-            var transportFeeItemDetails = transportFeeItemSummaries.Select(item => new TransportFeeItemDetail
+            // Get full TransportFeeItem details instead of summaries
+            var transportFeeItems = await _transportFeeItemRepo.GetByTransactionIdAsync(transaction.Id);
+            var studentIds = transportFeeItems.Select(i => i.StudentId).ToList();
+            var students = await _studentRepo.GetQueryable()
+                .Where(s => studentIds.Contains(s.Id))
+                .ToListAsync();
+
+            var transportFeeItemDetails = transportFeeItems.Select(item =>
             {
-                Id = item.Id,
-                StudentId = item.StudentId,
-                StudentName = item.StudentName,
-                Description = item.Description,
-                DistanceKm = 0, // Will be populated from TransportFeeItem if needed
-                UnitPricePerKm = 0, // Will be populated from TransportFeeItem if needed
-                Amount = item.Amount,
-                SemesterName = "", // Will be populated from TransportFeeItem if needed
-                AcademicYear = "", // Will be populated from TransportFeeItem if needed
-                Type = TransportFeeItemType.Register, // Default value
-                Status = item.Status
+                var student = students.FirstOrDefault(s => s.Id == item.StudentId);
+                return new TransportFeeItemDetail
+                {
+                    Id = item.Id,
+                    StudentId = item.StudentId,
+                    StudentName = student != null ? $"{student.FirstName} {student.LastName}" : "",
+                    Description = item.Description,
+                    DistanceKm = item.DistanceKm,
+                    UnitPricePerKm = item.UnitPriceVndPerKm,
+                    Amount = item.Subtotal,
+                    SemesterName = item.SemesterName,
+                    AcademicYear = item.AcademicYear,
+                    Type = item.Type,
+                    Status = item.Status
+                };
             }).ToList();
 
             return new TransactionDetailResponseDto
