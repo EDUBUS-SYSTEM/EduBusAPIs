@@ -3,11 +3,6 @@ using Data.Repos.Interfaces;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 using Constants;
 
@@ -477,11 +472,11 @@ namespace Services.Implementations
 			if (trip.RouteId == Guid.Empty)
 				throw new ArgumentException("Route ID is required");
 
-			if (trip.PlannedStartAt >= trip.PlannedEndAt)
-				throw new ArgumentException("Planned start time must be before planned end time");
+			ValidateTripTimeConstraints(trip);
 
-			if (trip.ServiceDate.Date < DateTime.UtcNow.Date)
-				throw new ArgumentException("Service date cannot be in the past");
+			var currentDate = DateTime.UtcNow.Date;
+			if (trip.ServiceDate.Date < currentDate)
+				throw new ArgumentException($"Service date ({trip.ServiceDate:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
 
 			// Validate Route exists and is active
 			var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
@@ -496,7 +491,11 @@ namespace Services.Implementations
 				var schedule = await scheduleRepo.FindAsync(trip.ScheduleSnapshot.ScheduleId);
 				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
 					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
+
+				ValidateTripTimesAgainstSchedule(trip, schedule);
 			}
+
+			ValidateTripPickupPoints(trip, route);
 
 			// Check for duplicate trips
 			var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
@@ -519,14 +518,92 @@ namespace Services.Implementations
 			if (trip.RouteId == Guid.Empty)
 				throw new ArgumentException("Route ID is required");
 
-			if (trip.PlannedStartAt >= trip.PlannedEndAt)
-				throw new ArgumentException("Planned start time must be before planned end time");
+			ValidateTripTimeConstraints(trip);
 
 			// Validate Route exists and is active
 			var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
 			var route = await routeRepo.FindAsync(trip.RouteId);
 			if (route == null || route.IsDeleted || !route.IsActive)
 				throw new InvalidOperationException($"Route {trip.RouteId} does not exist or is inactive");
+
+			if (trip.ScheduleSnapshot != null && trip.ScheduleSnapshot.ScheduleId != Guid.Empty)
+			{
+				var scheduleRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Schedule>>(DatabaseType.MongoDb);
+				var schedule = await scheduleRepo.FindAsync(trip.ScheduleSnapshot.ScheduleId);
+				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
+					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
+
+				ValidateTripTimesAgainstSchedule(trip, schedule);
+			}
+
+			ValidateTripPickupPoints(trip, route);
+		}
+
+		public static void ValidateTripTimeConstraints(Trip trip)
+		{
+			if (trip.PlannedStartAt >= trip.PlannedEndAt)
+				throw new ArgumentException("Planned start time must be before planned end time");
+
+			var duration = trip.PlannedEndAt - trip.PlannedStartAt;
+			if (duration.TotalMinutes < 15)
+				throw new ArgumentException("Trip duration must be at least 15 minutes");
+
+			if (duration.TotalHours > 8)
+				throw new ArgumentException("Trip duration cannot exceed 8 hours");
+
+			var now = DateTime.UtcNow;
+			if (trip.ServiceDate.Date == now.Date)
+			{
+				if (trip.PlannedStartAt < now.AddMinutes(-5)) // Allow 5 minutes buffer
+					throw new ArgumentException($"Planned start time ({trip.PlannedStartAt:HH:mm}) cannot be more than 5 minutes in the past for today's trips");
+			}
+		}
+
+		public static void ValidateTripTimesAgainstSchedule(Trip trip, Schedule schedule)
+		{
+			if (!TryParseHms(schedule.StartTime, out var sh, out var sm, out var ss) ||
+				!TryParseHms(schedule.EndTime, out var eh, out var em, out var es))
+			{
+				throw new ArgumentException($"Invalid schedule time format: StartTime={schedule.StartTime}, EndTime={schedule.EndTime}");
+			}
+
+			var scheduleStart = new DateTime(trip.ServiceDate.Year, trip.ServiceDate.Month, trip.ServiceDate.Day, sh, sm, ss, DateTimeKind.Unspecified);
+			var scheduleEnd = new DateTime(trip.ServiceDate.Year, trip.ServiceDate.Month, trip.ServiceDate.Day, eh, em, es, DateTimeKind.Unspecified);
+			
+			if (scheduleEnd <= scheduleStart)
+				scheduleEnd = scheduleEnd.AddDays(1);
+
+			// Validate trip times are within reasonable range of schedule times (±30 minutes)
+			var startDiff = Math.Abs((trip.PlannedStartAt - scheduleStart).TotalMinutes);
+			var endDiff = Math.Abs((trip.PlannedEndAt - scheduleEnd).TotalMinutes);
+
+			if (startDiff > 30)
+				throw new ArgumentException($"Trip start time ({trip.PlannedStartAt:HH:mm}) deviates more than 30 minutes from schedule start time ({scheduleStart:HH:mm})");
+
+			if (endDiff > 30)
+				throw new ArgumentException($"Trip end time ({trip.PlannedEndAt:HH:mm}) deviates more than 30 minutes from schedule end time ({scheduleEnd:HH:mm})");
+		}
+
+		public static void ValidateTripPickupPoints(Trip trip, Route route)
+		{
+			if (trip.Stops == null || !trip.Stops.Any())
+				return; 
+
+			var routePickupPointIds = route.PickupPoints.Select(pp => pp.PickupPointId).ToHashSet();
+			var invalidPickupPoints = new List<Guid>();
+
+			foreach (var stop in trip.Stops)
+			{
+				if (!routePickupPointIds.Contains(stop.PickupPointId))
+				{
+					invalidPickupPoints.Add(stop.PickupPointId);
+				}
+			}
+
+			if (invalidPickupPoints.Any())
+			{
+				throw new InvalidOperationException($"The following pickup points do not belong to route {trip.RouteId}: {string.Join(", ", invalidPickupPoints)}");
+			}
 		}
 
 		private async Task GenerateTripStopsFromRouteAsync(Trip trip)
@@ -693,6 +770,8 @@ namespace Services.Implementations
 		{
 			try
 			{
+				ValidateAttendanceState(state);
+
 				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
 				var trip = await repository.FindAsync(tripId);
 				if (trip == null)
@@ -728,6 +807,26 @@ namespace Services.Implementations
 			{
 				_logger.LogError(ex, "Error updating attendance: {TripId}, {StopId}, {StudentId}", tripId, stopId, studentId);
 				throw;
+			}
+		}
+
+		public static void ValidateAttendanceState(string state)
+		{
+			if (string.IsNullOrWhiteSpace(state))
+				throw new ArgumentException("Attendance state cannot be null or empty");
+
+			var validStates = new[]
+			{
+				AttendanceStates.Present,
+				AttendanceStates.Absent,
+				AttendanceStates.Late,
+				AttendanceStates.Excused,
+				AttendanceStates.Pending
+			};
+
+			if (!validStates.Contains(state))
+			{
+				throw new ArgumentException($"Invalid attendance state '{state}'. Valid states are: {string.Join(", ", validStates)}");
 			}
 		}
 

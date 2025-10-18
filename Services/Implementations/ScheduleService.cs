@@ -370,6 +370,12 @@ namespace Services.Implementations
 			if (!IsValidTimezone(s.Timezone))
 				throw new ArgumentException($"Invalid timezone: {s.Timezone}");
 
+			var currentDate = DateTime.UtcNow.Date;
+			if (s.EffectiveFrom.Date < currentDate)
+			{
+				throw new ArgumentException($"EffectiveFrom date ({s.EffectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+			}
+
 			// effective range
 			if (s.EffectiveTo.HasValue && s.EffectiveTo.Value <= s.EffectiveFrom)
 				throw new ArgumentException("effectiveTo must be greater than or equal to effectiveFrom");

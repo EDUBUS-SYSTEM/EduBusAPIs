@@ -123,6 +123,12 @@ namespace Services.Implementations
 
 				await ApplySmartDefaultsAsync(routeSchedule);
 
+				var currentDate = DateTime.UtcNow.Date;
+				if (routeSchedule.EffectiveFrom.Date < currentDate)
+				{
+					throw new ArgumentException($"EffectiveFrom date ({routeSchedule.EffectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+				}
+
 				if (routeSchedule.EffectiveTo.HasValue && routeSchedule.EffectiveTo <= routeSchedule.EffectiveFrom)
 					throw new ArgumentException("effectiveTo must be greater than effectiveFrom");
 
@@ -177,6 +183,12 @@ namespace Services.Implementations
 				if (existingRouteSchedule == null)
 					return null;
 
+				var currentDate = DateTime.UtcNow.Date;
+				if (routeSchedule.EffectiveFrom.Date < currentDate)
+				{
+					throw new ArgumentException($"EffectiveFrom date ({routeSchedule.EffectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+				}
+
 				if (routeSchedule.EffectiveTo.HasValue && routeSchedule.EffectiveTo <= routeSchedule.EffectiveFrom)
 					throw new ArgumentException("effectiveTo must be greater than effectiveFrom");
 
@@ -223,7 +235,18 @@ namespace Services.Implementations
 			try
 			{
 				var repository = _databaseFactory.GetRepositoryByType<IRouteScheduleRepository>(DatabaseType.MongoDb);
-				return await repository.DeleteAsync(id);
+				
+				var existingRouteSchedule = await repository.FindAsync(id);
+				if (existingRouteSchedule == null)
+				{
+					_logger.LogWarning("RouteSchedule with ID {RouteScheduleId} not found or already deleted", id);
+					return null;
+				}
+
+				var deletedRouteSchedule = await repository.DeleteAsync(id);
+				
+				_logger.LogInformation("Successfully deleted RouteSchedule with ID {RouteScheduleId}", id);
+				return deletedRouteSchedule;
 			}
 			catch (Exception ex)
 			{

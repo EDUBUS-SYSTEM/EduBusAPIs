@@ -68,6 +68,12 @@ namespace Data.Repos.MongoDB
 
 		public virtual async Task<T?> DeleteAsync(Guid id)
 		{
+			var existingDoc = await FindAsync(id);
+			if (existingDoc == null)
+			{
+				return null;
+			}
+
 			var filter = Builders<T>.Filter.Eq(x => x.Id, id);
 			var update = Builders<T>.Update
 				.Set(x => x.IsDeleted, true)
@@ -75,7 +81,7 @@ namespace Data.Repos.MongoDB
 
 			var options = new FindOneAndUpdateOptions<T> { ReturnDocument = ReturnDocument.After };
 			var updated = await _collection.FindOneAndUpdateAsync(filter, update, options);
-			return updated; // returns the soft-deleted doc, not null
+			return updated;
 		}
 
 		public virtual async Task<IEnumerable<T>> FindByConditionAsync(Expression<Func<T, bool>> expression)
@@ -197,7 +203,10 @@ namespace Data.Repos.MongoDB
 
 			foreach (var id in idsList)
 			{
-				var filter = Builders<T>.Filter.Eq(x => x.Id, id);
+				var filter = Builders<T>.Filter.And(
+					Builders<T>.Filter.Eq(x => x.Id, id),
+					Builders<T>.Filter.Eq(x => x.IsDeleted, false)
+				);
 				var update = Builders<T>.Update
 					.Set(x => x.IsDeleted, true)
 					.Set(x => x.UpdatedAt, now);

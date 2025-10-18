@@ -1013,7 +1013,13 @@ namespace Services.Implementations
 
         private void ValidateRouteScheduleDates(DateTime effectiveFrom, DateTime? effectiveTo)
         {
-            // Validate EffectiveTo is not before EffectiveFrom
+            var currentDate = DateTime.UtcNow.Date;
+            
+            if (effectiveFrom.Date < currentDate)
+            {
+                throw new InvalidOperationException($"EffectiveFrom date ({effectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+            }
+            
             if (effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Date)
             {
                 throw new InvalidOperationException("EffectiveTo date cannot be before EffectiveFrom date");
