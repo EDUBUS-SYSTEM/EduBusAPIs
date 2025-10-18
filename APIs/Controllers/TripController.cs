@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Trip;
+using MongoDB.Driver;
+using Utils;
+using Data.Repos.Interfaces;
 
 namespace APIs.Controllers
 {
@@ -17,12 +20,14 @@ namespace APIs.Controllers
 		private readonly ITripService _tripService;
 		private readonly ILogger<TripController> _logger;
 		private readonly IMapper _mapper;
+		private readonly IDatabaseFactory _databaseFactory;
 
-		public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper)
+		public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper, IDatabaseFactory databaseFactory)
 		{
 			_tripService = tripService;
 			_logger = logger;
 			_mapper = mapper;
+			_databaseFactory = databaseFactory;
 		}
 
 		[HttpGet]
@@ -221,5 +226,206 @@ namespace APIs.Controllers
 				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
 			}
 		}
+
+		[HttpPost("generate-all-automatic")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> GenerateAllTripsAutomatic(
+			[FromQuery] int daysAhead = 7)
+		{
+			try
+			{
+				var startDate = DateTime.UtcNow.Date;
+				var endDate = startDate.AddDays(daysAhead);
+
+				var scheduleRepo = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
+				var routeScheduleRepo = _databaseFactory.GetRepositoryByType<IRouteScheduleRepository>(DatabaseType.MongoDb);
+
+				// Get all active schedules
+				var activeSchedules = await scheduleRepo.FindByFilterAsync(
+					Builders<Schedule>.Filter.And(
+						Builders<Schedule>.Filter.Eq(s => s.IsActive, true),
+						Builders<Schedule>.Filter.Eq(s => s.IsDeleted, false),
+						Builders<Schedule>.Filter.Lte(s => s.EffectiveFrom, endDate),
+						Builders<Schedule>.Filter.Or(
+							Builders<Schedule>.Filter.Eq(s => s.EffectiveTo, null),
+							Builders<Schedule>.Filter.Gte(s => s.EffectiveTo, startDate)
+						)
+					)
+				);
+
+				var totalGenerated = 0;
+				var processedSchedules = 0;
+				var results = new List<object>();
+
+				foreach (var schedule in activeSchedules)
+				{
+					try
+					{
+						// Check if schedule has active route schedules
+						var routeSchedules = await routeScheduleRepo.GetRouteSchedulesByScheduleAsync(schedule.Id);
+						var activeRouteSchedules = routeSchedules.Where(rs => rs.IsActive && !rs.IsDeleted).ToList();
+
+						if (!activeRouteSchedules.Any())
+							continue;
+
+						// Generate trips for this schedule
+						var generatedTrips = await _tripService.GenerateTripsFromScheduleAsync(
+							schedule.Id, 
+							startDate, 
+							endDate
+						);
+
+						var tripCount = generatedTrips.Count();
+						totalGenerated += tripCount;
+						processedSchedules++;
+
+						results.Add(new
+						{
+							scheduleId = schedule.Id,
+							scheduleName = schedule.Name,
+							tripCount = tripCount,
+							routeScheduleCount = activeRouteSchedules.Count
+						});
+					}
+					catch (Exception ex)
+					{
+						_logger.LogError(ex, "Error generating trips for schedule {ScheduleId}", schedule.Id);
+						results.Add(new
+						{
+							scheduleId = schedule.Id,
+							scheduleName = schedule.Name,
+							error = ex.Message
+						});
+					}
+				}
+
+				return Ok(new
+				{
+					message = "Automatic trip generation completed",
+					startDate = startDate,
+					endDate = endDate,
+					processedSchedules = processedSchedules,
+					totalGenerated = totalGenerated,
+					results = results
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error in automatic trip generation");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		#region Enhanced Trip Management Endpoints
+
+		[HttpPut("{id}/status")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> UpdateTripStatus(Guid id, [FromBody] UpdateTripStatusRequest request)
+		{
+			try
+			{
+				var success = await _tripService.UpdateTripStatusAsync(id, request.Status, request.Reason);
+				if (!success)
+				{
+					return NotFound(new { message = "Trip not found" });
+				}
+
+				return Ok(new { 
+					tripId = id, 
+					status = request.Status, 
+					reason = request.Reason,
+					message = "Trip status updated successfully" 
+				});
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating trip status: {TripId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPut("{id}/attendance")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> UpdateAttendance(Guid id, [FromBody] UpdateAttendanceRequest request)
+		{
+			try
+			{
+				var success = await _tripService.UpdateAttendanceAsync(id, request.StopId, request.StudentId, request.State);
+				if (!success)
+				{
+					return NotFound(new { message = "Trip, stop, or student not found" });
+				}
+
+				return Ok(new { 
+					tripId = id, 
+					stopId = request.StopId, 
+					studentId = request.StudentId,
+					state = request.State,
+					message = "Attendance updated successfully" 
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating attendance: {TripId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/stops")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<IEnumerable<TripStopDto>>> GetTripStops(Guid id)
+		{
+			try
+			{
+				var trip = await _tripService.GetTripByIdAsync(id);
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found" });
+				}
+
+				return Ok(_mapper.Map<IEnumerable<TripStopDto>>(trip.Stops));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip stops: {TripId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/attendance")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> GetTripAttendance(Guid id)
+		{
+			try
+			{
+				var trip = await _tripService.GetTripByIdAsync(id);
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found" });
+				}
+
+				var attendanceSummary = trip.Stops.SelectMany(s => s.Attendance)
+					.GroupBy(a => a.State)
+					.ToDictionary(g => g.Key, g => g.Count());
+
+				return Ok(new { 
+					tripId = id, 
+					attendanceSummary = attendanceSummary,
+					totalStops = trip.Stops.Count,
+					totalAttendanceRecords = trip.Stops.Sum(s => s.Attendance.Count)
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip attendance: {TripId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		#endregion
 	}
 }

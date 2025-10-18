@@ -11,6 +11,12 @@ namespace Data.Repos.MongoDB
         }
         public override async Task<Route?> DeleteAsync(Guid id)
         {
+            var existingRoute = await FindAsync(id);
+            if (existingRoute == null)
+            {
+                return null;
+            }
+
             var filter = Builders<Route>.Filter.Eq(x => x.Id, id);
             var update = Builders<Route>.Update
                 .Set(x => x.IsDeleted, true)

@@ -199,5 +199,60 @@ namespace APIs.Controllers
 				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
 			}
 		}
+
+		[HttpPost("cleanup/orphaned")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> CleanupOrphanedRouteSchedules()
+		{
+			try
+			{
+				var result = await _routeScheduleService.CleanupOrphanedRouteSchedulesAsync();
+				return Ok(new { 
+					success = result, 
+					message = result ? "Orphaned route schedules cleaned up successfully" : "No orphaned route schedules found" 
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error cleaning up orphaned route schedules");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("validation/orphaned")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<IEnumerable<RouteScheduleDto>>> GetOrphanedRouteSchedules()
+		{
+			try
+			{
+				var orphaned = await _routeScheduleService.GetOrphanedRouteSchedulesAsync();
+				return Ok(_mapper.Map<IEnumerable<RouteScheduleDto>>(orphaned));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting orphaned route schedules");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{id}/validation")]
+		[Authorize(Roles = Roles.Admin)]
+		public async Task<ActionResult<object>> ValidateRouteScheduleIntegrity(Guid id)
+		{
+			try
+			{
+				var isValid = await _routeScheduleService.ValidateRouteScheduleIntegrityAsync(id);
+				return Ok(new { 
+					routeScheduleId = id, 
+					isValid = isValid,
+					message = isValid ? "Route schedule integrity is valid" : "Route schedule integrity validation failed"
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error validating route schedule integrity: {RouteScheduleId}", id);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
 	}
 }
