@@ -1,9 +1,4 @@
 ﻿using Data.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Services.Contracts
 {
@@ -31,5 +26,12 @@ namespace Services.Contracts
 			int perPage,
 			string sortBy,
 			string sortOrder);
+
+		Task<bool> UpdateTripStatusAsync(Guid tripId, string newStatus, string? reason = null);
+		Task<bool> UpdateAttendanceAsync(Guid tripId, Guid stopId, Guid studentId, string state);
+		Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId);
+
+		Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date);
+		Task<IEnumerable<Trip>> GetTripsAffectedByScheduleOverrideAsync(Guid scheduleId, DateTime date);
 	}
 }

@@ -12,10 +12,10 @@ namespace Data.Models
         public Guid ScheduleId { get; set; }
 
         [BsonElement("effectiveFrom")]
-        public DateTime EffectiveFrom { get; set; }
+        public DateTime EffectiveFrom { get; set; } = DateTime.UtcNow.Date;
 
         [BsonElement("effectiveTo")]
-        public DateTime? EffectiveTo { get; set; }
+        public DateTime? EffectiveTo { get; set; } = null; // null = inherit from Schedule
 
         [BsonElement("priority")]
         public int Priority { get; set; } = 0;
