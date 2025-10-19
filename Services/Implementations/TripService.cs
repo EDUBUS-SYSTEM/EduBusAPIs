@@ -3,6 +3,7 @@ using Data.Repos.Interfaces;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
+using Services.Models.Trip;
 using Utils;
 using Constants;
 
@@ -862,6 +863,158 @@ namespace Services.Implementations
 				throw;
 			}
 		}
+
+
+		public async Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate)
+		{
+			try
+			{
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
+				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+				
+				// Get active driver-vehicle assignments for the service date
+				var driverVehicles = await driverVehicleRepo.GetActiveDriverVehiclesByDateAsync(driverId, serviceDate);
+				if (!driverVehicles.Any())
+					return Enumerable.Empty<Trip>();
+
+				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).ToList();
+				
+				// Get all routes for these vehicles
+				var routes = new List<Route>();
+				foreach (var vehicleId in vehicleIds)
+				{
+					var vehicleRoutes = await routeRepo.FindByConditionAsync(r => r.VehicleId == vehicleId && r.IsActive && !r.IsDeleted);
+					routes.AddRange(vehicleRoutes);
+				}
+
+				if (!routes.Any())
+					return Enumerable.Empty<Trip>();
+
+				var routeIds = routes.Select(r => r.Id).ToList();
+				
+				// Get trips for these routes on the service date
+				var trips = new List<Trip>();
+				foreach (var routeId in routeIds)
+				{
+					var routeTrips = await tripRepo.GetTripsByRouteAsync(routeId);
+					var dayTrips = routeTrips.Where(t => t.ServiceDate.Date == serviceDate.Date);
+					trips.AddRange(dayTrips);
+				}
+
+				// Sort by planned start time
+				return trips.OrderBy(t => t.PlannedStartAt);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule by date: {DriverId}, {ServiceDate}", driverId, serviceDate);
+				throw;
+			}
+		}
+
+		public async Task<IEnumerable<Trip>> GetDriverScheduleByRangeAsync(Guid driverId, DateTime startDate, DateTime endDate)
+		{
+			try
+			{
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
+				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+				
+				// Get active driver-vehicle assignments for the date range
+				var driverVehicles = await driverVehicleRepo.GetActiveDriverVehiclesByDateRangeAsync(driverId, startDate, endDate);
+				if (!driverVehicles.Any())
+					return Enumerable.Empty<Trip>();
+
+				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).ToList();
+				
+				// Get all routes for these vehicles
+				var routes = new List<Route>();
+				foreach (var vehicleId in vehicleIds)
+				{
+					var vehicleRoutes = await routeRepo.FindByConditionAsync(r => r.VehicleId == vehicleId && r.IsActive && !r.IsDeleted);
+					routes.AddRange(vehicleRoutes);
+				}
+
+				if (!routes.Any())
+					return Enumerable.Empty<Trip>();
+
+				var routeIds = routes.Select(r => r.Id).ToList();
+				
+				// Get trips for these routes in the date range
+				var trips = new List<Trip>();
+				foreach (var routeId in routeIds)
+				{
+					var routeTrips = await tripRepo.GetTripsByRouteAsync(routeId);
+					var rangeTrips = routeTrips.Where(t => t.ServiceDate.Date >= startDate.Date && t.ServiceDate.Date <= endDate.Date);
+					trips.AddRange(rangeTrips);
+				}
+
+				// Sort by service date and planned start time
+				return trips.OrderBy(t => t.ServiceDate).ThenBy(t => t.PlannedStartAt);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule by range: {DriverId}, {StartDate} to {EndDate}", driverId, startDate, endDate);
+				throw;
+			}
+		}
+
+		public async Task<IEnumerable<Trip>> GetDriverUpcomingScheduleAsync(Guid driverId, int days = 7)
+		{
+			try
+			{
+				var startDate = DateTime.UtcNow.Date;
+				var endDate = startDate.AddDays(days);
+				
+				return await GetDriverScheduleByRangeAsync(driverId, startDate, endDate);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver upcoming schedule: {DriverId}, {Days} days", driverId, days);
+				throw;
+			}
+		}
+
+		public async Task<DriverScheduleSummary> GetDriverScheduleSummaryAsync(Guid driverId, DateTime startDate, DateTime endDate)
+		{
+			try
+			{
+				var trips = await GetDriverScheduleByRangeAsync(driverId, startDate, endDate);
+				var tripList = trips.ToList();
+
+				var summary = new DriverScheduleSummary
+				{
+					DriverId = driverId,
+					StartDate = startDate,
+					EndDate = endDate,
+					TotalTrips = tripList.Count,
+					ScheduledTrips = tripList.Count(t => t.Status == TripStatus.Scheduled),
+					InProgressTrips = tripList.Count(t => t.Status == TripStatus.InProgress),
+					CompletedTrips = tripList.Count(t => t.Status == TripStatus.Completed),
+					CancelledTrips = tripList.Count(t => t.Status == TripStatus.Cancelled),
+					TotalWorkingHours = CalculateTotalWorkingHours(tripList),
+					TripsByDate = tripList.GroupBy(t => t.ServiceDate.Date)
+						.ToDictionary(g => g.Key, g => g.Count())
+				};
+
+				return summary;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule summary: {DriverId}", driverId);
+				throw;
+			}
+		}
+
+		private static double CalculateTotalWorkingHours(IEnumerable<Trip> trips)
+		{
+			var totalMinutes = trips
+				.Where(t => t.Status == TripStatus.Completed && t.StartTime.HasValue && t.EndTime.HasValue)
+				.Sum(t => (t.EndTime!.Value - t.StartTime!.Value).TotalMinutes);
+			
+			return Math.Round(totalMinutes / 60.0, 2);
+		}
+
 
 	}
 }

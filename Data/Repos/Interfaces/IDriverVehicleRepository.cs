@@ -44,5 +44,8 @@ namespace Data.Repos.Interfaces
         Task<IEnumerable<DriverVehicle>> GetDriverAssignmentsAsync(Guid driverId, bool? isActive = null, DateTime? startDate = null, DateTime? endDate = null);
         Task<Dictionary<Guid, DriverVehicle?>> GetPrimaryVehiclesForDriversAsync(IEnumerable<Guid> driverIds);
         Task<DriverVehicle?> GetPrimaryVehicleForDriverAsync(Guid driverId);
+        
+        Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateAsync(Guid driverId, DateTime serviceDate);
+        Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
     }
 }

@@ -148,6 +148,25 @@ namespace Services.MapperProfiles
 			CreateMap<TripStop, TripStopDto>();
 			CreateMap<TripStopDto, TripStop>();
 
+			// Driver Schedule mappings
+			CreateMap<Trip, DriverScheduleDto>()
+				.ForMember(dest => dest.RouteName, opt => opt.MapFrom(src => "Route Name")) // Will be populated by service
+				.ForMember(dest => dest.ScheduleName, opt => opt.MapFrom(src => src.ScheduleSnapshot.Name))
+				.ForMember(dest => dest.TotalStops, opt => opt.MapFrom(src => src.Stops.Count))
+				.ForMember(dest => dest.CompletedStops, opt => opt.MapFrom(src => src.Stops.Count(s => s.DepartedAt.HasValue)))
+				.ForMember(dest => dest.Stops, opt => opt.MapFrom(src => src.Stops));
+			
+			CreateMap<TripStop, DriverScheduleStopDto>()
+				.ForMember(dest => dest.PickupPointName, opt => opt.MapFrom(src => "Pickup Point")) // Will be populated by service
+				.ForMember(dest => dest.Address, opt => opt.MapFrom(src => src.Location.Address))
+				.ForMember(dest => dest.Latitude, opt => opt.MapFrom(src => src.Location.Latitude))
+				.ForMember(dest => dest.Longitude, opt => opt.MapFrom(src => src.Location.Longitude))
+				.ForMember(dest => dest.TotalStudents, opt => opt.MapFrom(src => src.Attendance.Count))
+				.ForMember(dest => dest.PresentStudents, opt => opt.MapFrom(src => src.Attendance.Count(a => a.State == "Present")))
+				.ForMember(dest => dest.AbsentStudents, opt => opt.MapFrom(src => src.Attendance.Count(a => a.State == "Absent")));
+
+			CreateMap<DriverScheduleSummary, DriverScheduleSummaryDto>();
+
 			// RouteSchedule mappings
 			CreateMap<RouteSchedule, RouteScheduleDto>();
 			CreateMap<CreateRouteScheduleDto, RouteSchedule>();

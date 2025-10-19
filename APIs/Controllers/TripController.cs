@@ -427,5 +427,81 @@ namespace APIs.Controllers
 		}
 
 		#endregion
+
+		[HttpGet("driver/{driverId}/schedule/date/{serviceDate:datetime}")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<IEnumerable<DriverScheduleDto>>> GetDriverScheduleByDate(Guid driverId, DateTime serviceDate)
+		{
+			try
+			{
+				var trips = await _tripService.GetDriverScheduleByDateAsync(driverId, serviceDate);
+				return Ok(_mapper.Map<IEnumerable<DriverScheduleDto>>(trips));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule by date: {DriverId}, {ServiceDate}", driverId, serviceDate);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("driver/{driverId}/schedule/range")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<IEnumerable<DriverScheduleDto>>> GetDriverScheduleByRange(
+			Guid driverId,
+			[FromQuery] DateTime startDate,
+			[FromQuery] DateTime endDate)
+		{
+			try
+			{
+				var trips = await _tripService.GetDriverScheduleByRangeAsync(driverId, startDate, endDate);
+				return Ok(_mapper.Map<IEnumerable<DriverScheduleDto>>(trips));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule by range: {DriverId}, {StartDate} to {EndDate}", driverId, startDate, endDate);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("driver/{driverId}/schedule/upcoming")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<IEnumerable<DriverScheduleDto>>> GetDriverUpcomingSchedule(
+			Guid driverId,
+			[FromQuery] int days = 7)
+		{
+			try
+			{
+				var trips = await _tripService.GetDriverUpcomingScheduleAsync(driverId, days);
+				return Ok(_mapper.Map<IEnumerable<DriverScheduleDto>>(trips));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver upcoming schedule: {DriverId}, {Days} days", driverId, days);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("driver/{driverId}/schedule/summary")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<DriverScheduleSummaryDto>> GetDriverScheduleSummary(
+			Guid driverId,
+			[FromQuery] DateTime? startDate = null,
+			[FromQuery] DateTime? endDate = null)
+		{
+			try
+			{
+				var start = startDate ?? DateTime.UtcNow.Date;
+				var end = endDate ?? start.AddDays(30);
+				
+				var summary = await _tripService.GetDriverScheduleSummaryAsync(driverId, start, end);
+				return Ok(_mapper.Map<DriverScheduleSummaryDto>(summary));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting driver schedule summary: {DriverId}", driverId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
 	}
 }

@@ -358,5 +358,32 @@ namespace Data.Repos.SqlServer
                            (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now))
                 .FirstOrDefaultAsync();
         }
+
+        public async Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateAsync(Guid driverId, DateTime serviceDate)
+        {
+            var startOfDay = serviceDate.Date;
+            var endOfDay = startOfDay.AddDays(1);
+
+            return await _context.DriverVehicles
+                .Include(dv => dv.Vehicle)
+                .Where(dv => dv.DriverId == driverId &&
+                           !dv.IsDeleted &&
+                           dv.Status == DriverVehicleStatus.Active &&
+                           dv.StartTimeUtc < endOfDay &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > startOfDay))
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate)
+        {
+            return await _context.DriverVehicles
+                .Include(dv => dv.Vehicle)
+                .Where(dv => dv.DriverId == driverId &&
+                           !dv.IsDeleted &&
+                           dv.Status == DriverVehicleStatus.Active &&
+                           dv.StartTimeUtc < endDate.Date.AddDays(1) &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > startDate.Date))
+                .ToListAsync();
+        }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Services.Models.Trip;
 
 namespace Services.Contracts
 {
@@ -33,5 +34,10 @@ namespace Services.Contracts
 
 		Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date);
 		Task<IEnumerable<Trip>> GetTripsAffectedByScheduleOverrideAsync(Guid scheduleId, DateTime date);
+
+		Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate);
+		Task<IEnumerable<Trip>> GetDriverScheduleByRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
+		Task<IEnumerable<Trip>> GetDriverUpcomingScheduleAsync(Guid driverId, int days = 7);
+		Task<DriverScheduleSummary> GetDriverScheduleSummaryAsync(Guid driverId, DateTime startDate, DateTime endDate);
 	}
 }
