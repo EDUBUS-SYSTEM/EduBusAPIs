@@ -1,9 +1,6 @@
 ﻿using Data.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Services.Models.Route;
+
 
 namespace Services.Contracts
 {
@@ -29,5 +26,13 @@ namespace Services.Contracts
 			int perPage,
 			string sortBy,
 			string sortOrder);
+
+		Task<bool> DeactivateRouteSchedulesByRouteAsync(Guid routeId);
+		Task<bool> DeactivateRouteSchedulesByScheduleAsync(Guid scheduleId);
+		Task<IEnumerable<RouteSchedule>> GetOrphanedRouteSchedulesAsync();
+		Task<bool> CleanupOrphanedRouteSchedulesAsync();
+		Task<bool> ValidateRouteScheduleIntegrityAsync(Guid routeScheduleId);
+
+		Task<RouteSchedule> ApplySmartDefaultsFromRequestAsync(RouteScheduleRequest request, Guid routeId);
 	}
 }

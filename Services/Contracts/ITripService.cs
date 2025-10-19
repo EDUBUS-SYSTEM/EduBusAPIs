@@ -1,9 +1,5 @@
 ﻿using Data.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Services.Models.Trip;
 
 namespace Services.Contracts
 {
@@ -31,5 +27,17 @@ namespace Services.Contracts
 			int perPage,
 			string sortBy,
 			string sortOrder);
+
+		Task<bool> UpdateTripStatusAsync(Guid tripId, string newStatus, string? reason = null);
+		Task<bool> UpdateAttendanceAsync(Guid tripId, Guid stopId, Guid studentId, string state);
+		Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId);
+
+		Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date);
+		Task<IEnumerable<Trip>> GetTripsAffectedByScheduleOverrideAsync(Guid scheduleId, DateTime date);
+
+		Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate);
+		Task<IEnumerable<Trip>> GetDriverScheduleByRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
+		Task<IEnumerable<Trip>> GetDriverUpcomingScheduleAsync(Guid driverId, int days = 7);
+		Task<DriverScheduleSummary> GetDriverScheduleSummaryAsync(Guid driverId, DateTime startDate, DateTime endDate);
 	}
 }
