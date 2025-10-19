@@ -15,18 +15,27 @@ namespace Services.Implementations
         private readonly IDriverVehicleRepository _driverVehicleRepo;
         private readonly IVehicleRepository _vehicleRepo;
         private readonly IDriverRepository _driverRepo;
+        private readonly IMongoRepository<Route> _routeRepository;
+        private readonly IStudentRepository _studentRepository;
+        private readonly IPickupPointRepository _pickupPointRepository;
         private readonly IMapper _mapper;
 
         public DriverVehicleService(
             IDriverVehicleRepository driverVehicleRepo,
             IVehicleRepository vehicleRepo,
             IMapper mapper,
-            IDriverRepository driverRepo)
+            IDriverRepository driverRepo,
+            IMongoRepository<Route> routeRepository,
+            IStudentRepository studentRepository,
+            IPickupPointRepository pickupPointRepository)
         {
             _driverVehicleRepo = driverVehicleRepo;
             _vehicleRepo = vehicleRepo;
             _mapper = mapper;
             _driverRepo = driverRepo;
+            _routeRepository = routeRepository;
+            _studentRepository = studentRepository;
+            _pickupPointRepository = pickupPointRepository;
         }
 
         public async Task<VehicleDriversResponse?> GetDriversByVehicleAsync(Guid vehicleId, bool? isActive)
@@ -536,6 +545,147 @@ namespace Services.Implementations
             }
 
             return dto;
+        }
+
+        public async Task<DriverVehicleInfoDto?> GetDriverCurrentVehicleAsync(Guid driverId)
+        {
+            var driverVehicle = await _driverVehicleRepo.GetPrimaryVehicleForDriverAsync(driverId);
+            
+            if (driverVehicle == null || driverVehicle.Vehicle == null)
+            {
+                return null;
+            }
+
+            var vehicle = driverVehicle.Vehicle;
+            
+            return new DriverVehicleInfoDto
+            {
+                VehicleId = vehicle.Id,
+                LicensePlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate),
+                Capacity = vehicle.Capacity,
+                Status = vehicle.Status,
+                StatusNote = vehicle.StatusNote,
+                IsPrimaryDriver = driverVehicle.IsPrimaryDriver,
+                AssignmentStartTime = driverVehicle.StartTimeUtc,
+                AssignmentEndTime = driverVehicle.EndTimeUtc,
+                AssignmentStatus = driverVehicle.Status
+            };
+        }
+
+        public async Task<VehicleStudentsResponse> GetVehicleStudentsAsync(Guid vehicleId)
+        {
+            try
+            {
+                // 1. Find active route for this vehicle
+                var routes = await _routeRepository.FindByConditionAsync(r => 
+                    r.VehicleId == vehicleId && 
+                    r.IsActive && 
+                    !r.IsDeleted);
+                
+                var activeRoute = routes.FirstOrDefault();
+                
+                if (activeRoute == null)
+                {
+                    return new VehicleStudentsResponse
+                    {
+                        Success = true,
+                        Data = new VehicleStudentsData
+                        {
+                            VehicleId = vehicleId,
+                            TotalStudents = 0,
+                            Students = new List<VehicleStudentInfo>()
+                        }
+                    };
+                }
+
+                // 2. Get all pickup point IDs from route
+                var pickupPointIds = activeRoute.PickupPoints
+                    .Select(pp => pp.PickupPointId)
+                    .ToList();
+
+                if (!pickupPointIds.Any())
+                {
+                    return new VehicleStudentsResponse
+                    {
+                        Success = true,
+                        Data = new VehicleStudentsData
+                        {
+                            VehicleId = vehicleId,
+                            RouteId = activeRoute.Id.ToString(),
+                            RouteName = activeRoute.RouteName,
+                            TotalStudents = 0,
+                            Students = new List<VehicleStudentInfo>()
+                        }
+                    };
+                }
+
+                // 3. Get students at these pickup points
+                var students = await _studentRepository.FindByConditionAsync(s => 
+                    s.CurrentPickupPointId.HasValue &&
+                    pickupPointIds.Contains(s.CurrentPickupPointId.Value) &&
+                    s.Status == StudentStatus.Active &&
+                    !s.IsDeleted);
+
+                // 4. Get pickup point details for addresses
+                var pickupPoints = await _pickupPointRepository.FindByConditionAsync(pp =>
+                    pickupPointIds.Contains(pp.Id) && !pp.IsDeleted);
+
+                var pickupPointDict = pickupPoints.ToDictionary(pp => pp.Id);
+                
+                // 5. Create response with students sorted by pickup sequence
+                var studentInfos = students.Select(s =>
+                {
+                    var pickupPoint = pickupPointDict.GetValueOrDefault(s.CurrentPickupPointId!.Value);
+                    var routePickupPoint = activeRoute.PickupPoints
+                        .FirstOrDefault(pp => pp.PickupPointId == s.CurrentPickupPointId);
+
+                    return new VehicleStudentInfo
+                    {
+                        StudentId = s.Id,
+                        FirstName = s.FirstName,
+                        LastName = s.LastName,
+                        PickupPointId = s.CurrentPickupPointId!.Value,
+                        PickupPointAddress = routePickupPoint?.Location?.Address ?? 
+                                            pickupPoint?.Location ?? 
+                                            "Unknown",
+                        PickupSequenceOrder = routePickupPoint?.SequenceOrder ?? 999,
+                        GradeLevel = s.StudentGradeEnrollments
+                            ?.Where(e => e.EndTimeUtc == null)
+                            ?.FirstOrDefault()
+                            ?.Grade?.Name,
+                        ParentName = s.Parent != null 
+                            ? $"{s.Parent.FirstName} {s.Parent.LastName}".Trim() 
+                            : null,
+                        ParentPhone = s.Parent?.PhoneNumber
+                    };
+                })
+                .OrderBy(si => si.PickupSequenceOrder)
+                .ThenBy(si => si.LastName)
+                .ToList();
+
+                return new VehicleStudentsResponse
+                {
+                    Success = true,
+                    Data = new VehicleStudentsData
+                    {
+                        VehicleId = vehicleId,
+                        RouteId = activeRoute.Id.ToString(),
+                        RouteName = activeRoute.RouteName,
+                        TotalStudents = studentInfos.Count,
+                        Students = studentInfos
+                    }
+                };
+            }
+            catch (Exception ex)
+            {
+                // Log exception here if logger is available
+                return new VehicleStudentsResponse
+                {
+                    Success = false,
+                    Error = "SERVICE_ERROR",
+                    Message = "Failed to retrieve students."
+                };
+            }
         }
     }
 }

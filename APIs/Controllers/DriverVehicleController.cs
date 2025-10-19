@@ -119,6 +119,107 @@ namespace APIs.Controllers
             }
         }
 
+        /// <summary>
+        /// Get current driver's own vehicle from token - Driver only
+        /// </summary>
+        [Authorize(Roles = Roles.Driver)]
+        [HttpGet("current-vehicle")]
+        public async Task<ActionResult<DriverVehicleInfoResponse>> GetCurrentVehicle()
+        {
+            try
+            {
+                var driverIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (driverIdClaim == null)
+                {
+                    return Unauthorized(new DriverVehicleInfoResponse 
+                    { 
+                        Success = false, 
+                        Error = "DRIVER_ID_NOT_FOUND", 
+                        Message = "Driver ID not found in token." 
+                    });
+                }
+
+                Guid driverId = Guid.Parse(driverIdClaim.Value);
+
+                var result = await _driverVehicleService.GetDriverCurrentVehicleAsync(driverId);
+                
+                if (result == null)
+                {
+                    return NotFound(new DriverVehicleInfoResponse 
+                    { 
+                        Success = false, 
+                        Error = "NO_VEHICLE_ASSIGNED", 
+                        Message = "You have no vehicle assigned." 
+                    });
+                }
+
+                return Ok(new DriverVehicleInfoResponse 
+                { 
+                    Success = true, 
+                    Data = result 
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new DriverVehicleInfoResponse 
+                { 
+                    Success = false, 
+                    Error = "INTERNAL_SERVER_ERROR",
+                    Message = "An error occurred while retrieving your vehicle information." 
+                });
+            }
+        }
+
+        /// <summary>
+        /// Get students assigned to current driver's vehicle - Driver only
+        /// </summary>
+        [Authorize(Roles = Roles.Driver)]
+        [HttpGet("current-vehicle/students")]
+        public async Task<ActionResult<VehicleStudentsResponse>> GetCurrentVehicleStudents()
+        {
+            try
+            {
+                var driverIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (driverIdClaim == null)
+                {
+                    return Unauthorized(new VehicleStudentsResponse
+                    {
+                        Success = false,
+                        Error = "DRIVER_ID_NOT_FOUND",
+                        Message = "Driver ID not found in token."
+                    });
+                }
+
+                Guid driverId = Guid.Parse(driverIdClaim.Value);
+
+                // Get driver's current vehicle
+                var vehicle = await _driverVehicleService.GetDriverCurrentVehicleAsync(driverId);
+                if (vehicle == null)
+                {
+                    return NotFound(new VehicleStudentsResponse
+                    {
+                        Success = false,
+                        Error = "NO_VEHICLE_ASSIGNED",
+                        Message = "You have no vehicle assigned."
+                    });
+                }
+
+                // Get students for that vehicle
+                var result = await _driverVehicleService.GetVehicleStudentsAsync(vehicle.VehicleId);
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new VehicleStudentsResponse
+                {
+                    Success = false,
+                    Error = "INTERNAL_SERVER_ERROR",
+                    Message = "An error occurred while retrieving students."
+                });
+            }
+        }
+
         #endregion
 
         #region Vehicle Assignment Management (Admin only)

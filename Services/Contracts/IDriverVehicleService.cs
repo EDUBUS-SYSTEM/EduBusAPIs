@@ -34,5 +34,11 @@ namespace Services.Contracts
         Task<DriverAssignmentSummaryResponse> GetDriverAssignmentSummaryAsync(Guid driverId);
         Task<AssignmentListResponse> GetDriverAssignmentsAsync(Guid driverId, bool? isActive = null, DateTime? startDate = null, DateTime? endDate = null, int page = 1, int perPage = 20);
         Task<DriverAssignmentResponse?> UpdateAssignmentStatusAsync(Guid assignmentId, DriverVehicleStatus status, Guid adminId, string? note = null);
+        
+        // Get driver's current vehicle
+        Task<DriverVehicleInfoDto?> GetDriverCurrentVehicleAsync(Guid driverId);
+        
+        // Get students on driver's vehicle
+        Task<VehicleStudentsResponse> GetVehicleStudentsAsync(Guid vehicleId);
     }
 }

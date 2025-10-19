@@ -1,10 +1,12 @@
 ﻿using Data.Models;
+using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.UserAccount;
 using System.Security.Claims;
 using Constants;
+using Utils;
 
 namespace APIs.Controllers
 {
@@ -13,7 +15,13 @@ namespace APIs.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
-        public AuthController(IAuthService authService) => _authService = authService;
+        private readonly IUserAccountRepository _userAccountRepository;
+        
+        public AuthController(IAuthService authService, IUserAccountRepository userAccountRepository)
+        {
+            _authService = authService;
+            _userAccountRepository = userAccountRepository;
+        }
 
         // POST /auth/login
         [HttpPost("login")]
@@ -145,6 +153,66 @@ namespace APIs.Controllers
                 data = new { message = "You are authenticated with a valid role!" },
                 error = (object?)null
             });
+        }
+
+        // POST /auth/reset-all-passwords
+        
+        [HttpPost("reset-all-passwords")]
+        public async Task<IActionResult> ResetAllPasswords()
+        {
+            try
+            {
+                // Lấy tất cả user từ database (không bao gồm user đã bị xóa)
+                var allUsers = await _userAccountRepository.FindByConditionAsync(u => !u.IsDeleted);
+                
+                if (!allUsers.Any())
+                {
+                    return Ok(new
+                    {
+                        success = true,
+                        data = new { message = "No users found to reset passwords", updatedCount = 0 },
+                        error = (object?)null
+                    });
+                }
+
+                var updatedCount = 0;
+                var newPassword = "password";
+                var hashedPassword = SecurityHelper.HashPassword(newPassword);
+
+                // Cập nhật mật khẩu cho từng user
+                foreach (var user in allUsers)
+                {
+                    user.HashedPassword = hashedPassword;
+                    user.UpdatedAt = DateTime.UtcNow;
+                    
+                    var updatedUser = await _userAccountRepository.UpdateAsync(user);
+                    if (updatedUser != null)
+                    {
+                        updatedCount++;
+                    }
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new 
+                    { 
+                        message = $"Successfully reset passwords for {updatedCount} users",
+                        updatedCount = updatedCount,
+                        newPassword = newPassword
+                    },
+                    error = (object?)null
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    success = false,
+                    data = (object?)null,
+                    error = new { code = "INTERNAL_ERROR", message = ex.Message }
+                });
+            }
         }
     }
 }

@@ -40,6 +40,44 @@ namespace Data.Repos.SqlServer
             return await query.ToListAsync();
         }
 
+        public async Task<(IEnumerable<DriverLeaveRequest> items, int totalCount)> GetByDriverIdPaginatedAsync(
+            Guid driverId, 
+            DateTime? fromDate, 
+            DateTime? toDate, 
+            LeaveStatus? status,
+            int page, 
+            int perPage)
+        {
+            var query = _context.DriverLeaveRequests
+                .Include(l => l.Driver)
+                .Include(l => l.ApprovedByAdmin)
+                .Include(l => l.SuggestedReplacementDriver)
+                .Include(l => l.SuggestedReplacementVehicle)
+                .Where(l => l.DriverId == driverId && !l.IsDeleted);
+
+            // Apply date filters
+            if (fromDate.HasValue)
+                query = query.Where(l => l.EndDate >= fromDate.Value);
+            if (toDate.HasValue)
+                query = query.Where(l => l.StartDate <= toDate.Value);
+            
+            // Apply status filter
+            if (status.HasValue)
+                query = query.Where(l => l.Status == status.Value);
+
+            // Get total count
+            var totalCount = await query.CountAsync();
+
+            // Apply pagination with ordering (newest first)
+            var items = await query
+                .OrderByDescending(l => l.RequestedAt)
+                .Skip((page - 1) * perPage)
+                .Take(perPage)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
         public async Task<IEnumerable<DriverLeaveRequest>> GetPendingLeavesAsync()
         {
             return await _context.DriverLeaveRequests
