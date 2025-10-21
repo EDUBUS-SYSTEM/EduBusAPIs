@@ -50,6 +50,14 @@ namespace Services.Implementations
                     $"Driver with ID {dto.DriverId} not found.");
             }
 
+            // Check if driver has active vehicle assignment
+            var activeAssignments = await _driverVehicleRepo.GetActiveAssignmentsByDriverAsync(dto.DriverId);
+            if (!activeAssignments.Any())
+            {
+                _logger.LogWarning("Leave request rejected: Driver has no active vehicle assignment. Driver: {DriverId}", dto.DriverId);
+                throw new InvalidOperationException("Driver must have an active vehicle assignment before requesting leave.");
+            }
+
             // Validate start date is not in the past
             var today = DateTime.UtcNow.Date;
             if (dto.StartDate < today)
@@ -100,7 +108,12 @@ namespace Services.Implementations
             }
 
             // Check for overlapping leave requests
-            var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(dto.DriverId, dto.StartDate, dto.EndDate);
+            var normalizedStartDate = dto.StartDate.Date; // 00:00:00.000
+            var normalizedEndDate = dto.EndDate.Date.AddDays(1).AddTicks(-1); // 23:59:59.999
+
+            // Check for overlapping leave requests with normalized dates
+            var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(
+                dto.DriverId, normalizedStartDate, normalizedEndDate);
             if (hasOverlappingLeave)
             {
                 // Get detailed information about overlapping leaves
