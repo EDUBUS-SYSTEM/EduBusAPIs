@@ -359,28 +359,148 @@ namespace APIs.Controllers
                 });
             }
         }
+        /// <summary>
+        /// Get leave requests for the currently logged-in driver with pagination
+        /// </summary>
+        [Authorize(Roles = Roles.Driver)]
+        [HttpGet("my-leaves")]
+        public async Task<ActionResult<DriverLeaveListResponse>> GetMyLeaveRequests(
+            [FromQuery] DateTime? fromDate,
+            [FromQuery] DateTime? toDate,
+            [FromQuery] LeaveStatus? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int perPage = 20)
+        {
+            try
+            {
+                var driverIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(driverIdClaim))
+                {
+                    return Unauthorized(new
+                    {
+                        message = "User identification not found in token"
+                    });
+                }
+
+                var driverId = Guid.Parse(driverIdClaim);
+                
+                // Validate pagination parameters
+                if (page < 1) page = 1;
+                if (perPage < 1 || perPage > 100) perPage = 20;
+                
+                var result = await _driverLeaveService.GetDriverLeavesPaginatedAsync(
+                    driverId, fromDate, toDate, status, page, perPage);
+                
+                if (!result.Success)
+                {
+                    return StatusCode(500, result);
+                }
+                
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new DriverLeaveListResponse
+                {
+                    Success = false,
+                    Error = new { message = "An error occurred while retrieving leave requests.", details = ex.Message }
+                });
+            }
+        }
+
+        /// <summary>
+        /// Get a specific leave request by ID - Driver can view own, Admin can view any
+        /// </summary>
+        [HttpGet("leaves/{leaveId}")]
+        public async Task<ActionResult<DriverLeaveResponse>> GetLeaveById(Guid leaveId)
+        {
+            try
+            {
+                var leave = await _driverLeaveService.GetLeaveByIdAsync(leaveId);
+                if (leave == null)
+                    return NotFound(new { message = "Leave request not found." });
+
+                // Check authorization: Driver can only see their own leaves
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var isAdmin = User.IsInRole(Roles.Admin);
+                
+                if (!isAdmin && leave.DriverId.ToString() != userIdClaim)
+                    return Forbid();
+
+                return Ok(leave);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while retrieving leave request.", details = ex.Message });
+            }
+        }
+
+       
 
         /// <summary>
         /// Create leave request - Driver can create own, Admin can create for any
         /// </summary>
-        [HttpPost("{id}/leaves")]
-        public async Task<ActionResult<DriverLeaveResponse>> CreateLeaveRequest(Guid id, [FromBody] CreateLeaveRequestDto request)
+        [Authorize(Roles = Roles.Driver)]
+        [HttpPost("send-leave-request")]
+        public async Task<ActionResult<DriverLeaveResponse>> SendLeaveRequest([FromBody] CreateLeaveRequestDto request)
         {
             try
             {
-                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, id))
+                if (!ModelState.IsValid)
                 {
-                    return Forbid();
+                    return BadRequest(new
+                    {
+                        message = "Validation failed",
+                        errors = ModelState.Values
+                            .SelectMany(v => v.Errors)
+                            .Select(e => e.ErrorMessage)
+                            .ToList(),
+                        requestId = HttpContext.TraceIdentifier
+                    });
                 }
 
-                request.DriverId = id;
+                var driverIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(driverIdClaim))
+                {
+                    return Unauthorized(new
+                    {
+                        message = "User identification not found in token",
+                    });
+                }
+                var driverId = Guid.Parse(driverIdClaim);
+                request.DriverId = driverId;
                 
                 var leave = await _driverLeaveService.CreateLeaveRequestAsync(request);
-                return CreatedAtAction(nameof(GetDriverLeaves), new { id = id }, leave);
+                return CreatedAtAction(nameof(GetDriverLeaves), new { id = driverIdClaim }, leave);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new
+                {
+                    message = ex.Message,  
+                });
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(ex.Message);
+                // Check if it's an overlapping leave request error
+                if (ex.Message.Contains("already have") && 
+                    (ex.Message.Contains("pending") || ex.Message.Contains("approved")))
+                {
+                    return Conflict(new
+                    {
+                        message = ex.Message,
+                        errorType = "OverlappingLeaveRequest",
+                        statusCode = 409
+                    });
+                }
+                
+                // For other InvalidOperationException (validation errors, etc.)
+                return BadRequest(new
+                {
+                    message = ex.Message,
+                    errorType = "ValidationError",
+                    statusCode = 400
+                });
             }
             catch (Exception ex)
             {

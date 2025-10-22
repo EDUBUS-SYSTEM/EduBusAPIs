@@ -43,12 +43,38 @@ namespace Services.Implementations
 
         public async Task<DriverLeaveResponse> CreateLeaveRequestAsync(CreateLeaveRequestDto dto)
         {
+            var driver = await _driverRepo.FindAsync(dto.DriverId);
+            if (driver == null || driver.IsDeleted) 
+            {
+                throw new KeyNotFoundException(
+                    $"Driver with ID {dto.DriverId} not found.");
+            }
+
+            // Check if driver has active vehicle assignment
+            var activeAssignments = await _driverVehicleRepo.GetActiveAssignmentsByDriverAsync(dto.DriverId);
+            if (!activeAssignments.Any())
+            {
+                _logger.LogWarning("Leave request rejected: Driver has no active vehicle assignment. Driver: {DriverId}", dto.DriverId);
+                throw new InvalidOperationException("Driver must have an active vehicle assignment before requesting leave.");
+            }
+
+            // Validate start date is not in the past
+            var today = DateTime.UtcNow.Date;
+            if (dto.StartDate < today)
+            {
+                _logger.LogWarning("Leave request rejected: Start date {StartDate} is in the past. Current date: {CurrentDate}",
+                    dto.StartDate, today);
+                throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {dto.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
+            }
+            if (dto.EndDate < dto.StartDate)
+            {
+                throw new InvalidOperationException("Leave end date cannot be before start date.");
+            }
             var settings = _configurationService.GetLeaveRequestSettings();
             var now = DateTime.UtcNow;
-            var today = DateTime.UtcNow.Date;
             var minimumAdvanceTime = now.AddHours(settings.MinimumAdvanceNoticeHours);
-            var emergencyAdvanceTime = now.AddHours(settings.EmergencyLeaveAdvanceNoticeHours);
-            
+            var emergencyAdvanceTime = now.AddHours(settings.EmergencyLeaveAdvanceNoticeHours);          
+
             // Check if this is an emergency leave request
             var isEmergencyLeave = dto.LeaveType == LeaveType.Emergency;
             var isSickLeave = dto.LeaveType == LeaveType.Sick;
@@ -60,14 +86,6 @@ namespace Services.Implementations
                 : isSickLeave && settings.AllowEmergencyLeaveRequests
                 ? emergencyAdvanceTime
                 : minimumAdvanceTime;
-            
-            // Validate start date is not in the past
-            if (dto.StartDate < today)
-            {
-                _logger.LogWarning("Leave request rejected: Start date {StartDate} is in the past. Current date: {CurrentDate}", 
-                    dto.StartDate, today);
-                throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {dto.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
-            }
             
             // Validate advance notice requirement
             if (dto.StartDate < requiredAdvanceTime)
@@ -88,10 +106,33 @@ namespace Services.Implementations
                 
                 throw new InvalidOperationException(errorMessage);
             }
-            
-            if (dto.EndDate < dto.StartDate)
+
+            // Check for overlapping leave requests
+            var normalizedStartDate = dto.StartDate.Date; // 00:00:00.000
+            var normalizedEndDate = dto.EndDate.Date.AddDays(1).AddTicks(-1); // 23:59:59.999
+
+            // Check for overlapping leave requests with normalized dates
+            var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(
+                dto.DriverId, normalizedStartDate, normalizedEndDate);
+            if (hasOverlappingLeave)
             {
-                throw new InvalidOperationException("Leave end date cannot be before start date.");
+                // Get detailed information about overlapping leaves
+                var overlappingLeaves = await _leaveRepo.GetLeavesByDriverAndDateRangeAsync(dto.DriverId, dto.StartDate, dto.EndDate);
+                var activeOverlappingLeaves = overlappingLeaves.Where(l => l.Status == LeaveStatus.Pending || l.Status == LeaveStatus.Approved).ToList();
+                
+                if (activeOverlappingLeaves.Any())
+                {
+                    var overlappingLeave = activeOverlappingLeaves.First();
+                    var statusText = overlappingLeave.Status == LeaveStatus.Pending ? "pending" : "approved";
+                    
+                    _logger.LogWarning("Leave request rejected: Overlapping leave exists. Driver: {DriverId}, " +
+                        "Requested: {StartDate} to {EndDate}, Existing: {ExistingStartDate} to {ExistingEndDate}, Status: {Status}", 
+                        dto.DriverId, dto.StartDate, dto.EndDate, overlappingLeave.StartDate, overlappingLeave.EndDate, overlappingLeave.Status);
+                    
+                    throw new InvalidOperationException(
+                        $"You already have a {statusText} leave request from {overlappingLeave.StartDate:yyyy-MM-dd} to {overlappingLeave.EndDate:yyyy-MM-dd}. " +
+                        "Please cancel or modify your existing request before creating a new one.");
+                }
             }
             
             var entity = _mapper.Map<DriverLeaveRequest>(dto);
@@ -103,7 +144,6 @@ namespace Services.Implementations
             // Send notification to admin about new leave request
             try
             {
-                var driver = await _driverRepo.FindAsync(dto.DriverId);
                 var message = $"New leave request from {driver?.FirstName} {driver?.LastName} for {dto.LeaveType} from {dto.StartDate:yyyy-MM-dd} to {dto.EndDate:yyyy-MM-dd}";
                 
                 var metadata = new Dictionary<string, object>
@@ -139,12 +179,66 @@ namespace Services.Implementations
         {
             var entity = await _leaveRepo.FindAsync(leaveId);
             if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
+            
+            // Check if the leave request is in a state that allows updates
+            if (entity.Status != LeaveStatus.Pending)
+            {
+                throw new InvalidOperationException($"Cannot update leave request. Current status: {entity.Status}. Only pending leave requests can be updated.");
+            }
+            
+            // Store original values for validation
+            var originalStartDate = entity.StartDate;
+            var originalEndDate = entity.EndDate;
+            
+            // Update fields
             if (dto.LeaveType.HasValue) entity.LeaveType = dto.LeaveType.Value;
             if (dto.StartDate.HasValue) entity.StartDate = dto.StartDate.Value;
             if (dto.EndDate.HasValue) entity.EndDate = dto.EndDate.Value;
             if (!string.IsNullOrWhiteSpace(dto.Reason)) entity.Reason = dto.Reason;
             if (dto.AutoReplacementEnabled.HasValue) entity.AutoReplacementEnabled = dto.AutoReplacementEnabled.Value;
             if (!string.IsNullOrWhiteSpace(dto.AdditionalInformation)) { /* store if later modeled */ }
+            
+            // Validate date changes if dates were modified
+            if (dto.StartDate.HasValue || dto.EndDate.HasValue)
+            {
+                // Validate start date is not in the past
+                var today = DateTime.UtcNow.Date;
+                if (entity.StartDate < today)
+                {
+                    throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {entity.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
+                }
+                
+                if (entity.EndDate < entity.StartDate)
+                {
+                    throw new InvalidOperationException("Leave end date cannot be before start date.");
+                }
+                
+                // Check for overlapping leave requests (excluding current leave)
+                var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(entity.DriverId, entity.StartDate, entity.EndDate);
+                if (hasOverlappingLeave)
+                {
+                    // Get detailed information about overlapping leaves (excluding current leave)
+                    var overlappingLeaves = await _leaveRepo.GetLeavesByDriverAndDateRangeAsync(entity.DriverId, entity.StartDate, entity.EndDate);
+                    var activeOverlappingLeaves = overlappingLeaves
+                        .Where(l => l.Id != leaveId && (l.Status == LeaveStatus.Pending || l.Status == LeaveStatus.Approved))
+                        .ToList();
+                    
+                    if (activeOverlappingLeaves.Any())
+                    {
+                        var overlappingLeave = activeOverlappingLeaves.First();
+                        var statusText = overlappingLeave.Status == LeaveStatus.Pending ? "pending" : "approved";
+                        
+                        _logger.LogWarning("Leave request update rejected: Overlapping leave exists. Driver: {DriverId}, " +
+                            "Updated: {StartDate} to {EndDate}, Existing: {ExistingStartDate} to {ExistingEndDate}, Status: {Status}", 
+                            entity.DriverId, entity.StartDate, entity.EndDate, overlappingLeave.StartDate, overlappingLeave.EndDate, overlappingLeave.Status);
+                        
+                        throw new InvalidOperationException(
+                            $"You already have a {statusText} leave request from {overlappingLeave.StartDate:yyyy-MM-dd} to {overlappingLeave.EndDate:yyyy-MM-dd}. " +
+                            "Please cancel or modify your existing request before updating this one.");
+                    }
+                }
+            }
+            
             entity.UpdatedAt = DateTime.UtcNow;
             var updated = await _leaveRepo.UpdateAsync(entity);
             return _mapper.Map<DriverLeaveResponse>(updated!);
@@ -402,6 +496,62 @@ namespace Services.Implementations
         {
             var list = await _leaveRepo.GetByDriverIdAsync(driverId, fromDate, toDate);
             return list.Select(_mapper.Map<DriverLeaveResponse>);
+        }
+
+        public async Task<DriverLeaveListResponse> GetDriverLeavesPaginatedAsync(
+            Guid driverId, 
+            DateTime? fromDate, 
+            DateTime? toDate, 
+            LeaveStatus? status,
+            int page, 
+            int perPage)
+        {
+            try
+            {
+                // Validate pagination parameters
+                if (page < 1) page = 1;
+                if (perPage < 1 || perPage > 100) perPage = 20;
+
+                // Get paginated data from repository
+                var (items, totalCount) = await _leaveRepo.GetByDriverIdPaginatedAsync(
+                    driverId, fromDate, toDate, status, page, perPage);
+
+                // Calculate pagination info
+                var totalPages = (int)Math.Ceiling((double)totalCount / perPage);
+                var pagination = new PaginationInfo
+                {
+                    CurrentPage = page,
+                    PerPage = perPage,
+                    TotalItems = totalCount,
+                    TotalPages = totalPages,
+                    HasNextPage = page < totalPages,
+                    HasPreviousPage = page > 1
+                };
+
+                // Map to response DTOs
+                var leaveResponses = items.Select(l => _mapper.Map<DriverLeaveResponse>(l)).ToList();
+
+                // Get pending leaves count for this driver
+                var pendingCount = await _leaveRepo.GetQueryable()
+                    .Where(l => l.DriverId == driverId && !l.IsDeleted && l.Status == LeaveStatus.Pending)
+                    .CountAsync();
+
+                return new DriverLeaveListResponse
+                {
+                    Success = true,
+                    Data = leaveResponses,
+                    Pagination = pagination,
+                    PendingLeavesCount = pendingCount
+                };
+            }
+            catch (Exception ex)
+            {
+                return new DriverLeaveListResponse
+                {
+                    Success = false,
+                    Error = new { message = "An error occurred while retrieving leave requests.", details = ex.Message }
+                };
+            }
         }
 
         public async Task<IEnumerable<DriverLeaveResponse>> GetPendingLeavesAsync()

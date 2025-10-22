@@ -25,6 +25,13 @@ namespace Services.Contracts
         
         // Queries
         Task<IEnumerable<DriverLeaveResponse>> GetDriverLeavesAsync(Guid driverId, DateTime? fromDate, DateTime? toDate);
+        Task<DriverLeaveListResponse> GetDriverLeavesPaginatedAsync(
+            Guid driverId, 
+            DateTime? fromDate, 
+            DateTime? toDate, 
+            LeaveStatus? status,
+            int page, 
+            int perPage);
         Task<IEnumerable<DriverLeaveResponse>> GetPendingLeavesAsync();
         Task<DriverLeaveResponse?> GetLeaveByIdAsync(Guid leaveId);
         Task<IEnumerable<DriverLeaveResponse>> GetLeavesByStatusAsync(LeaveStatus status);
