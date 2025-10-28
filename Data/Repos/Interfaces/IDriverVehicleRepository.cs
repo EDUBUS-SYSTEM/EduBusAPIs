@@ -10,8 +10,8 @@ namespace Data.Repos.Interfaces
         Task<DriverVehicle> AssignDriverAsync(DriverVehicle entity);
         Task<bool> IsDriverAlreadyAssignedAsync(Guid vehicleId, Guid driverId, bool onlyActive = true);
         
-        Task<bool> HasTimeConflictAsync(Guid driverId, DateTime startTime, DateTime? endTime);
-        Task<bool> HasVehicleTimeConflictAsync(Guid vehicleId, DateTime startTime, DateTime? endTime);
+        Task<bool> HasTimeConflictAsync(Guid driverId, DateTime startTime, DateTime? endTime, Guid? excludeAssignmentId = null);
+        Task<bool> HasVehicleTimeConflictAsync(Guid vehicleId, DateTime startTime, DateTime? endTime, Guid? excludeAssignmentId = null);
         Task<IEnumerable<DriverVehicle>> GetActiveAssignmentsByDriverAsync(Guid driverId);
         Task<IEnumerable<DriverVehicle>> GetActiveAssignmentsByVehicleAsync(Guid vehicleId);
         
@@ -44,5 +44,6 @@ namespace Data.Repos.Interfaces
         Task<IEnumerable<DriverVehicle>> GetDriverAssignmentsAsync(Guid driverId, bool? isActive = null, DateTime? startDate = null, DateTime? endDate = null);
         Task<Dictionary<Guid, DriverVehicle?>> GetPrimaryVehiclesForDriversAsync(IEnumerable<Guid> driverIds);
         Task<DriverVehicle?> GetPrimaryVehicleForDriverAsync(Guid driverId);
+        Task<DriverVehicle?> GetActivePrimaryDriverForVehicleAsync(Guid vehicleId);
     }
 }
