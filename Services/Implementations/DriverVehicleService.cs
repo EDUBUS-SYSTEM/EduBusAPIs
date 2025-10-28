@@ -52,6 +52,13 @@ namespace Services.Implementations
             };
         }
 
+        public async Task<DriverAssignmentDto?> GetActivePrimaryDriverForVehicleAsync(Guid vehicleId)
+        {
+            var assignment = await _driverVehicleRepo.GetActivePrimaryDriverForVehicleAsync(vehicleId);
+            if (assignment == null) return null;
+            return _mapper.Map<DriverAssignmentDto>(assignment);
+        }
+
         public async Task<IEnumerable<DriverInfoDto>> GetDriversNotAssignedToVehicleAsync(
         Guid vehicleId, DateTime start, DateTime end)
         {
@@ -126,12 +133,12 @@ namespace Services.Implementations
             var vehicle = await _vehicleRepo.FindAsync(vehicleId);
             if (vehicle == null || vehicle.IsDeleted) return null;
 
+            // Validate start date is not in the past
+            if (dto.StartTimeUtc.Date < DateTime.UtcNow.Date)
+                throw new InvalidOperationException("Start date cannot be in the past.");
+
             if (dto.EndTimeUtc.HasValue && dto.EndTimeUtc <= dto.StartTimeUtc)
                 throw new InvalidOperationException("End time cannot be earlier than start time.");
-
-            var alreadyAssigned = await _driverVehicleRepo.IsDriverAlreadyAssignedAsync(vehicleId, dto.DriverId, true);
-            if (alreadyAssigned)
-                throw new InvalidOperationException("This driver is already assigned to the vehicle");
 
             var entity = new DriverVehicle
             {
@@ -140,6 +147,7 @@ namespace Services.Implementations
                 IsPrimaryDriver = dto.IsPrimaryDriver,
                 StartTimeUtc = dto.StartTimeUtc,
                 EndTimeUtc = dto.EndTimeUtc,
+                Status = DriverVehicleStatus.Assigned,
                 AssignedByAdminId = adminId
             };
 
@@ -169,12 +177,46 @@ namespace Services.Implementations
         {
             var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
             if (assignment == null || assignment.IsDeleted) return null;
-            if (dto.IsPrimaryDriver.HasValue) assignment.IsPrimaryDriver = dto.IsPrimaryDriver.Value;
-            if (dto.StartTimeUtc.HasValue && dto.EndTimeUtc.HasValue && dto.EndTimeUtc <= dto.StartTimeUtc)
+            
+            // Determine new time range (use existing if not provided in dto)
+            var newStartTime = dto.StartTimeUtc ?? assignment.StartTimeUtc;
+            var newEndTime = dto.EndTimeUtc.HasValue ? dto.EndTimeUtc : assignment.EndTimeUtc;
+            
+            // Validate start date is not in the past
+            if (newStartTime.Date < DateTime.UtcNow.Date)
+                throw new InvalidOperationException("Start date cannot be in the past.");
+            
+            // Validate end time > start time
+            if (newEndTime.HasValue && newEndTime <= newStartTime)
                 throw new InvalidOperationException("End time cannot be earlier than start time.");
+            
+            // Check conflict with OTHER assignments of the SAME DRIVER (exclude current assignment)
+            var driverConflict = await _driverVehicleRepo.HasTimeConflictAsync(
+                assignment.DriverId, 
+                newStartTime, 
+                newEndTime, 
+                assignmentId  // Exclude current assignment from check
+            );
+            if (driverConflict)
+                throw new InvalidOperationException("Driver has conflicting assignment with another vehicle in the selected time window.");
+            
+            // Check conflict with OTHER assignments of the SAME VEHICLE (exclude current assignment)
+            var vehicleConflict = await _driverVehicleRepo.HasVehicleTimeConflictAsync(
+                assignment.VehicleId, 
+                newStartTime, 
+                newEndTime, 
+                assignmentId  // Exclude current assignment from check
+            );
+            if (vehicleConflict)
+                throw new InvalidOperationException("Vehicle has conflicting assignment with another driver in the selected time window.");
+            
+            // Update fields
+            if (dto.IsPrimaryDriver.HasValue) assignment.IsPrimaryDriver = dto.IsPrimaryDriver.Value;
+            if (dto.StartTimeUtc.HasValue) assignment.StartTimeUtc = dto.StartTimeUtc.Value;
             if (dto.EndTimeUtc.HasValue) assignment.EndTimeUtc = dto.EndTimeUtc.Value;
             if (!string.IsNullOrWhiteSpace(dto.AssignmentReason)) assignment.AssignmentReason = dto.AssignmentReason;
             assignment.UpdatedAt = DateTime.UtcNow;
+            
             var updated = await _driverVehicleRepo.UpdateAsync(assignment);
             return new DriverAssignmentResponse { Success = true, Data = _mapper.Map<DriverAssignmentDto>(updated!) };
         }
@@ -183,7 +225,7 @@ namespace Services.Implementations
         {
             var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
             if (assignment == null || assignment.IsDeleted) return null;
-            assignment.Status = DriverVehicleStatus.Cancelled;
+            assignment.Status = DriverVehicleStatus.Unassigned;
             assignment.EndTimeUtc = assignment.EndTimeUtc ?? DateTime.UtcNow;
             assignment.ApprovalNote = reason;
             assignment.ApprovedByAdminId = adminId;         
@@ -267,7 +309,7 @@ namespace Services.Implementations
         {
             var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
             if (assignment == null) return null;
-            assignment.Status = DriverVehicleStatus.Active;
+            assignment.Status = DriverVehicleStatus.Assigned;
             assignment.ApprovedByAdminId = adminId;
             assignment.ApprovedAt = DateTime.UtcNow;
             assignment.ApprovalNote = note;
@@ -279,7 +321,7 @@ namespace Services.Implementations
         {
             var assignment = await _driverVehicleRepo.FindAsync(assignmentId);
             if (assignment == null) return null;
-            assignment.Status = DriverVehicleStatus.Cancelled;
+            assignment.Status = DriverVehicleStatus.Unassigned;
             assignment.ApprovedByAdminId = adminId;
             assignment.ApprovedAt = DateTime.UtcNow;
             assignment.ApprovalNote = $"Rejected: {reason}";
@@ -322,11 +364,11 @@ namespace Services.Implementations
                 var filterSummary = new FilterSummary
                 {
                     TotalAssignments = totalCount,
-                    ActiveAssignments = assignments.Count(a => a.StartTimeUtc <= DateTime.UtcNow && (!a.EndTimeUtc.HasValue || a.EndTimeUtc > DateTime.UtcNow)),
-                    PendingAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Pending),
-                    CompletedAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Completed),
-                    CancelledAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Cancelled),
-                    SuspendedAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Suspended),
+                    ActiveAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Assigned),
+                    PendingAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Unassigned && a.StartTimeUtc > DateTime.UtcNow),
+                    CompletedAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Unassigned && a.EndTimeUtc.HasValue && a.EndTimeUtc <= DateTime.UtcNow),
+                    CancelledAssignments = assignments.Count(a => a.Status == DriverVehicleStatus.Unassigned),
+                    SuspendedAssignments = 0,
                     UpcomingAssignments = assignments.Count(a => a.StartTimeUtc > DateTime.UtcNow),
                     EarliestStartDate = assignments.Any() ? assignments.Min(a => a.StartTimeUtc) : null,
                     LatestEndDate = assignments.Where(a => a.EndTimeUtc.HasValue).Any() ? assignments.Where(a => a.EndTimeUtc.HasValue).Max(a => a.EndTimeUtc) : null
@@ -394,17 +436,17 @@ namespace Services.Implementations
                     HasActiveAssignments = currentAssignments.Any(),
                     TotalAssignments = assignmentList.Count,
                     CompletedAssignments = completedAssignments.Count,
-                    CancelledAssignments = assignmentList.Count(a => a.Status == DriverVehicleStatus.Cancelled),
-                    PendingAssignments = assignmentList.Count(a => a.Status == DriverVehicleStatus.Pending),
+                    CancelledAssignments = assignmentList.Count(a => a.Status == DriverVehicleStatus.Unassigned && a.EndTimeUtc.HasValue),
+                    PendingAssignments = assignmentList.Count(a => a.Status == DriverVehicleStatus.Unassigned && a.StartTimeUtc > DateTime.UtcNow),
                     TotalWorkingHours = totalWorkingHours,
                     LastAssignmentDate = assignmentList.OrderByDescending(a => a.StartTimeUtc).FirstOrDefault()?.StartTimeUtc,
                     NextAssignmentDate = upcomingAssignments.OrderBy(a => a.StartTimeUtc).FirstOrDefault()?.StartTimeUtc,
                     AssignedVehicleIds = assignmentList.Select(a => a.VehicleId).Distinct().ToList(),
                     TotalVehiclesAssigned = assignmentList.Select(a => a.VehicleId).Distinct().Count(),
                     AssignmentCompletionRate = assignmentList.Count > 0 ? (double)completedAssignments.Count / assignmentList.Count * 100 : 0,
-                    OnTimeAssignments = completedAssignments.Count, // Placeholder - would need actual trip data
-                    LateAssignments = 0, // Placeholder - would need actual trip data
-                    PunctualityRate = 100 // Placeholder - would need actual trip data
+                    OnTimeAssignments = completedAssignments.Count,
+                    LateAssignments = 0,
+                    PunctualityRate = 100
                 };
 
                 return new DriverAssignmentSummaryResponse
@@ -472,7 +514,7 @@ namespace Services.Implementations
             assignment.Status = status;
             assignment.UpdatedAt = DateTime.UtcNow;
 
-            if (status == DriverVehicleStatus.Active || status == DriverVehicleStatus.Cancelled)
+            if (status == DriverVehicleStatus.Assigned)
             {
                 assignment.ApprovedByAdminId = adminId;
                 assignment.ApprovedAt = DateTime.UtcNow;
@@ -488,8 +530,10 @@ namespace Services.Implementations
             var now = DateTime.UtcNow;
             var dto = _mapper.Map<DriverAssignmentDto>(assignment);
             
-            // Set computed properties
-            dto.IsActive = assignment.StartTimeUtc <= now && (!assignment.EndTimeUtc.HasValue || assignment.EndTimeUtc > now);
+            // Set computed properties - Assigned means active
+            dto.IsActive = assignment.Status == DriverVehicleStatus.Assigned && 
+                          assignment.StartTimeUtc <= now && 
+                          (!assignment.EndTimeUtc.HasValue || assignment.EndTimeUtc > now);
             dto.IsUpcoming = assignment.StartTimeUtc > now;
             dto.IsCompleted = assignment.EndTimeUtc.HasValue && assignment.EndTimeUtc <= now;
             dto.Duration = assignment.EndTimeUtc.HasValue ? assignment.EndTimeUtc - assignment.StartTimeUtc : null;

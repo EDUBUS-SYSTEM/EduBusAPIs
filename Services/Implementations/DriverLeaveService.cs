@@ -52,11 +52,11 @@ namespace Services.Implementations
 
             // Check if driver has active vehicle assignment
             var activeAssignments = await _driverVehicleRepo.GetActiveAssignmentsByDriverAsync(dto.DriverId);
-            if (!activeAssignments.Any())
-            {
-                _logger.LogWarning("Leave request rejected: Driver has no active vehicle assignment. Driver: {DriverId}", dto.DriverId);
-                throw new InvalidOperationException("Driver must have an active vehicle assignment before requesting leave.");
-            }
+             if (!activeAssignments.Any())
+             {
+                 _logger.LogWarning("Leave request rejected: Driver has no active vehicle assignment. Driver: {DriverId}", dto.DriverId);
+                 throw new InvalidOperationException("Driver must have an active vehicle assignment before requesting leave.");
+             }
 
             // Validate start date is not in the past
             var today = DateTime.UtcNow.Date;
@@ -678,6 +678,79 @@ namespace Services.Implementations
                     Success = false,
                     Error = new { message = "An error occurred while retrieving leave requests.", details = ex.Message }
                 };
+            }
+        }
+
+        public async Task<DriverLeaveResponse?> GetActiveReplacementInfoByDriverIdAsync(Guid driverId)
+        {
+            try
+            {
+                // Get replacement info
+                var leaveRequest = await _leaveRepo.GetActiveReplacementByDriverIdAsync(driverId);
+
+                if (leaveRequest == null)
+                    return null;
+
+                // Map to response
+                return new DriverLeaveResponse
+                {
+                    Id = leaveRequest.Id,
+                    DriverId = leaveRequest.DriverId,
+                    DriverName = $"{leaveRequest.Driver.FirstName} {leaveRequest.Driver.LastName}",
+                    DriverEmail = leaveRequest.Driver.Email,
+                    DriverPhoneNumber = leaveRequest.Driver.PhoneNumber ?? string.Empty,
+                    DriverLicenseNumber = leaveRequest.Driver.DriverLicense != null 
+                        ? SecurityHelper.DecryptFromBytes(leaveRequest.Driver.DriverLicense.HashedLicenseNumber)
+                        : string.Empty,
+                    LeaveType = leaveRequest.LeaveType,
+                    StartDate = leaveRequest.StartDate,
+                    EndDate = leaveRequest.EndDate,
+                    Reason = leaveRequest.Reason,
+                    Status = leaveRequest.Status,
+                    RequestedAt = leaveRequest.RequestedAt,
+                    ApprovedByAdminId = leaveRequest.ApprovedByAdminId,
+                    ApprovedByAdminName = leaveRequest.ApprovedByAdmin != null 
+                        ? $"{leaveRequest.ApprovedByAdmin.FirstName} {leaveRequest.ApprovedByAdmin.LastName}"
+                        : null,
+                    ApprovedAt = leaveRequest.ApprovedAt,
+                    ApprovalNote = leaveRequest.ApprovalNote,
+                    AutoReplacementEnabled = leaveRequest.AutoReplacementEnabled,
+                    SuggestedReplacementDriverId = leaveRequest.SuggestedReplacementDriverId,
+                    SuggestedReplacementDriverName = leaveRequest.SuggestedReplacementDriver != null
+                        ? $"{leaveRequest.SuggestedReplacementDriver.FirstName} {leaveRequest.SuggestedReplacementDriver.LastName}"
+                        : null,
+                    SuggestedReplacementVehicleId = leaveRequest.SuggestedReplacementVehicleId,
+                    SuggestedReplacementVehiclePlate = leaveRequest.SuggestedReplacementVehicle != null
+                        ? SecurityHelper.DecryptFromBytes(leaveRequest.SuggestedReplacementVehicle.HashedLicensePlate)
+                        : null,
+                    SuggestionGeneratedAt = leaveRequest.SuggestionGeneratedAt
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active replacement info for driver {DriverId}", driverId);
+                return null;
+            }
+        }
+
+        public async Task<IEnumerable<DriverReplacementMatchDto>> GetActiveReplacementMatchesAsync()
+        {
+            try
+            {
+                var activeReplacements = await _leaveRepo.GetActiveReplacementsAsync();
+                
+                return activeReplacements.Select(lr => new DriverReplacementMatchDto
+                {
+                    DriverId = lr.DriverId,
+                    VehicleId = lr.SuggestedReplacementVehicleId,
+                    StartDate = lr.StartDate,
+                    EndDate = lr.EndDate
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active replacement matches");
+                return new List<DriverReplacementMatchDto>();
             }
         }
     }

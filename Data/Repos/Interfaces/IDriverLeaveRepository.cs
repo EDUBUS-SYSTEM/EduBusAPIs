@@ -18,5 +18,7 @@ namespace Data.Repos.Interfaces
         Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDateRangeAsync(DateTime startDate, DateTime endDate);
         Task<bool> HasOverlappingLeaveAsync(Guid driverId, DateTime startDate, DateTime endDate);
         Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDriverAndDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
+        Task<DriverLeaveRequest?> GetActiveReplacementByDriverIdAsync(Guid replacementDriverId);
+        Task<IEnumerable<DriverLeaveRequest>> GetActiveReplacementsAsync();
     }
 }

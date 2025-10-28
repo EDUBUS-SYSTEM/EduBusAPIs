@@ -690,6 +690,48 @@ namespace APIs.Controllers
             }
         }
 
+        /// <summary>
+        /// Get active replacement info for a driver
+        /// Returns the leave request info if this driver is currently on leave with a replacement driver
+        /// </summary>
+        [HttpGet("{driverId}/replacement-info")]
+        public async Task<ActionResult<DriverLeaveResponse>> GetReplacementInfo(Guid driverId)
+        {
+            try
+            {
+                var replacementInfo = await _driverLeaveService.GetActiveReplacementInfoByDriverIdAsync(driverId);
+                
+                if (replacementInfo == null)
+                {
+                    return Ok(new { message = "No active replacement found for this driver" });
+                }
+
+                return Ok(replacementInfo);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while retrieving replacement info." });
+            }
+        }
+
+        /// <summary>
+        /// Get active replacement matches (driver + vehicle + date range)
+        /// Useful for UI to show replacement info icon only for matching assignments
+        /// </summary>
+        [HttpGet("active-replacement-matches")]
+        public async Task<ActionResult> GetActiveReplacementMatches()
+        {
+            try
+            {
+                var matches = await _driverLeaveService.GetActiveReplacementMatchesAsync();
+                return Ok(matches);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while retrieving replacement matches." });
+            }
+        }
+
         #endregion
 
     }

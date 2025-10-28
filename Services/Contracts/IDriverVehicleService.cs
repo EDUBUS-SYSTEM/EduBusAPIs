@@ -8,6 +8,7 @@ namespace Services.Contracts
     public interface IDriverVehicleService
     {
         Task<VehicleDriversResponse?> GetDriversByVehicleAsync(Guid vehicleId, bool? isActive);
+        Task<DriverAssignmentDto?> GetActivePrimaryDriverForVehicleAsync(Guid vehicleId);
         Task<IEnumerable<DriverInfoDto>> GetDriversNotAssignedToVehicleAsync(Guid vehicleId, DateTime start, DateTime end);
         Task<DriverAssignmentResponse?> AssignDriverAsync(Guid vehicleId, DriverAssignmentRequest dto, Guid adminId);
         
