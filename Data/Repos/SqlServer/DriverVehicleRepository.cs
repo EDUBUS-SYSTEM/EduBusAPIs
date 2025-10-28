@@ -28,12 +28,14 @@ namespace Data.Repos.SqlServer
 
                 if (isActive.Value)
                 {
-                    query = query.Where(dv => dv.StartTimeUtc <= now &&
+                    query = query.Where(dv => dv.Status == DriverVehicleStatus.Assigned &&
+                                             dv.StartTimeUtc <= now &&
                                              (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now));
                 }
                 else
                 {
-                    query = query.Where(dv => dv.EndTimeUtc.HasValue && dv.EndTimeUtc <= now);
+                    query = query.Where(dv => dv.Status == DriverVehicleStatus.Unassigned ||
+                                             (dv.EndTimeUtc.HasValue && dv.EndTimeUtc <= now));
                 }
             }
 
@@ -42,14 +44,15 @@ namespace Data.Repos.SqlServer
 
         public async Task<List<Driver>> GetDriversNotAssignedToVehicleAsync(Guid vehicleId, DateTime start, DateTime end)
         {
+            // Get drivers that are NOT assigned to ANY vehicle during this time period
+            // This prevents drivers from being double-booked across multiple vehicles
             var q = _context.Drivers
                 .AsNoTracking()
                 .Where(d => !d.IsDeleted)
                 .Where(d => !_context.DriverVehicles.Any(a =>
                     a.DriverId == d.Id &&
-                    a.VehicleId == vehicleId &&
                     !a.IsDeleted &&
-                    a.Status != DriverVehicleStatus.Cancelled &&
+                    a.Status == DriverVehicleStatus.Assigned &&
                     a.StartTimeUtc < end &&
                     (a.EndTimeUtc == null || a.EndTimeUtc > start)
                 ));
@@ -97,20 +100,32 @@ namespace Data.Repos.SqlServer
             return aStart < bEndVal && bStart < aEndVal;
         }
 
-        public async Task<bool> HasTimeConflictAsync(Guid driverId, DateTime startTime, DateTime? endTime)
+        public async Task<bool> HasTimeConflictAsync(Guid driverId, DateTime startTime, DateTime? endTime, Guid? excludeAssignmentId = null)
         {
             var query = _context.DriverVehicles
-            .Where(dv => dv.DriverId == driverId && !dv.IsDeleted && dv.Status != DriverVehicleStatus.Cancelled);
+            .Where(dv => dv.DriverId == driverId && !dv.IsDeleted && dv.Status == DriverVehicleStatus.Assigned);
+
+            // Exclude current assignment when updating
+            if (excludeAssignmentId.HasValue)
+            {
+                query = query.Where(dv => dv.Id != excludeAssignmentId.Value);
+            }
 
             // overlap: existing.Start < newEnd && newStart < existing.End (null end = infinite)
             var newEndVal = endTime ?? DateTime.MaxValue;
             return await query.AnyAsync(dv => dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue));
         }
 
-        public async Task<bool> HasVehicleTimeConflictAsync(Guid vehicleId, DateTime startTime, DateTime? endTime)
+        public async Task<bool> HasVehicleTimeConflictAsync(Guid vehicleId, DateTime startTime, DateTime? endTime, Guid? excludeAssignmentId = null)
         {
             var query = _context.DriverVehicles
-            .Where(dv => dv.VehicleId == vehicleId && !dv.IsDeleted && dv.Status != DriverVehicleStatus.Cancelled);
+            .Where(dv => dv.VehicleId == vehicleId && !dv.IsDeleted && dv.Status == DriverVehicleStatus.Assigned);
+
+            // Exclude current assignment when updating
+            if (excludeAssignmentId.HasValue)
+            {
+                query = query.Where(dv => dv.Id != excludeAssignmentId.Value);
+            }
 
             var newEndVal = endTime ?? DateTime.MaxValue;
             return await query.AnyAsync(dv => dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue));
@@ -122,6 +137,7 @@ namespace Data.Repos.SqlServer
             return await _context.DriverVehicles
                 .Include(dv => dv.Vehicle)
                 .Where(dv => dv.DriverId == driverId &&
+                             dv.Status == DriverVehicleStatus.Assigned &&
                              dv.StartTimeUtc <= now &&
                              (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now) &&
                              !dv.IsDeleted)
@@ -134,6 +150,7 @@ namespace Data.Repos.SqlServer
             return await _context.DriverVehicles
                 .Include(dv => dv.Driver)
                 .Where(dv => dv.VehicleId == vehicleId &&
+                             dv.Status == DriverVehicleStatus.Assigned &&
                              dv.StartTimeUtc <= now &&
                              (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now) &&
                              !dv.IsDeleted)
@@ -145,7 +162,7 @@ namespace Data.Repos.SqlServer
             // Drivers with no overlapping assignments in the window
             var newEndVal = endTime;
             var overlappingDriverIds = await _context.DriverVehicles
-                .Where(dv => !dv.IsDeleted  && dv.Status != DriverVehicleStatus.Cancelled && dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue))
+                .Where(dv => !dv.IsDeleted && dv.Status == DriverVehicleStatus.Assigned && dv.StartTimeUtc < newEndVal && startTime < (dv.EndTimeUtc ?? DateTime.MaxValue))
                 .Select(dv => dv.DriverId)
                 .Distinct()
                 .ToListAsync();
@@ -354,6 +371,20 @@ namespace Data.Repos.SqlServer
                 .Where(dv => dv.DriverId == driverId &&
                            !dv.IsDeleted &&
                            dv.IsPrimaryDriver &&
+                           dv.StartTimeUtc <= now &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now))
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<DriverVehicle?> GetActivePrimaryDriverForVehicleAsync(Guid vehicleId)
+        {
+            var now = DateTime.UtcNow;
+            return await _context.DriverVehicles
+                .Include(dv => dv.Driver)
+                .Where(dv => dv.VehicleId == vehicleId &&
+                           !dv.IsDeleted &&
+                           dv.IsPrimaryDriver &&
+                           dv.Status == DriverVehicleStatus.Assigned &&
                            dv.StartTimeUtc <= now &&
                            (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > now))
                 .FirstOrDefaultAsync();

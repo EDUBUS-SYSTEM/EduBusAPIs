@@ -114,5 +114,37 @@ namespace Data.Repos.SqlServer
                 .Where(l => l.DriverId == driverId && !l.IsDeleted && l.StartDate <= endDate && l.EndDate >= startDate)
                 .ToListAsync();
         }
+
+    public async Task<DriverLeaveRequest?> GetActiveReplacementByDriverIdAsync(Guid driverId)
+    {
+        // Find leave request for this driver (DriverId = driverId)
+        // with a replacement driver (SuggestedReplacementDriverId != null)
+        // No date filtering here, let frontend check date overlap with assignment
+        return await _context.DriverLeaveRequests
+            .Include(lr => lr.Driver)
+                .ThenInclude(d => d.DriverLicense)
+            .Include(lr => lr.ApprovedByAdmin)
+            .Include(lr => lr.SuggestedReplacementDriver)
+                .ThenInclude(d => d.DriverLicense)
+            .Include(lr => lr.SuggestedReplacementVehicle)
+            .Where(lr => !lr.IsDeleted &&
+                        lr.Status == LeaveStatus.Approved &&
+                        lr.DriverId == driverId &&
+                        lr.SuggestedReplacementDriverId != null)
+            .OrderByDescending(lr => lr.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<IEnumerable<DriverLeaveRequest>> GetActiveReplacementsAsync()
+    {
+        // Get all approved leave requests with replacement driver
+        // Don't check vehicle ID as it can be null
+        // No date filtering here, let frontend match with assignment dates
+        return await _context.DriverLeaveRequests
+            .Where(lr => !lr.IsDeleted &&
+                        lr.Status == LeaveStatus.Approved &&
+                        lr.SuggestedReplacementDriverId != null)
+            .ToListAsync();
+    }
     }
 }
