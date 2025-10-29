@@ -223,8 +223,10 @@ public class PaymentController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("PayOS webhook received: {Payload}", payload);
-            
+            if (payload.Data.OrderCode == 123)
+            {
+                return Ok();
+            }
             // Process webhook and update transaction status
             var success = await _paymentService.HandlePayOSWebhookAsync(payload);
 

@@ -95,6 +95,19 @@ namespace APIs.Services
 				_logger.LogError(ex, "Error sending notification count update to admins");
 			}
 		}
-	}
+
+        public async Task SendEventToUserAsync(Guid userId, string eventName, object payload)
+        {
+            try
+            {
+                await _hubContext.Clients.Group($"User_{userId}").SendAsync(eventName, payload);
+                _logger.LogInformation("Sent event '{EventName}' to user {UserId}", eventName, userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending event '{EventName}' to user {UserId}", eventName, userId);
+            }
+        }
+    }
 }
 
