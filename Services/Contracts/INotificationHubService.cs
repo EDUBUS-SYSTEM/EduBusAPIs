@@ -10,5 +10,7 @@ namespace Services.Contracts
         Task SendNotificationToAllAsync(NotificationResponse notification);
         Task SendNotificationCountUpdateAsync(Guid userId, int unreadCount);
         Task SendNotificationCountUpdateToAdminsAsync(int unreadCount);
+
+        Task SendEventToUserAsync(Guid userId, string eventName, object payload);
     }
 }

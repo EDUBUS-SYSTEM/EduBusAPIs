@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Services.Contracts;
 using Services.Models.Payment;
+using System.Globalization;
 
 namespace Services.Implementations;
 
@@ -22,6 +23,7 @@ public class PaymentService : IPaymentService
     private readonly IMapper _mapper;
     private readonly ILogger<PaymentService> _logger;
     private readonly PayOSConfig _config;
+    private readonly INotificationHubService _hubService;
 
     public PaymentService(
         ITransactionRepository transactionRepository,
@@ -33,7 +35,8 @@ public class PaymentService : IPaymentService
         IPickupPointEnrollmentService pickupPointEnrollmentService,
         IMapper mapper,
         ILogger<PaymentService> logger,
-        IOptions<PayOSConfig> config)
+        IOptions<PayOSConfig> config,
+        INotificationHubService hubService)
     {
         _transactionRepository = transactionRepository;
         _transportFeeItemRepository = transportFeeItemRepository;
@@ -45,6 +48,7 @@ public class PaymentService : IPaymentService
         _mapper = mapper;
         _logger = logger;
         _config = config.Value;
+        _hubService = hubService;
     }
 
     public async Task<PagedTransactionResponse> GetTransactionsAsync(TransactionListRequest request)
@@ -376,7 +380,15 @@ public class PaymentService : IPaymentService
             if (newStatus == TransactionStatus.Paid)
             {
                 transaction.Status = TransactionStatus.Paid;
-                transaction.PaidAtUtc = DateTime.UtcNow;
+                if (DateTime.TryParseExact(
+                    payload.Data.TransactionDateTime,
+                    "yyyy-MM-dd HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime transactionDateTime))
+                {
+                    transaction.PaidAtUtc = transactionDateTime;
+                }
                 // Keep existing ProviderTransactionId (PaymentLinkId) and add Reference as additional info
                 if (string.IsNullOrEmpty(transaction.ProviderTransactionId))
                 {
@@ -413,6 +425,29 @@ public class PaymentService : IPaymentService
             await LogPaymentEventAsync(transaction.Id, newStatus, 
                 PaymentEventSource.webhook, message, System.Text.Json.JsonSerializer.Serialize(verifiedData));
 
+            // Send real-time transaction update with full detail
+            if (_hubService != null)
+            {
+                // Get full transaction detail to send via SignalR
+                var transactionDetail = await GetTransactionDetailAsync(transaction.Id);
+
+                var eventPayload = new
+                {
+                    TransactionId = transaction.Id,
+                    Status = newStatus.ToString(),
+                    UpdatedAt = DateTime.UtcNow,
+                    Transaction = transactionDetail  // Full detail for immediate UI update
+                };
+
+                await _hubService.SendEventToUserAsync(
+                    transaction.ParentId,
+                    "TransactionStatusUpdated",  // Event name for client
+                    eventPayload
+                );
+
+                _logger.LogInformation("✅ Sent full transaction detail to parent {ParentId}",
+                    transaction.ParentId);
+            }
             return true;
         }
         catch (Exception ex)
