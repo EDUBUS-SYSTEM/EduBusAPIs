@@ -20,7 +20,6 @@ using Services.Implementations;
 using Services.MapperProfiles;
 using Services.Models.Configuration;
 using Services.Models.Route;
-using System.Security.Authentication;
 using System.Text;
 using Utils;
 
@@ -222,6 +221,7 @@ builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Serv
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestionService>();
 builder.Services.AddHostedService<Services.Backgrounds.NotificationCleanupService>();
+builder.Services.AddHostedService<Services.Backgrounds.AutoTripGenerationService>();
 
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());

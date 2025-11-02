@@ -15,5 +15,8 @@ namespace Data.Repos.Interfaces
 		Task<IEnumerable<Trip>> GetTripsByStatusAsync(string status);
 		Task<IEnumerable<Trip>> GetTripsByDriverAsync(Guid driverId);
 		Task<IEnumerable<Trip>> GetUpcomingTripsAsync(DateTime fromDate, int days = 7);
+		
+		Task<IEnumerable<Trip>> GetTripsByVehicleAndDateAsync(Guid vehicleId, DateTime serviceDate);
+		Task<IEnumerable<Trip>> GetTripsByVehicleAndDateRangeAsync(Guid vehicleId, DateTime startDate, DateTime endDate);
 	}
 }

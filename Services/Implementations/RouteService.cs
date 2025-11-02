@@ -16,6 +16,8 @@ namespace Services.Implementations
         private readonly IPickupPointRepository _pickupPointRepository;
         private readonly IStudentRepository _studentRepository;
         private readonly IVehicleRepository _vehicleRepository;
+        private readonly IRouteScheduleService _routeScheduleService;
+        private readonly ITripService _tripService;
         private readonly IMapper _mapper;
 
         public RouteService(
@@ -25,6 +27,8 @@ namespace Services.Implementations
             IPickupPointRepository pickupPointRepository, 
             IStudentRepository studentRepository, 
             IVehicleRepository vehicleRepository, 
+            IRouteScheduleService routeScheduleService,
+            ITripService tripService,
             IMapper mapper)
         {
             _routeRepository = routeRepository;
@@ -33,6 +37,8 @@ namespace Services.Implementations
             _pickupPointRepository = pickupPointRepository;
             _studentRepository = studentRepository;
             _vehicleRepository = vehicleRepository;
+            _routeScheduleService = routeScheduleService;
+            _tripService = tripService;
             _mapper = mapper;
         }
 
@@ -64,7 +70,7 @@ namespace Services.Implementations
                     throw new InvalidOperationException($"Schedule with ID {request.RouteSchedule.ScheduleId} does not exist or is not active");
 
                 // Validate EffectiveFrom and EffectiveTo
-                ValidateRouteScheduleDates(request.RouteSchedule.EffectiveFrom, request.RouteSchedule.EffectiveTo);
+                ValidateRouteScheduleDates(request.RouteSchedule.EffectiveFrom ?? DateTime.UtcNow.Date, request.RouteSchedule.EffectiveTo);
             }
 
             // Create new route with location info from existing pickup points
@@ -99,7 +105,7 @@ namespace Services.Implementations
                 {
                     RouteId = createdRoute.Id,
                     ScheduleId = request.RouteSchedule.ScheduleId,
-                    EffectiveFrom = request.RouteSchedule.EffectiveFrom,
+                    EffectiveFrom = request.RouteSchedule.EffectiveFrom ?? DateTime.UtcNow.Date,
                     EffectiveTo = request.RouteSchedule.EffectiveTo,
                     Priority = request.RouteSchedule.Priority,
                     IsActive = true
@@ -149,7 +155,7 @@ namespace Services.Implementations
                     throw new InvalidOperationException($"Schedule with ID {request.RouteSchedule.ScheduleId} does not exist or is not active");
 
                 // Validate dates once
-                ValidateRouteScheduleDates(request.RouteSchedule.EffectiveFrom, request.RouteSchedule.EffectiveTo);
+                ValidateRouteScheduleDates(request.RouteSchedule.EffectiveFrom ?? DateTime.UtcNow.Date, request.RouteSchedule.EffectiveTo);
             }
 
             // Process each route individually
@@ -481,7 +487,10 @@ namespace Services.Implementations
             if (route == null || route.IsDeleted)
                 return false;
 
-            // Use the repository's DeleteAsync method which sets both IsDeleted = true and IsActive = false
+            await _routeScheduleService.DeactivateRouteSchedulesByRouteAsync(id);
+
+            await _tripService.CascadeDeactivateTripsByRouteAsync(id);
+
             var deletedRoute = await _routeRepository.DeleteAsync(id);
             return deletedRoute != null;
         }
@@ -510,6 +519,10 @@ namespace Services.Implementations
             var route = await _routeRepository.FindAsync(id);
             if (route == null || route.IsDeleted)
                 return false;
+
+            await _routeScheduleService.DeactivateRouteSchedulesByRouteAsync(id);
+
+            await _tripService.CascadeDeactivateTripsByRouteAsync(id);
 
             route.IsActive = false;
             route.UpdatedAt = DateTime.UtcNow;
@@ -600,7 +613,6 @@ namespace Services.Implementations
 					updatedRoutes.Add(existingRoute);
 				}
 
-				// ✅ FIX: Single database call using bulk update
 				var updatedRouteResults = await _routeRepository.BulkUpdateAsync(updatedRoutes);
 
 				// Map updated routes to DTOs
@@ -671,7 +683,7 @@ namespace Services.Implementations
 				route.VehicleId = request.VehicleId.Value;
 			}
 
-			// ✅ IMPORTANT: Do NOT modify pickup points - leave them unchanged
+			// Do NOT modify pickup points - leave them unchanged
 			route.UpdatedAt = DateTime.UtcNow;
 
 			var updatedRoute = await _routeRepository.UpdateAsync(route);
@@ -706,7 +718,6 @@ namespace Services.Implementations
 
 			try
 			{
-				// ✅ STEP 1: Validate all new routes first (before making any changes)
 				var validationErrors = ValidateBulkRouteDuplicates(request.Routes);
 				if (validationErrors.Any())
 				{
@@ -758,11 +769,9 @@ namespace Services.Implementations
 					routesToCreate.Add(newRoute);
 				}
 
-				// ✅ STEP 2: Get all existing routes for bulk deletion
 				var existingRoutes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted);
 				var existingRouteIds = existingRoutes.Select(r => r.Id).ToList();
 
-				// ✅ STEP 3: Bulk delete all existing routes (single database call)
 				var deletedCount = 0;
 				if (existingRouteIds.Any())
 				{
@@ -772,11 +781,9 @@ namespace Services.Implementations
 
 				response.DeletedRoutes = deletedCount;
 
-				// ✅ STEP 4: Bulk create all new routes (single database call)
 				var createdRoutes = await _routeRepository.BulkCreateAsync(routesToCreate);
 				var createdRoutesList = createdRoutes.ToList();
 
-				// ✅ STEP 5: Convert to DTOs and populate additional information
 				var routeDtos = new List<RouteDto>();
 
 				// Get all vehicle information in one query
@@ -828,7 +835,6 @@ namespace Services.Implementations
 					routeDtos.Add(routeDto);
 				}
 
-				// ✅ STEP 6: Prepare successful response
 				response.CreatedRoutes = routeDtos;
 				response.SuccessfulRoutes = routeDtos.Count;
 				response.Success = true;
@@ -849,7 +855,7 @@ namespace Services.Implementations
 			// Collect all pickup points from the bulk update
 			var allPickupPointsInBulkUpdate = routes
 				.Where(r => r.PickupPoints != null)
-				.SelectMany(r => r.PickupPoints.Select(pp => new { RouteId = r.RouteId, PickupPointId = pp.PickupPointId }))
+				.SelectMany(r => r.PickupPoints!.Select(pp => new { RouteId = r.RouteId, PickupPointId = pp.PickupPointId }))
 				.ToList();
 
 			// Group pickup points by pickup point ID to find duplicates within the bulk update
@@ -874,7 +880,7 @@ namespace Services.Implementations
 				var conflictingRoutes = await _routeRepository.FindByConditionAsync(r =>
 					!r.IsDeleted &&
 					r.IsActive &&
-					!bulkUpdateRouteIds.Contains(r.Id) && // ✅ Exclude routes being updated
+					!bulkUpdateRouteIds.Contains(r.Id) && // Exclude routes being updated
 					r.PickupPoints.Any(pp => allPickupPointIds.Contains(pp.PickupPointId)));
 
 				if (conflictingRoutes.Any())
@@ -1007,7 +1013,13 @@ namespace Services.Implementations
 
         private void ValidateRouteScheduleDates(DateTime effectiveFrom, DateTime? effectiveTo)
         {
-            // Validate EffectiveTo is not before EffectiveFrom
+            var currentDate = DateTime.UtcNow.Date;
+            
+            if (effectiveFrom.Date < currentDate)
+            {
+                throw new InvalidOperationException($"EffectiveFrom date ({effectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+            }
+            
             if (effectiveTo.HasValue && effectiveTo.Value.Date < effectiveFrom.Date)
             {
                 throw new InvalidOperationException("EffectiveTo date cannot be before EffectiveFrom date");

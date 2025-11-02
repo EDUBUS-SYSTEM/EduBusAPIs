@@ -1,6 +1,7 @@
 ﻿using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
@@ -14,16 +15,20 @@ namespace Services.Implementations
 	{
 		private readonly IDatabaseFactory _databaseFactory;
 		private readonly ILogger<ScheduleService> _logger;
+		private readonly IServiceProvider _serviceProvider;
 
 		private readonly INotificationService _notificationService;
 		private readonly IAcademicCalendarService _academicCalendarService;
+		private readonly IRouteScheduleService _routeScheduleService;
 
-		public ScheduleService(IDatabaseFactory databaseFactory, ILogger<ScheduleService> logger, INotificationService notificationService, IAcademicCalendarService academicCalendarService)
+		public ScheduleService(IDatabaseFactory databaseFactory, ILogger<ScheduleService> logger, IServiceProvider serviceProvider, INotificationService notificationService, IAcademicCalendarService academicCalendarService, IRouteScheduleService routeScheduleService)
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
+			_serviceProvider = serviceProvider;
 			_notificationService = notificationService;
 			_academicCalendarService = academicCalendarService;
+			_routeScheduleService = routeScheduleService;
 		}
 
 		public async Task<IEnumerable<Schedule>> QuerySchedulesAsync(
@@ -281,6 +286,8 @@ namespace Services.Implementations
 		{
 			try
 			{
+				await _routeScheduleService.DeactivateRouteSchedulesByScheduleAsync(id);
+
 				var repository = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
 				return await repository.DeleteAsync(id);
 			}
@@ -362,6 +369,12 @@ namespace Services.Implementations
 			// timezone
 			if (!IsValidTimezone(s.Timezone))
 				throw new ArgumentException($"Invalid timezone: {s.Timezone}");
+
+			var currentDate = DateTime.UtcNow.Date;
+			if (s.EffectiveFrom.Date < currentDate)
+			{
+				throw new ArgumentException($"EffectiveFrom date ({s.EffectiveFrom:yyyy-MM-dd}) cannot be in the past. Current date is {currentDate:yyyy-MM-dd}");
+			}
 
 			// effective range
 			if (s.EffectiveTo.HasValue && s.EffectiveTo.Value <= s.EffectiveFrom)
@@ -457,6 +470,45 @@ namespace Services.Implementations
 			{
 				_logger.LogError(ex, "Error adding time override for schedule {ScheduleId}", scheduleId);
 				throw;
+			}
+		}
+
+		public async Task<Schedule?> AddTimeOverrideAndRegenerateTripsAsync(Guid scheduleId, ScheduleTimeOverride timeOverride)
+		{
+			try
+			{
+				// Add the time override
+				var updatedSchedule = await AddTimeOverrideAsync(scheduleId, timeOverride);
+				if (updatedSchedule == null)
+					return null;
+
+				await RegenerateTripsForScheduleOverrideAsync(scheduleId, timeOverride.Date);
+
+				return updatedSchedule;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error adding time override and regenerating trips for schedule {ScheduleId}", scheduleId);
+				throw;
+			}
+		}
+
+		private async Task RegenerateTripsForScheduleOverrideAsync(Guid scheduleId, DateTime date)
+		{
+			try
+			{
+				// Get ITripService from DI container
+				var tripService = _serviceProvider.GetRequiredService<ITripService>();
+				
+				// Regenerate trips for the affected date
+				var regeneratedTrips = await tripService.RegenerateTripsForDateAsync(scheduleId, date);
+				
+				_logger.LogInformation("Regenerated {Count} trips for schedule {ScheduleId} on {Date} due to time override", 
+					regeneratedTrips.Count(), scheduleId, date);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error regenerating trips for schedule override: {ScheduleId} on {Date}", scheduleId, date);
 			}
 		}
 
