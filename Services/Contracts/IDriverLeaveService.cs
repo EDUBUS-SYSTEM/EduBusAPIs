@@ -1,5 +1,6 @@
 using Services.Models.Driver;
 using Data.Models.Enums;
+using System.Collections.Generic;
 
 namespace Services.Contracts
 {
@@ -38,5 +39,9 @@ namespace Services.Contracts
         
         // Paginated queries
         Task<DriverLeaveListResponse> GetLeaveRequestsAsync(DriverLeaveListRequest request);
+        
+        // Replacement info
+        Task<DriverLeaveResponse?> GetActiveReplacementInfoByDriverIdAsync(Guid driverId);
+        Task<IEnumerable<DriverReplacementMatchDto>> GetActiveReplacementMatchesAsync();
     }
 }
