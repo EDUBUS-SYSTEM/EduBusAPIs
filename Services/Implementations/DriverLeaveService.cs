@@ -13,7 +13,6 @@ namespace Services.Implementations
     public class DriverLeaveService : IDriverLeaveService
     {
         private readonly IDriverLeaveRepository _leaveRepo;
-        private readonly IDriverLeaveConflictRepository _conflictRepo;
         private readonly IDriverRepository _driverRepo;
         private readonly IDriverVehicleRepository _driverVehicleRepo;
         private readonly INotificationService _notificationService;
@@ -23,7 +22,6 @@ namespace Services.Implementations
 
         public DriverLeaveService(
             IDriverLeaveRepository leaveRepo,
-            IDriverLeaveConflictRepository conflictRepo,
             IDriverRepository driverRepo,
             IDriverVehicleRepository driverVehicleRepo,
             INotificationService notificationService,
@@ -32,7 +30,6 @@ namespace Services.Implementations
             ILogger<DriverLeaveService> logger)
         {
             _leaveRepo = leaveRepo;
-            _conflictRepo = conflictRepo;
             _driverRepo = driverRepo;
             _driverVehicleRepo = driverVehicleRepo;
             _notificationService = notificationService;
@@ -173,85 +170,6 @@ namespace Services.Implementations
             }
             
             return _mapper.Map<DriverLeaveResponse>(created);
-        }
-
-        public async Task<DriverLeaveResponse> UpdateLeaveRequestAsync(Guid leaveId, UpdateLeaveRequestDto dto)
-        {
-            var entity = await _leaveRepo.FindAsync(leaveId);
-            if (entity == null || entity.IsDeleted) throw new InvalidOperationException("Leave not found");
-            
-            // Check if the leave request is in a state that allows updates
-            if (entity.Status != LeaveStatus.Pending)
-            {
-                throw new InvalidOperationException($"Cannot update leave request. Current status: {entity.Status}. Only pending leave requests can be updated.");
-            }
-            
-            // Store original values for validation
-            var originalStartDate = entity.StartDate;
-            var originalEndDate = entity.EndDate;
-            
-            // Update fields
-            if (dto.LeaveType.HasValue) entity.LeaveType = dto.LeaveType.Value;
-            if (dto.StartDate.HasValue) entity.StartDate = dto.StartDate.Value;
-            if (dto.EndDate.HasValue) entity.EndDate = dto.EndDate.Value;
-            if (!string.IsNullOrWhiteSpace(dto.Reason)) entity.Reason = dto.Reason;
-            if (dto.AutoReplacementEnabled.HasValue) entity.AutoReplacementEnabled = dto.AutoReplacementEnabled.Value;
-            if (!string.IsNullOrWhiteSpace(dto.AdditionalInformation)) { /* store if later modeled */ }
-            
-            // Validate date changes if dates were modified
-            if (dto.StartDate.HasValue || dto.EndDate.HasValue)
-            {
-                // Validate start date is not in the past
-                var today = DateTime.UtcNow.Date;
-                if (entity.StartDate < today)
-                {
-                    throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {entity.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
-                }
-                
-                if (entity.EndDate < entity.StartDate)
-                {
-                    throw new InvalidOperationException("Leave end date cannot be before start date.");
-                }
-                
-                // Check for overlapping leave requests (excluding current leave)
-                var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(entity.DriverId, entity.StartDate, entity.EndDate);
-                if (hasOverlappingLeave)
-                {
-                    // Get detailed information about overlapping leaves (excluding current leave)
-                    var overlappingLeaves = await _leaveRepo.GetLeavesByDriverAndDateRangeAsync(entity.DriverId, entity.StartDate, entity.EndDate);
-                    var activeOverlappingLeaves = overlappingLeaves
-                        .Where(l => l.Id != leaveId && (l.Status == LeaveStatus.Pending || l.Status == LeaveStatus.Approved))
-                        .ToList();
-                    
-                    if (activeOverlappingLeaves.Any())
-                    {
-                        var overlappingLeave = activeOverlappingLeaves.First();
-                        var statusText = overlappingLeave.Status == LeaveStatus.Pending ? "pending" : "approved";
-                        
-                        _logger.LogWarning("Leave request update rejected: Overlapping leave exists. Driver: {DriverId}, " +
-                            "Updated: {StartDate} to {EndDate}, Existing: {ExistingStartDate} to {ExistingEndDate}, Status: {Status}", 
-                            entity.DriverId, entity.StartDate, entity.EndDate, overlappingLeave.StartDate, overlappingLeave.EndDate, overlappingLeave.Status);
-                        
-                        throw new InvalidOperationException(
-                            $"You already have a {statusText} leave request from {overlappingLeave.StartDate:yyyy-MM-dd} to {overlappingLeave.EndDate:yyyy-MM-dd}. " +
-                            "Please cancel or modify your existing request before updating this one.");
-                    }
-                }
-            }
-            
-            entity.UpdatedAt = DateTime.UtcNow;
-            var updated = await _leaveRepo.UpdateAsync(entity);
-            return _mapper.Map<DriverLeaveResponse>(updated!);
-        }
-
-        public async Task<DriverLeaveResponse> CancelLeaveRequestAsync(Guid leaveId, Guid driverId)
-        {
-            var entity = await _leaveRepo.FindAsync(leaveId);
-            if (entity == null || entity.IsDeleted || entity.DriverId != driverId) throw new InvalidOperationException("Leave not found");
-            entity.Status = LeaveStatus.Cancelled;
-            entity.UpdatedAt = DateTime.UtcNow;
-            var updated = await _leaveRepo.UpdateAsync(entity);
-            return _mapper.Map<DriverLeaveResponse>(updated!);
         }
 
         public async Task<DriverLeaveResponse> ApproveLeaveRequestAsync(Guid leaveId, ApproveLeaveRequestDto dto, Guid adminId)
@@ -469,29 +387,6 @@ namespace Services.Implementations
             };
         }
 
-        public Task<ReplacementSuggestionResponse> AcceptReplacementSuggestionAsync(Guid leaveId, Guid suggestionId, Guid adminId)
-        {
-            // For MVP, simply return success without persisting an acceptance entity
-            return Task.FromResult(new ReplacementSuggestionResponse { Success = true, Message = "Accepted", TotalSuggestions = 0 });
-        }
-
-        public Task<ReplacementSuggestionResponse> RejectReplacementSuggestionAsync(Guid leaveId, Guid suggestionId, Guid adminId)
-        {
-            return Task.FromResult(new ReplacementSuggestionResponse { Success = true, Message = "Rejected", TotalSuggestions = 0 });
-        }
-
-        public async Task<IEnumerable<DriverLeaveConflictDto>> DetectConflictsAsync(Guid leaveId)
-        {
-            var conflicts = await _conflictRepo.GetByLeaveRequestIdAsync(leaveId);
-            return conflicts.Select(_mapper.Map<DriverLeaveConflictDto>);
-        }
-
-        public Task<ConflictResolutionResponse> ResolveConflictsAsync(Guid leaveId, Guid adminId)
-        {
-            // MVP: return empty resolution
-            return Task.FromResult(new ConflictResolutionResponse { Success = true, Message = "No conflicts to resolve", ResolvedAt = DateTime.UtcNow });
-        }
-
         public async Task<IEnumerable<DriverLeaveResponse>> GetDriverLeavesAsync(Guid driverId, DateTime? fromDate, DateTime? toDate)
         {
             var list = await _leaveRepo.GetByDriverIdAsync(driverId, fromDate, toDate);
@@ -554,22 +449,10 @@ namespace Services.Implementations
             }
         }
 
-        public async Task<IEnumerable<DriverLeaveResponse>> GetPendingLeavesAsync()
-        {
-            var list = await _leaveRepo.GetPendingLeavesAsync();
-            return list.Select(_mapper.Map<DriverLeaveResponse>);
-        }
-
         public async Task<DriverLeaveResponse?> GetLeaveByIdAsync(Guid leaveId)
         {
             var entity = await _leaveRepo.FindAsync(leaveId);
             return entity == null ? null : _mapper.Map<DriverLeaveResponse>(entity);
-        }
-
-        public async Task<IEnumerable<DriverLeaveResponse>> GetLeavesByStatusAsync(LeaveStatus status)
-        {
-            var list = await _leaveRepo.GetLeavesByStatusAsync(status);
-            return list.Select(l => _mapper.Map<DriverLeaveResponse>(l));
         }
 
         public async Task<DriverLeaveListResponse> GetLeaveRequestsAsync(DriverLeaveListRequest request)

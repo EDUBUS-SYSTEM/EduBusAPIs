@@ -146,7 +146,6 @@ builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<IGradeRepository, GradeRepository>();
 builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
 builder.Services.AddScoped<IDriverLeaveRepository, DriverLeaveRepository>();
-builder.Services.AddScoped<IDriverLeaveConflictRepository, DriverLeaveConflictRepository>();
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
