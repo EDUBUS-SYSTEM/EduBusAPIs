@@ -33,6 +33,7 @@ public class EmailService : IEmailService, IHostedService, IDisposable
             Password = cfg["EmailSettings:Password"] ?? "",
             EnableSsl = bool.TryParse(cfg["EmailSettings:EnableSsl"], out var ssl) && ssl
         };
+        
         ValidateSettings(_settings);
     }
 
@@ -94,33 +95,38 @@ public class EmailService : IEmailService, IHostedService, IDisposable
     /// </summary>
     public async Task SendEmailAsync(string to, string subject, string body)
     {
-        var msg = new MimeMessage();
-        msg.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
-        msg.To.Add(MailboxAddress.Parse(to));
-        msg.Subject = subject;
-        msg.Body = new TextPart(TextFormat.Html) { Text = body };
-
-        using var smtp = new MailKit.Net.Smtp.SmtpClient();
-
-        // Choose TLS option based on config:
-        // StartTls (587) or Auto (let MailKit decide).
-        var socketOpt = _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
-
+        MailKit.Net.Smtp.SmtpClient? smtp = null;
         try
         {
+            var msg = new MimeMessage();
+            msg.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+            msg.To.Add(MailboxAddress.Parse(to));
+            msg.Subject = subject;
+            msg.Body = new TextPart(TextFormat.Html) { Text = body };
+
+            smtp = new MailKit.Net.Smtp.SmtpClient();
+            var socketOpt = _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
+
             await smtp.ConnectAsync(_settings.SmtpServer, _settings.SmtpPort, socketOpt, _cts.Token);
             await smtp.AuthenticateAsync(_settings.Username, _settings.Password, _cts.Token);
             await smtp.SendAsync(msg, _cts.Token);
         }
         catch (Exception ex)
         {
-            // Wrap with a concise, English error for higher layers/logs.
-            _logger.LogError(ex, "Failed to send email to {To}.", to);
-            throw new InvalidOperationException("Failed to send email. Please try again later.", ex);
+            _logger.LogError(ex, "Failed to send email to {To}. Error: {ErrorMessage}", to, ex.Message);
+            throw new InvalidOperationException($"Failed to send email to {to}. Please check EmailSettings configuration.", ex);
         }
         finally
         {
-            try { await smtp.DisconnectAsync(true, _cts.Token); } catch { /* ignore */ }
+            if (smtp != null && smtp.IsConnected)
+            {
+                try 
+                { 
+                    await smtp.DisconnectAsync(true, _cts.Token);
+                } 
+                catch { /* ignore disconnect errors */ }
+            }
+            smtp?.Dispose();
         }
     }
 
@@ -151,14 +157,24 @@ public class EmailService : IEmailService, IHostedService, IDisposable
     /// <summary>
     /// Validate mandatory email settings at startup.
     /// </summary>
-    private static void ValidateSettings(EmailSettings s)
+    private void ValidateSettings(EmailSettings s)
     {
-        if (string.IsNullOrWhiteSpace(s.SmtpServer) ||
-            string.IsNullOrWhiteSpace(s.SenderEmail) ||
-            string.IsNullOrWhiteSpace(s.Username) ||
-            string.IsNullOrWhiteSpace(s.Password))
+        var missingFields = new List<string>();
+        
+        if (string.IsNullOrWhiteSpace(s.SmtpServer))
+            missingFields.Add("SmtpServer");
+        if (string.IsNullOrWhiteSpace(s.SenderEmail))
+            missingFields.Add("SenderEmail");
+        if (string.IsNullOrWhiteSpace(s.Username))
+            missingFields.Add("Username");
+        if (string.IsNullOrWhiteSpace(s.Password))
+            missingFields.Add("Password");
+            
+        if (missingFields.Any())
         {
-            throw new InvalidOperationException("EmailSettings is incomplete. Please check configuration.");
+            var errorMsg = $"EmailSettings is incomplete. Missing fields: {string.Join(", ", missingFields)}. Please configure EmailSettings in appsettings.json or user secrets.";
+            _logger.LogError("EmailService configuration error: {ErrorMessage}", errorMsg);
+            throw new InvalidOperationException(errorMsg);
         }
     }
 
