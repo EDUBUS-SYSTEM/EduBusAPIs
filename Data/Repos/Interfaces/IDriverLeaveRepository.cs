@@ -13,9 +13,6 @@ namespace Data.Repos.Interfaces
             LeaveStatus? status,
             int page, 
             int perPage);
-        Task<IEnumerable<DriverLeaveRequest>> GetPendingLeavesAsync();
-        Task<IEnumerable<DriverLeaveRequest>> GetLeavesByStatusAsync(LeaveStatus status);
-        Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDateRangeAsync(DateTime startDate, DateTime endDate);
         Task<bool> HasOverlappingLeaveAsync(Guid driverId, DateTime startDate, DateTime endDate);
         Task<IEnumerable<DriverLeaveRequest>> GetLeavesByDriverAndDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
         Task<DriverLeaveRequest?> GetActiveReplacementByDriverIdAsync(Guid replacementDriverId);

@@ -13,6 +13,5 @@ namespace Services.Contracts
         Task<AuthResponse?> LoginAsync(LoginRequest request);
         Task LogoutAsync(Guid userId);
         Task<(string accessToken, string refreshToken, DateTime expiresUtc)?> RefreshTokensAsync(string refreshToken);
-        Task<UserAccount?> GetUserByIdAsync(Guid userId);
     }
 }

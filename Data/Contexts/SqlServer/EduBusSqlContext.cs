@@ -51,7 +51,6 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public virtual DbSet<DriverLeaveRequest> DriverLeaveRequests { get; set; }
-        public virtual DbSet<DriverLeaveConflict> DriverLeaveConflicts { get; set; }
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
 
 
@@ -185,34 +184,6 @@ namespace Data.Contexts.SqlServer
                       .WithMany()
                       .HasForeignKey(e => e.SuggestedReplacementVehicleId)
                       .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<DriverLeaveConflict>(entity =>
-            {
-                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
-                entity.Property(e => e.CreatedAt)
-                      .HasPrecision(3)
-                      .HasDefaultValueSql("(sysutcdatetime())");
-                entity.Property(e => e.UpdatedAt)
-                      .HasPrecision(3);
-
-                entity.HasOne(e => e.LeaveRequest)
-                      .WithMany(r => r.Conflicts)
-                      .HasForeignKey(e => e.LeaveRequestId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.SuggestedDriver)
-                      .WithMany()
-                      .HasForeignKey(e => e.SuggestedDriverId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne(e => e.SuggestedVehicle)
-                      .WithMany()
-                      .HasForeignKey(e => e.SuggestedVehicleId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                // Ignore Mongo Trip navigation on SQL side
-                entity.Ignore(e => e.Trip);
             });
 
             modelBuilder.Entity<Grade>(entity =>
