@@ -603,4 +603,27 @@ public class PaymentService : IPaymentService
 
         await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated and pickup point assigned after payment");
     }
+    public async Task<UnpaidFeesResponse> GetUnpaidFeesAsync(Guid parentId)
+    {
+        try
+        {
+            var unpaidCount = await _transactionRepository.GetQueryable()
+                .Where(t => t.ParentId == parentId
+                    && !t.IsDeleted
+                    && (t.Status == TransactionStatus.Notyet
+                        || t.Status == TransactionStatus.Failed))
+                .CountAsync();
+
+            return new UnpaidFeesResponse
+            {
+                HasUnpaidFees = unpaidCount > 0,
+                Count = unpaidCount
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting unpaid fees for parent: {ParentId}", parentId);
+            throw;
+        }
+    }
 }

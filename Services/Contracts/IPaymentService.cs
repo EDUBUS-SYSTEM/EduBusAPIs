@@ -23,5 +23,6 @@ public interface IPaymentService
     Task<Transaction> CreateTransactionForPickupPointRequestAsync(string pickupPointRequestId, Guid scheduleId);
     Task<bool> IsTransactionCancellableAsync(Transaction transaction);
     Task<bool> IsTransactionPaidAsync(Transaction transaction);
+    Task<UnpaidFeesResponse> GetUnpaidFeesAsync(Guid parentId);
 }
 
