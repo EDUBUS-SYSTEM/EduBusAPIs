@@ -20,6 +20,7 @@ using Services.Implementations;
 using Services.MapperProfiles;
 using Services.Models.Configuration;
 using Services.Models.Route;
+using Services.Validators;
 using System.Text;
 using Utils;
 
@@ -180,6 +181,8 @@ builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddScoped<IDriverLicenseService, DriverLicenseService>();
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<LicensePlateValidator>();
+builder.Services.AddScoped<UserAccountValidationService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<IDriverVehicleService, DriverVehicleService>();
 builder.Services.AddScoped<IStudentService, StudentService>();

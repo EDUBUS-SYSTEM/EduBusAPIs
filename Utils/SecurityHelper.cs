@@ -1,10 +1,5 @@
-﻿using BCrypt.Net;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Utils
 {
@@ -17,6 +12,19 @@ namespace Utils
             return new string(Enumerable.Repeat(chars, length)
                 .Select(s => s[random.Next(s.Length)]).ToArray());
         }
+
+        /// <summary>
+        /// Generates a random password and returns both raw and hashed versions
+        /// </summary>
+        /// <param name="length">Length of password to generate (default 8)</param>
+        /// <returns>Tuple of (rawPassword, hashedPasswordBytes)</returns>
+        public static (string rawPassword, byte[] hashedPassword) GenerateAndHashPassword(int length = 8)
+        {
+            var rawPassword = GenerateRandomPassword(length);
+            var hashedPassword = HashPassword(rawPassword);
+            return (rawPassword, hashedPassword);
+        }
+
         //1-way encryption
         public static byte[] HashPassword(string value)
         {
