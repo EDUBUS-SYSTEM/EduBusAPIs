@@ -277,5 +277,58 @@ namespace APIs.Controllers
                 return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Get all students that have not been assigned to any parent (ParentId is null)
+        /// Admin-only endpoint for new parent registration workflow
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet("unassigned")]
+        public async Task<IActionResult> GetUnassignedStudents()
+        {
+            try
+            {
+                var students = await _studentService.GetUnassignedStudentsAsync();
+                return Ok(students);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Bulk assign multiple students to a single parent
+        /// Admin-only endpoint for new parent registration workflow
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPatch("bulk-assign-parent")]
+        public async Task<IActionResult> BulkAssignParent([FromBody] BulkAssignParentRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _studentService.BulkAssignParentAsync(request);
+                return Ok(result);
+            }
+            catch (ArgumentNullException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
     }
 }

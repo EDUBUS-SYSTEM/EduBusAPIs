@@ -27,5 +27,9 @@ namespace Services.Contracts
         
         // TODO: Will be used when payment service is ready
         Task<StudentDto> ActivateStudentByPaymentAsync(Guid id);
+
+        // New admin workflow methods
+        Task<IEnumerable<StudentDto>> GetUnassignedStudentsAsync();
+        Task<BulkAssignParentResponse> BulkAssignParentAsync(BulkAssignParentRequest request);
     }
 }

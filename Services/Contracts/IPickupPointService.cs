@@ -10,5 +10,6 @@ namespace Services.Contracts
 	public interface IPickupPointService
 	{
 		Task<PickupPointsResponse> GetUnassignedPickupPointsAsync();
+		Task<AdminCreatePickupPointResponse> AdminCreatePickupPointAsync(AdminCreatePickupPointRequest request, Guid adminId);
 	}
 }
