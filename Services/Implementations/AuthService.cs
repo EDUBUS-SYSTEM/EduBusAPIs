@@ -152,16 +152,10 @@ namespace Services.Implementations
             return (new JwtSecurityTokenHandler().WriteToken(token), expires);
         }
 
-
         private bool VerifyPassword(string plainPassword, byte[] hashedBytes)
         {
             var hashString = Encoding.UTF8.GetString(hashedBytes);
             return BCrypt.Net.BCrypt.Verify(plainPassword, hashString);
-        }
-
-        public async Task<UserAccount?> GetUserByIdAsync(Guid userId)
-        {
-            return await _userRepo.FindAsync(userId);
         }
 
     }

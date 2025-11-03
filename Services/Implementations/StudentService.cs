@@ -459,25 +459,6 @@ namespace Services.Implementations
             return _mapper.Map<IEnumerable<StudentDto>>(students);
         }
 
-        // TODO: Add payment status logic when payment service is ready
-        // This method will be called when payment is processed to auto-activate student
-        public async Task<StudentDto> ActivateStudentByPaymentAsync(Guid id)
-        {
-            var student = await _studentRepository.FindAsync(id);
-            if (student == null)
-                throw new KeyNotFoundException("Student not found");
-
-            // Auto-activate when payment is made
-            if (student.Status == StudentStatus.Available || student.Status == StudentStatus.Pending)
-            {
-                student.Status = StudentStatus.Active;
-                student.ActivatedAt = DateTime.UtcNow;
-                await _studentRepository.UpdateAsync(student);
-            }
-
-            return _mapper.Map<StudentDto>(student);
-        }
-
         /// <summary>
         /// Get all students that have not been assigned to any parent (ParentId is null)
         /// </summary>

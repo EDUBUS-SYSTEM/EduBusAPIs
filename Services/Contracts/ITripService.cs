@@ -12,10 +12,7 @@ namespace Services.Contracts
 		Task<Trip?> DeleteTripAsync(Guid id);
 		Task<IEnumerable<Trip>> GetTripsByRouteAsync(Guid routeId);
 		Task<IEnumerable<Trip>> GetTripsByDateAsync(DateTime serviceDate);
-		Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
-		Task<IEnumerable<Trip>> GetTripsByStatusAsync(string status);
 		Task<IEnumerable<Trip>> GetUpcomingTripsAsync(DateTime fromDate, int days = 7);
-		Task<bool> TripExistsAsync(Guid id);
 		Task<IEnumerable<Trip>> GenerateTripsFromScheduleAsync(Guid scheduleId, DateTime startDate, DateTime endDate);
 		Task<IEnumerable<Trip>> QueryTripsAsync(
 			Guid? routeId,
@@ -31,10 +28,7 @@ namespace Services.Contracts
 		Task<bool> UpdateTripStatusAsync(Guid tripId, string newStatus, string? reason = null);
 		Task<bool> UpdateAttendanceAsync(Guid tripId, Guid stopId, Guid studentId, string state);
 		Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId);
-
 		Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date);
-		Task<IEnumerable<Trip>> GetTripsAffectedByScheduleOverrideAsync(Guid scheduleId, DateTime date);
-
 		Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate);
 		Task<IEnumerable<Trip>> GetDriverScheduleByRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
 		Task<IEnumerable<Trip>> GetDriverUpcomingScheduleAsync(Guid driverId, int days = 7);

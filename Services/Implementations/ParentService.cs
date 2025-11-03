@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
+using Services.Validators;
 using Utils;
 
 namespace Services.Implementations
@@ -19,13 +20,15 @@ namespace Services.Implementations
         private readonly IEmailService _emailService;
         private readonly ILogger<ParentService> _logger;
         
+        private readonly UserAccountValidationService _validationService;
         public ParentService(IParentRepository parentRepository, IUserAccountRepository userAccountRepository,
-            IStudentRepository studentRepository, IMapper mapper, IEmailService emailService, ILogger<ParentService> logger)
+            IStudentRepository studentRepository, IMapper mapper, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
         {
             _parentRepository = parentRepository;
             _userAccountRepository = userAccountRepository;
             _studentRepository = studentRepository;
             _mapper = mapper;
+            _validationService = validationService;
             _emailService = emailService;
             _logger = logger;
         }
@@ -35,15 +38,11 @@ namespace Services.Implementations
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
 
-            if (await _userAccountRepository.IsEmailExistAsync(dto.Email))
-                throw new InvalidOperationException("Email already exists.");
-            if (await _userAccountRepository.IsPhoneNumberExistAsync(dto.PhoneNumber))
-                throw new InvalidOperationException("Phone number already exists.");
+            await _validationService.ValidateEmailAndPhoneAsync(dto.Email, dto.PhoneNumber);
 
             var parent = _mapper.Map<Parent>(dto);
 
-            var rawPassword = SecurityHelper.GenerateRandomPassword();
-            var hashedPassword = SecurityHelper.HashPassword(rawPassword);
+            var (rawPassword, hashedPassword) = SecurityHelper.GenerateAndHashPassword();
             parent.HashedPassword = hashedPassword;
 
             var createdParent = await _parentRepository.AddAsync(parent);
@@ -205,8 +204,8 @@ namespace Services.Implementations
 
                     var parent = _mapper.Map<Parent>(parentDto);
 
-                    var rawPassword = SecurityHelper.GenerateRandomPassword();
-                    parent.HashedPassword = SecurityHelper.HashPassword(rawPassword);
+                    var (rawPassword, hashedPassword) = SecurityHelper.GenerateAndHashPassword();
+                    parent.HashedPassword = hashedPassword;
 
                     var createdParent = await _parentRepository.AddAsync(parent);
 
@@ -287,27 +286,6 @@ namespace Services.Implementations
             }
 
             return result;
-        }
-
-        public async Task<int> LinkStudentsByEmailAsync(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email)) return 0;
-
-            var parent = (await _parentRepository.FindByConditionAsync(p => p.Email == email)).FirstOrDefault();
-            if (parent == null) return 0;
-
-            var students = await _studentRepository.FindByConditionAsync(
-                s => s.ParentId == null && s.ParentEmail == email);
-
-            int updated = 0;
-            foreach (var student in students)
-            {
-                student.ParentId = parent.Id;
-                student.ParentEmail = string.Empty;
-                await _studentRepository.UpdateAsync(student);
-                updated++;
-            }
-            return updated;
         }
 
         public async Task<byte[]> ExportParentsToExcelAsync()

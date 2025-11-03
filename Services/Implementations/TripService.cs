@@ -21,15 +21,15 @@ namespace Services.Implementations
 		}
 
 		public async Task<IEnumerable<Trip>> QueryTripsAsync(
-	Guid? routeId,
-	DateTime? serviceDate,
-	DateTime? startDate,
-	DateTime? endDate,
-	string? status,
-	int page,
-	int perPage,
-	string sortBy,
-	string sortOrder)
+			Guid? routeId,
+			DateTime? serviceDate,
+			DateTime? startDate,
+			DateTime? endDate,
+			string? status,
+			int page,
+			int perPage,
+			string sortBy,
+			string sortOrder)
 		{
 			try
 			{
@@ -39,9 +39,9 @@ namespace Services.Implementations
 				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
 
 				var filters = new List<FilterDefinition<Trip>>
-		{
-			Builders<Trip>.Filter.Eq(t => t.IsDeleted, false)
-		};
+				{
+					Builders<Trip>.Filter.Eq(t => t.IsDeleted, false)
+				};
 
 				if (routeId.HasValue)
 					filters.Add(Builders<Trip>.Filter.Eq(t => t.RouteId, routeId.Value));
@@ -199,34 +199,6 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate)
-		{
-			try
-			{
-				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				return await repository.GetTripsByDateRangeAsync(startDate, endDate);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error getting trips by date range: {StartDate} to {EndDate}", startDate, endDate);
-				throw;
-			}
-		}
-
-		public async Task<IEnumerable<Trip>> GetTripsByStatusAsync(string status)
-		{
-			try
-			{
-				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				return await repository.GetTripsByStatusAsync(status);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error getting trips by status: {Status}", status);
-				throw;
-			}
-		}
-
 		public async Task<IEnumerable<Trip>> GetUpcomingTripsAsync(DateTime fromDate, int days = 7)
 		{
 			try
@@ -237,20 +209,6 @@ namespace Services.Implementations
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error getting upcoming trips from: {FromDate} for {Days} days", fromDate, days);
-				throw;
-			}
-		}
-
-		public async Task<bool> TripExistsAsync(Guid id)
-		{
-			try
-			{
-				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				return await repository.ExistsAsync(id);
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error checking if trip exists: {TripId}", id);
 				throw;
 			}
 		}
@@ -706,29 +664,6 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<IEnumerable<Trip>> GetTripsAffectedByScheduleOverrideAsync(Guid scheduleId, DateTime date)
-		{
-			try
-			{
-				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				
-				var trips = await tripRepo.FindByFilterAsync(
-					Builders<Trip>.Filter.And(
-						Builders<Trip>.Filter.Eq(t => t.ServiceDate, date),
-						Builders<Trip>.Filter.Eq(t => t.ScheduleSnapshot.ScheduleId, scheduleId),
-						Builders<Trip>.Filter.Eq(t => t.IsDeleted, false)
-					)
-				);
-
-				return trips;
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error getting trips affected by schedule override: {ScheduleId} on {Date}", scheduleId, date);
-				throw;
-			}
-		}
-
 		public async Task<bool> UpdateTripStatusAsync(Guid tripId, string newStatus, string? reason = null)
 		{
 			try
@@ -863,7 +798,6 @@ namespace Services.Implementations
 				throw;
 			}
 		}
-
 
 		public async Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate)
 		{
@@ -1014,7 +948,6 @@ namespace Services.Implementations
 			
 			return Math.Round(totalMinutes / 60.0, 2);
 		}
-
 
 	}
 }

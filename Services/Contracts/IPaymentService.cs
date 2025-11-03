@@ -18,10 +18,8 @@ public interface IPaymentService
     
     // Webhook Handling
     Task<bool> HandlePayOSWebhookAsync(PayOSWebhookPayload payload);
-    
+
     // Business Logic
     Task<Transaction> CreateTransactionForPickupPointRequestAsync(string pickupPointRequestId, Guid scheduleId);
-    Task<bool> IsTransactionCancellableAsync(Transaction transaction);
-    Task<bool> IsTransactionPaidAsync(Transaction transaction);
 }
 
