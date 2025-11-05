@@ -254,7 +254,7 @@ public class PaymentService : IPaymentService
             if (transaction == null)
                 throw new ArgumentException("Transaction not found");
 
-            if (!await IsTransactionCancellableAsync(transaction))
+            if (transaction.Status != TransactionStatus.Notyet)
                 throw new InvalidOperationException("Transaction cannot be cancelled");
 
             // Update transaction status
@@ -300,7 +300,7 @@ public class PaymentService : IPaymentService
             if (transaction == null)
                 throw new ArgumentException("Transaction not found");
 
-            if (await IsTransactionPaidAsync(transaction))
+            if (transaction.Status == TransactionStatus.Paid)
                 throw new InvalidOperationException("Transaction is already paid");
 
             // Update transaction
@@ -546,16 +546,6 @@ public class PaymentService : IPaymentService
         }
     }
 
-    public async Task<bool> IsTransactionCancellableAsync(Transaction transaction)
-    {
-        return transaction.Status == TransactionStatus.Notyet;
-    }
-
-    public async Task<bool> IsTransactionPaidAsync(Transaction transaction)
-    {
-        return transaction.Status == TransactionStatus.Paid;
-    }
-
     private async Task LogPaymentEventAsync(Guid transactionId, TransactionStatus status, 
         PaymentEventSource source, string message, string? rawPayload = null)
     {
@@ -602,5 +592,28 @@ public class PaymentService : IPaymentService
         await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transactionId);
 
         await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated and pickup point assigned after payment");
+    }
+    public async Task<UnpaidFeesResponse> GetUnpaidFeesAsync(Guid parentId)
+    {
+        try
+        {
+            var unpaidCount = await _transactionRepository.GetQueryable()
+                .Where(t => t.ParentId == parentId
+                    && !t.IsDeleted
+                    && (t.Status == TransactionStatus.Notyet
+                        || t.Status == TransactionStatus.Failed))
+                .CountAsync();
+
+            return new UnpaidFeesResponse
+            {
+                HasUnpaidFees = unpaidCount > 0,
+                Count = unpaidCount
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting unpaid fees for parent: {ParentId}", parentId);
+            throw;
+        }
     }
 }

@@ -421,9 +421,9 @@ namespace Services.Implementations
             if (student == null)
                 throw new KeyNotFoundException("Student not found");
 
-            if (student.Status == StudentStatus.Deleted)
+            if (student.IsDeleted == true)
             {
-                student.Status = StudentStatus.Available;
+                student.IsDeleted = false;
                 student.DeactivatedAt = null;
                 student.DeactivationReason = null;
             }
@@ -444,7 +444,7 @@ namespace Services.Implementations
             if (student == null)
                 throw new KeyNotFoundException("Student not found");
 
-            student.Status = StudentStatus.Deleted;
+            student.IsDeleted = true;
             student.DeactivatedAt = DateTime.UtcNow;
             student.DeactivationReason = reason;
 
@@ -452,39 +452,84 @@ namespace Services.Implementations
             return _mapper.Map<StudentDto>(student);
         }
 
-        public async Task<IEnumerable<StudentDto>> GetStudentsByStatusAsync(Data.Models.Enums.StudentStatus status)
+        public async Task<IEnumerable<StudentDto>> GetStudentsByStatusAsync(StudentStatus status)
         {
-            if (status == Data.Models.Enums.StudentStatus.Deleted)
-            {
-                var students = await _studentRepository.GetQueryable()
-                    .Where(s => s.Status == status)
-                    .ToListAsync();
-                return _mapper.Map<IEnumerable<StudentDto>>(students);
-            }
-            else
-            {
-                var students = await _studentRepository.FindByConditionAsync(s => s.Status == status && !s.IsDeleted);
-                return _mapper.Map<IEnumerable<StudentDto>>(students);
-            }
+
+            var students = await _studentRepository.FindByConditionAsync(s => s.Status == status && !s.IsDeleted);
+            return _mapper.Map<IEnumerable<StudentDto>>(students);
         }
 
-        // TODO: Add payment status logic when payment service is ready
-        // This method will be called when payment is processed to auto-activate student
-        public async Task<StudentDto> ActivateStudentByPaymentAsync(Guid id)
+        /// <summary>
+        /// Get all students that have not been assigned to any parent (ParentId is null)
+        /// </summary>
+        public async Task<IEnumerable<StudentDto>> GetUnassignedStudentsAsync()
         {
-            var student = await _studentRepository.FindAsync(id);
-            if (student == null)
-                throw new KeyNotFoundException("Student not found");
+            var students = await _studentRepository
+                .FindByConditionAsync(s => s.ParentId == null && !s.IsDeleted);
 
-            // Auto-activate when payment is made
-            if (student.Status == StudentStatus.Available || student.Status == StudentStatus.Pending)
+            return _mapper.Map<IEnumerable<StudentDto>>(students);
+        }
+
+        /// <summary>
+        /// Bulk assign multiple students to a single parent
+        /// </summary>
+        public async Task<BulkAssignParentResponse> BulkAssignParentAsync(BulkAssignParentRequest request)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            // Validate parent exists
+            var parent = await _parentRepository.FindAsync(request.ParentId);
+            if (parent == null)
+                throw new KeyNotFoundException($"Parent with ID {request.ParentId} not found");
+
+            // Get all students
+            var students = new List<Student>();
+            foreach (var studentId in request.StudentIds)
             {
-                student.Status = StudentStatus.Active;
-                student.ActivatedAt = DateTime.UtcNow;
-                await _studentRepository.UpdateAsync(student);
+                var student = await _studentRepository.FindAsync(studentId);
+                if (student == null)
+                    throw new KeyNotFoundException($"Student with ID {studentId} not found");
+
+                // Check if student is already assigned to another parent
+                if (student.ParentId.HasValue && student.ParentId.Value != request.ParentId)
+                {
+                    throw new InvalidOperationException(
+                        $"Student {student.FirstName} {student.LastName} is already assigned to another parent");
+                }
+
+                students.Add(student);
             }
 
-            return _mapper.Map<StudentDto>(student);
+            // Assign all students to parent within a transaction-like operation
+            var updatedStudents = new List<Student>();
+            try
+            {
+                foreach (var student in students)
+                {
+                    student.ParentId = request.ParentId;
+                    student.ParentEmail = parent.Email; // Sync email with parent's email
+
+                    var updated = await _studentRepository.UpdateAsync(student);
+                    if (updated != null)
+                    {
+                        updatedStudents.Add(updated);
+                    }
+                }
+
+                return new BulkAssignParentResponse
+                {
+                    Success = true,
+                    UpdatedCount = updatedStudents.Count,
+                    Students = _mapper.Map<List<StudentDto>>(updatedStudents),
+                    Message = $"Successfully assigned {updatedStudents.Count} student(s) to parent {parent.FirstName} {parent.LastName}"
+                };
+            }
+            catch (Exception ex)
+            {
+                // If any update fails, throw exception to trigger rollback
+                throw new InvalidOperationException($"Failed to assign students to parent: {ex.Message}", ex);
+            }
         }
     }
 }

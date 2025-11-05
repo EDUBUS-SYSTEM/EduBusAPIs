@@ -6,6 +6,7 @@ using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
 using Services.Models.UserAccount;
+using Services.Validators;
 using Utils;
 
 namespace Services.Implementations
@@ -17,28 +18,24 @@ namespace Services.Implementations
         private readonly IDriverVehicleRepository _driverVehicleRepository;
         private readonly IDriverWorkingHoursRepository _driverWorkingHoursRepository;
         private readonly IMapper _mapper;
-        public DriverService(IDriverRepository driverRepository, IUserAccountRepository userAccountRepository, IDriverVehicleRepository driverVehicleRepository, IDriverWorkingHoursRepository driverWorkingHoursRepository, IMapper mapper)
+        private readonly UserAccountValidationService _validationService;
+        public DriverService(IDriverRepository driverRepository, IUserAccountRepository userAccountRepository, IDriverVehicleRepository driverVehicleRepository, IDriverWorkingHoursRepository driverWorkingHoursRepository, IMapper mapper, UserAccountValidationService validationService)
         {
             _driverRepository = driverRepository;
             _userAccountRepository = userAccountRepository;
             _driverVehicleRepository = driverVehicleRepository;
             _driverWorkingHoursRepository = driverWorkingHoursRepository;
             _mapper = mapper;
+            _validationService = validationService;
         }
         public async Task<CreateUserResponse> CreateDriverAsync(CreateDriverRequest dto)
         {
             if (dto == null)
                 throw new ArgumentNullException(nameof(dto));
-            var isExistingEmail = await _userAccountRepository.IsEmailExistAsync(dto.Email);
-            if (isExistingEmail)
-                throw new InvalidOperationException("Email already exists.");
-            var isExistingPhone = await _userAccountRepository.IsPhoneNumberExistAsync(dto.PhoneNumber);
-            if (isExistingPhone)
-                throw new InvalidOperationException("Phone number already exists.");
+            await _validationService.ValidateEmailAndPhoneAsync(dto.Email, dto.PhoneNumber);
             var driver = _mapper.Map<Driver>(dto);
             //hash password
-            var rawPassword = SecurityHelper.GenerateRandomPassword();
-            var hashedPassword = SecurityHelper.HashPassword(rawPassword);
+            var (rawPassword, hashedPassword) = SecurityHelper.GenerateAndHashPassword();
             driver.HashedPassword = hashedPassword;
             var createdDriver = await _driverRepository.AddAsync(driver);
             var response = _mapper.Map<CreateUserResponse>(createdDriver);
@@ -224,8 +221,7 @@ namespace Services.Implementations
                         var driver = _mapper.Map<Driver>(driverDto);
 
                         // Generate password
-                        var rawPassword = SecurityHelper.GenerateRandomPassword();
-                        var hashedPassword = SecurityHelper.HashPassword(rawPassword);
+                        var (rawPassword, hashedPassword) = SecurityHelper.GenerateAndHashPassword();
                         driver.HashedPassword = hashedPassword;
                         // Note: License number will be handled separately through DriverLicense entity
                         // Thêm vào database
@@ -351,11 +347,6 @@ namespace Services.Implementations
 
         public async Task<bool> IsDriverAvailableAsync(Guid driverId, DateTime startTime, DateTime endTime)
         {
-            // Check working hours (simple day and time window)
-            //var day = startTime.DayOfWeek;
-            //var wh = await _driverWorkingHoursRepository.GetByDriverAndDayAsync(driverId, day);
-            //var withinWorkingHours = wh != null && wh.IsAvailable && wh.StartTime <= startTime.TimeOfDay && endTime.TimeOfDay <= wh.EndTime;
-            //if (!withinWorkingHours) return false;
             // Check overlapping assignments
             var hasConflict = await _driverVehicleRepository.HasTimeConflictAsync(driverId, startTime, endTime);
             return !hasConflict;

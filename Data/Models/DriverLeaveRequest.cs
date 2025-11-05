@@ -28,5 +28,4 @@ public class DriverLeaveRequest : BaseDomain
     public virtual Admin? ApprovedByAdmin { get; set; }
     public virtual Driver? SuggestedReplacementDriver { get; set; }
     public virtual Vehicle? SuggestedReplacementVehicle { get; set; }
-    public virtual ICollection<DriverLeaveConflict> Conflicts { get; set; } = new List<DriverLeaveConflict>();
 }

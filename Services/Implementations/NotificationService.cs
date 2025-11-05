@@ -369,16 +369,6 @@ namespace Services.Implementations
             _logger.LogInformation("Cleaned up {Count} expired notifications", expiredNotifications.Count());
         }
 
-        public async Task<IEnumerable<NotificationResponse>> GetNotificationsByPriorityAsync(int priority, int page = 1, int pageSize = 20)
-        {
-            var repository = GetRepository();
-            var filter = Builders<Notification>.Filter.Eq(n => n.Priority, priority);
-            var sort = Builders<Notification>.Sort.Descending(n => n.TimeStamp);
-            
-            var notifications = await repository.FindByFilterAsync(filter, sort, (page - 1) * pageSize, pageSize);
-            return _mapper.Map<IEnumerable<NotificationResponse>>(notifications);
-        }
-
         // Driver leave specific notification methods
         public async Task<NotificationResponse> CreateDriverLeaveNotificationAsync(Guid leaveRequestId, NotificationType type, string message, Dictionary<string, object>? metadata = null)
         {
@@ -403,35 +393,6 @@ namespace Services.Implementations
         {
             var message = $"Auto-generated {suggestionCount} replacement suggestion(s) for leave request. Please review and approve.";
             return await CreateDriverLeaveNotificationAsync(leaveRequestId, NotificationType.ReplacementSuggestion, message, metadata);
-        }
-
-        public async Task<NotificationResponse> CreateConflictNotificationAsync(Guid leaveRequestId, int conflictCount, ConflictSeverity severity, Dictionary<string, object>? metadata = null)
-        {
-            var priority = severity switch
-            {
-                ConflictSeverity.Critical => 4,
-                ConflictSeverity.High => 3,
-                ConflictSeverity.Medium => 2,
-                _ => 1
-            };
-            
-            var message = $"Detected {conflictCount} schedule conflict(s) with severity: {severity}. Immediate attention required.";
-            
-            var createDto = new CreateAdminNotificationDto
-            {
-                Title = "Schedule Conflict Detected",
-                Message = message,
-                NotificationType = NotificationType.ConflictDetected,
-                Priority = priority,
-                RelatedEntityId = leaveRequestId,
-                RelatedEntityType = "DriverLeaveRequest",
-                ActionRequired = true,
-                ActionUrl = $"/admin/leave-requests/{leaveRequestId}/conflicts",
-                ExpiresAt = GetNotificationExpiration(NotificationType.ConflictDetected),
-                Metadata = metadata
-            };
-            
-            return await CreateAdminNotificationAsync(createDto);
         }
 
         private string GetNotificationTitle(NotificationType type)
@@ -478,7 +439,6 @@ namespace Services.Implementations
                 _ => DateTime.UtcNow.AddDays(30) // Default expiration
             };
         }
-
 
         public async Task<int> GetAdminUnreadCountAsync()
         {

@@ -19,12 +19,24 @@ namespace APIs.Controllers
 		private readonly IPickupPointEnrollmentService _svc;
 		private readonly IPickupPointService _pickupPointService;
 
-		public PickupPointController(IPickupPointEnrollmentService svc, IPickupPointService pickupPointService) 
+		public PickupPointController(IPickupPointEnrollmentService svc, IPickupPointService pickupPointService)
 		{
 			_svc = svc;
-			_pickupPointService = pickupPointService; 
+			_pickupPointService = pickupPointService;
 		}
 
+		// ===================================================================================
+		// DEPRECATED ENDPOINTS - Old Public Parent Registration Flow
+		// These endpoints are deprecated in favor of admin-managed parent registration
+		// New workflow: Admin creates parent account via /api/Student/bulk-assign-parent,
+		//               /api/PickupPoint/admin/create, and /api/Transaction/admin/create
+		// ===================================================================================
+
+		/// <summary>
+		/// [DEPRECATED] Public parent registration endpoint
+		/// Use admin-managed workflow instead
+		/// </summary>
+		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("register")]
 		[AllowAnonymous]
 		[ProducesResponseType(typeof(ParentRegistrationResponseDto), StatusCodes.Status201Created)]
@@ -53,6 +65,11 @@ namespace APIs.Controllers
 
 
 
+		/// <summary>
+		/// [DEPRECATED] OTP verification endpoint for public parent registration
+		/// Use admin-managed workflow instead
+		/// </summary>
+		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("verify-otp")]
 		[AllowAnonymous]
 		[ProducesResponseType(typeof(VerifyOtpWithStudentsResponseDto), StatusCodes.Status200OK)]
@@ -66,6 +83,11 @@ namespace APIs.Controllers
 		}
 
 
+		/// <summary>
+		/// [DEPRECATED] Public pickup point request submission
+		/// Use admin-managed workflow instead
+		/// </summary>
+		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("submit-request")]
 		[AllowAnonymous]
 		[ProducesResponseType(typeof(SubmitPickupPointRequestResponseDto), StatusCodes.Status201Created)]
@@ -225,6 +247,55 @@ namespace APIs.Controllers
 			{
 				var result = await _svc.GetPickupPointsWithStudentStatusAsync();
 				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
+		/// <summary>
+		/// Admin creates a pickup point directly (auto-approved, no approval workflow)
+		/// For new parent registration workflow
+		/// </summary>
+		[HttpPost("admin/create")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(AdminCreatePickupPointResponse), StatusCodes.Status201Created)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+		public async Task<IActionResult> AdminCreatePickupPoint([FromBody] AdminCreatePickupPointRequest request)
+		{
+			if (!ModelState.IsValid)
+				return ValidationProblem(ModelState);
+
+			var adminId = ResolveAdminIdFromClaims();
+			if (adminId is null || adminId == Guid.Empty)
+			{
+				return Unauthorized(Problem(title: "Unauthorized",
+									  detail: "Admin ID not found in claims.",
+									  statusCode: StatusCodes.Status401Unauthorized));
+			}
+
+			try
+			{
+				var result = await _pickupPointService.AdminCreatePickupPointAsync(request, adminId.Value);
+				return StatusCode(StatusCodes.Status201Created, result);
+			}
+			catch (ArgumentNullException ex)
+			{
+				return BadRequest(Problem(title: "Invalid request", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
+			}
+			catch (KeyNotFoundException ex)
+			{
+				return NotFound(Problem(title: "Resource not found", detail: ex.Message,
+									statusCode: StatusCodes.Status404NotFound));
+			}
+			catch (InvalidOperationException ex)
+			{
+				return Conflict(Problem(title: "Operation conflict", detail: ex.Message,
+									statusCode: StatusCodes.Status409Conflict));
 			}
 			catch (Exception ex)
 			{

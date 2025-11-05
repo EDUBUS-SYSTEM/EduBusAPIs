@@ -223,10 +223,9 @@ public class PaymentController : ControllerBase
     {
         try
         {
-            if (payload.Data.OrderCode == 123)
-            {
-                return Ok();
-            }
+            if(payload.Data.OrderCode == 123) return Ok(); // Test webhook endpoint
+            _logger.LogInformation("PayOS webhook received: {Payload}", payload);
+            
             // Process webhook and update transaction status
             var success = await _paymentService.HandlePayOSWebhookAsync(payload);
 

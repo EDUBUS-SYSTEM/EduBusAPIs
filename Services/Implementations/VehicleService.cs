@@ -5,7 +5,9 @@ using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
 using Services.Contracts;
+using Services.Extensions;
 using Services.Models.Vehicle;
+using Services.Validators;
 using Utils;
 
 namespace Services.Implementations
@@ -15,12 +17,14 @@ namespace Services.Implementations
         private readonly IVehicleRepository _vehicleRepo;
 		private readonly IMongoRepository<Route> _routeRepository;
 		private readonly IMapper _mapper;
+		private readonly LicensePlateValidator _licensePlateValidator;
 
-        public VehicleService(IVehicleRepository vehicleRepo, IMongoRepository<Route> routeRepository, IMapper mapper)
+        public VehicleService(IVehicleRepository vehicleRepo, IMongoRepository<Route> routeRepository, IMapper mapper, LicensePlateValidator licensePlateValidator)
         {
             _vehicleRepo = vehicleRepo;
 			_routeRepository = routeRepository;
 			_mapper = mapper;
+			_licensePlateValidator = licensePlateValidator;
         }
         public async Task<VehicleListResponse> GetVehiclesAsync(
             string? status, int? capacity, Guid? adminId, string? search,
@@ -63,12 +67,7 @@ namespace Services.Implementations
                     .Take(perPage)
                     .ToList();
 
-                var dtos = pageItems.Select(v =>
-                {
-                    var dto = _mapper.Map<VehicleDto>(v);
-                    dto.LicensePlate = SecurityHelper.DecryptFromBytes(v.HashedLicensePlate);
-                    return dto;
-                }).ToList();
+                var dtos = pageItems.ToDecryptedDtos(_mapper).ToList();
 
                 return new VehicleListResponse
                 {
@@ -87,12 +86,7 @@ namespace Services.Implementations
                 .Take(perPage)
                 .ToListAsync();
 
-            var list = items.Select(v =>
-            {
-                var dto = _mapper.Map<VehicleDto>(v);
-                dto.LicensePlate = SecurityHelper.DecryptFromBytes(v.HashedLicensePlate);
-                return dto;
-            }).ToList();
+            var list = items.ToDecryptedDtos(_mapper).ToList();
 
             return new VehicleListResponse
             {
@@ -114,8 +108,7 @@ namespace Services.Implementations
             var vehicle = await _vehicleRepo.FindAsync(id);
             if (vehicle == null || vehicle.IsDeleted) return null;
 
-            var dto = _mapper.Map<VehicleDto>(vehicle);
-            dto.LicensePlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+            var dto = vehicle.ToDecryptedDto(_mapper);
 
             return new VehicleResponse
             {
@@ -127,15 +120,7 @@ namespace Services.Implementations
         public async Task<VehicleResponse> CreateAsync(VehicleCreateRequest dto, Guid adminId)
         {
             // Check for duplicate license plate
-            var existingVehicles = await _vehicleRepo.GetQueryable()
-                .Where(v => !v.IsDeleted)
-                .ToListAsync();
-
-            var normalizedNewPlate = Normalize(dto.LicensePlate);
-            var isDuplicate = existingVehicles.Any(v => 
-                Normalize(SecurityHelper.DecryptFromBytes(v.HashedLicensePlate)) == normalizedNewPlate);
-
-            if (isDuplicate)
+            if (await _licensePlateValidator.IsDuplicateAsync(dto.LicensePlate))
             {
                 return new VehicleResponse
                 {
@@ -157,8 +142,7 @@ namespace Services.Implementations
 
             await _vehicleRepo.AddAsync(vehicle);
 
-            var resultDto = _mapper.Map<VehicleDto>(vehicle);
-            resultDto.LicensePlate = dto.LicensePlate;
+            var resultDto = vehicle.ToDecryptedDto(_mapper);
 
             return new VehicleResponse
             {
@@ -173,15 +157,7 @@ namespace Services.Implementations
             if (vehicle == null || vehicle.IsDeleted) return null;
 
             // Check for duplicate license plate (excluding current vehicle)
-            var existingVehicles = await _vehicleRepo.GetQueryable()
-                .Where(v => !v.IsDeleted && v.Id != id)
-                .ToListAsync();
-
-            var normalizedNewPlate = Normalize(dto.LicensePlate);
-            var isDuplicate = existingVehicles.Any(v => 
-                Normalize(SecurityHelper.DecryptFromBytes(v.HashedLicensePlate)) == normalizedNewPlate);
-
-            if (isDuplicate)
+            if (await _licensePlateValidator.IsDuplicateAsync(dto.LicensePlate, id))
             {
                 return new VehicleResponse
                 {
@@ -198,8 +174,7 @@ namespace Services.Implementations
 
             await _vehicleRepo.UpdateAsync(vehicle);
 
-            var resultDto = _mapper.Map<VehicleDto>(vehicle);
-            resultDto.LicensePlate = dto.LicensePlate;
+            var resultDto = vehicle.ToDecryptedDto(_mapper);
 
             return new VehicleResponse
             {
@@ -216,15 +191,7 @@ namespace Services.Implementations
             // Check for duplicate license plate if it's being updated
             if (!string.IsNullOrEmpty(dto.LicensePlate))
             {
-                var existingVehicles = await _vehicleRepo.GetQueryable()
-                    .Where(v => !v.IsDeleted && v.Id != id)
-                    .ToListAsync();
-
-                var normalizedNewPlate = Normalize(dto.LicensePlate);
-                var isDuplicate = existingVehicles.Any(v => 
-                    Normalize(SecurityHelper.DecryptFromBytes(v.HashedLicensePlate)) == normalizedNewPlate);
-
-                if (isDuplicate)
+                if (await _licensePlateValidator.IsDuplicateAsync(dto.LicensePlate, id))
                 {
                     return new VehicleResponse
                     {
@@ -246,10 +213,7 @@ namespace Services.Implementations
             vehicle.UpdatedAt = DateTime.UtcNow;
             await _vehicleRepo.UpdateAsync(vehicle);
 
-            var resultDto = _mapper.Map<VehicleDto>(vehicle);
-            resultDto.LicensePlate = !string.IsNullOrEmpty(dto.LicensePlate)
-                ? dto.LicensePlate
-                : SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+            var resultDto = vehicle.ToDecryptedDto(_mapper);
 
             return new VehicleResponse
             {
@@ -282,12 +246,7 @@ namespace Services.Implementations
 			// Get vehicles that are not assigned to any route
 			var vehicles = await _vehicleRepo.GetVehiclesAsync(exceptionIds: assignedVehicleIds);
 
-			var dtos = vehicles.Select(v =>
-			{
-				var dto = _mapper.Map<VehicleDto>(v);
-				dto.LicensePlate = SecurityHelper.DecryptFromBytes(v.HashedLicensePlate);
-				return dto;
-			}).ToList();
+			var dtos = vehicles.ToDecryptedDtos(_mapper).ToList();
 
 		return new VehicleListResponse
 		{

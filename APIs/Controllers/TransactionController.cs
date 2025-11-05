@@ -373,6 +373,52 @@ namespace APIs.Controllers
                 return StatusCode(500, new { message = "Internal server error", details = ex.Message });
             }
         }
+
+        /// <summary>
+        /// Admin creates a transaction for parent to pay semester fee
+        /// For new parent registration workflow
+        /// </summary>
+        [HttpPost("admin/create")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(typeof(AdminCreateTransactionResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+        public async Task<ActionResult<AdminCreateTransactionResponse>> AdminCreateTransaction(
+            [FromBody] AdminCreateTransactionRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Get admin ID from claims
+            var adminId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+            if (!adminId.HasValue)
+            {
+                return Unauthorized(new { message = "Admin ID not found in token" });
+            }
+
+            try
+            {
+                var result = await _transactionService.AdminCreateTransactionAsync(request, adminId.Value);
+                return StatusCode(StatusCodes.Status201Created, result);
+            }
+            catch (ArgumentNullException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+            }
+        }
     }
 
     public class UpdateTransactionStatusRequest

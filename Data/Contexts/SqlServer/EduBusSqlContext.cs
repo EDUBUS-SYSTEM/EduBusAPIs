@@ -51,14 +51,12 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public virtual DbSet<DriverLeaveRequest> DriverLeaveRequests { get; set; }
-        public virtual DbSet<DriverLeaveConflict> DriverLeaveConflicts { get; set; }
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
             => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
                 sql => sql.UseNetTopologySuite()
             );
 
@@ -186,34 +184,6 @@ namespace Data.Contexts.SqlServer
                       .WithMany()
                       .HasForeignKey(e => e.SuggestedReplacementVehicleId)
                       .OnDelete(DeleteBehavior.Restrict);
-            });
-
-            modelBuilder.Entity<DriverLeaveConflict>(entity =>
-            {
-                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
-                entity.Property(e => e.CreatedAt)
-                      .HasPrecision(3)
-                      .HasDefaultValueSql("(sysutcdatetime())");
-                entity.Property(e => e.UpdatedAt)
-                      .HasPrecision(3);
-
-                entity.HasOne(e => e.LeaveRequest)
-                      .WithMany(r => r.Conflicts)
-                      .HasForeignKey(e => e.LeaveRequestId)
-                      .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.SuggestedDriver)
-                      .WithMany()
-                      .HasForeignKey(e => e.SuggestedDriverId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                entity.HasOne(e => e.SuggestedVehicle)
-                      .WithMany()
-                      .HasForeignKey(e => e.SuggestedVehicleId)
-                      .OnDelete(DeleteBehavior.SetNull);
-
-                // Ignore Mongo Trip navigation on SQL side
-                entity.Ignore(e => e.Trip);
             });
 
             modelBuilder.Entity<Grade>(entity =>

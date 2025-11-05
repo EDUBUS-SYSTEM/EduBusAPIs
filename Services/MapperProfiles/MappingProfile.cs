@@ -84,9 +84,6 @@ namespace Services.MapperProfiles
             CreateMap<RejectLeaveRequestDto, DriverLeaveRequest>();
             CreateMap<UpdateLeaveRequestDto, DriverLeaveRequest>();
             
-            // Driver Leave Conflict mapping
-            CreateMap<DriverLeaveConflict, DriverLeaveConflictDto>();
-            
             // Driver Working Hours mapping
             CreateMap<CreateWorkingHoursDto, DriverWorkingHours>();
             CreateMap<UpdateWorkingHoursDto, DriverWorkingHours>();

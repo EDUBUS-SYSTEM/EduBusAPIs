@@ -20,5 +20,8 @@ namespace Services.Contracts
         Task<CalculateFeeResponse> CalculateTransportFeeAsync(CalculateFeeRequest request);
         Task<AcademicSemesterInfo> GetNextSemesterAsync();
         Task<Data.Models.UnitPrice> GetCurrentActiveUnitPriceAsync(Guid? unitPriceId);
+
+        // Admin workflow methods
+        Task<AdminCreateTransactionResponse> AdminCreateTransactionAsync(AdminCreateTransactionRequest request, Guid adminId);
     }
 }

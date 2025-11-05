@@ -399,21 +399,25 @@ namespace Data.Repos.SqlServer
                 .Include(dv => dv.Vehicle)
                 .Where(dv => dv.DriverId == driverId &&
                            !dv.IsDeleted &&
-                           dv.Status == DriverVehicleStatus.Active &&
+                           dv.Status == DriverVehicleStatus.Assigned &&
                            dv.StartTimeUtc < endOfDay &&
-                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > startOfDay))
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc >= startOfDay))
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate)
         {
+            var startOfRange = startDate.Date;
+            var endOfRange = endDate.Date.AddDays(1);
+
             return await _context.DriverVehicles
                 .Include(dv => dv.Vehicle)
                 .Where(dv => dv.DriverId == driverId &&
                            !dv.IsDeleted &&
-                           dv.Status == DriverVehicleStatus.Active &&
-                           dv.StartTimeUtc < endDate.Date.AddDays(1) &&
-                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc > startDate.Date))
+                           dv.Status == DriverVehicleStatus.Assigned &&
+                           dv.StartTimeUtc < endOfRange &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc >= startOfRange))
+                .OrderBy(dv => dv.StartTimeUtc)
                 .ToListAsync();
         }
     }

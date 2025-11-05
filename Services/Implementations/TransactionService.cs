@@ -13,6 +13,7 @@ namespace Services.Implementations
         private readonly ITransportFeeItemService _transportFeeItemService;
         private readonly ITransportFeeItemRepository _transportFeeItemRepo;
         private readonly IStudentRepository _studentRepo;
+        private readonly IParentRepository _parentRepo;
         private readonly IUnitPriceRepository _unitPriceRepo;
         private readonly IAcademicCalendarRepository _academicCalendarRepo;
         private readonly IScheduleRepository _scheduleRepo;
@@ -23,6 +24,7 @@ namespace Services.Implementations
             ITransportFeeItemService transportFeeItemService,
             ITransportFeeItemRepository transportFeeItemRepo,
             IStudentRepository studentRepo,
+            IParentRepository parentRepo,
             IUnitPriceRepository unitPriceRepo,
             IAcademicCalendarRepository academicCalendarRepo,
             IScheduleRepository scheduleRepo,
@@ -32,6 +34,7 @@ namespace Services.Implementations
             _transportFeeItemService = transportFeeItemService;
             _transportFeeItemRepo = transportFeeItemRepo;
             _studentRepo = studentRepo;
+            _parentRepo = parentRepo;
             _unitPriceRepo = unitPriceRepo;
             _academicCalendarRepo = academicCalendarRepo;
             _scheduleRepo = scheduleRepo;
@@ -626,6 +629,126 @@ namespace Services.Implementations
             }
 
             return activeUnitPrices.First();
+        }
+
+        /// <summary>
+        /// Admin creates a transaction for parent to pay semester fee
+        /// For new parent registration workflow
+        /// </summary>
+        public async Task<AdminCreateTransactionResponse> AdminCreateTransactionAsync(
+            AdminCreateTransactionRequest request, Guid adminId)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            // Validate parent exists
+            var parent = await _parentRepo.FindAsync(request.ParentId);
+            if (parent == null)
+                throw new KeyNotFoundException($"Parent with ID {request.ParentId} not found");
+
+            // Validate all students exist and belong to the parent
+            var students = new List<Student>();
+            foreach (var studentId in request.StudentIds)
+            {
+                var student = await _studentRepo.FindAsync(studentId);
+                if (student == null)
+                    throw new KeyNotFoundException($"Student with ID {studentId} not found");
+
+                if (student.ParentId != request.ParentId)
+                    throw new InvalidOperationException(
+                        $"Student {student.FirstName} {student.LastName} does not belong to the specified parent");
+
+                students.Add(student);
+            }
+
+            // Get semester info for transport fee items
+            var semesterInfo = await GetNextSemesterAsync();
+
+            // Use execution strategy for transaction
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _dbContext.Database.BeginTransactionAsync();
+                try
+                {
+                    // Create ONE transaction for all students
+                    var transactionEntity = new Transaction
+                    {
+                        Id = Guid.NewGuid(),
+                        ParentId = request.ParentId,
+                        TransactionCode = GenerateTransactionCode(),
+                        Status = TransactionStatus.Notyet, // Pending payment (Notyet = Pending in this system)
+                        Amount = request.Amount,
+                        Currency = "VND",
+                        Description = request.Description,
+                        Provider = PaymentProvider.PayOS,
+                        CreatedAt = DateTime.UtcNow
+                        // Note: DueDate field doesn't exist in Transaction model
+                        // Consider adding it in future database migration
+                    };
+
+                    await _transactionRepo.AddAsync(transactionEntity);
+
+                    // Create transport fee items for each student
+                    var transportFeeItems = new List<TransportFeeItemInfo>();
+                    var feePerStudent = request.Amount / request.StudentIds.Count; // Divide total amount by number of students
+
+                    foreach (var student in students)
+                    {
+                        var createItemRequest = new Services.Models.TransportFeeItem.CreateTransportFeeItemRequest
+                        {
+                            TransactionId = transactionEntity.Id,
+                            StudentId = student.Id,
+                            ParentEmail = parent.Email,
+                            Description = $"Transport fee for {student.FirstName} {student.LastName} - {semesterInfo.Name} {semesterInfo.AcademicYear}",
+                            DistanceKm = request.DistanceKm,
+                            UnitPricePerKm = request.UnitPricePerKm,
+                            Subtotal = feePerStudent,
+                            UnitPriceId = Guid.Empty, // Will be set by TransportFeeItemService if needed
+                            SemesterName = semesterInfo.Name,
+                            AcademicYear = semesterInfo.AcademicYear,
+                            SemesterStartDate = semesterInfo.StartDate,
+                            SemesterEndDate = semesterInfo.EndDate,
+                            TotalSchoolDays = request.Metadata?.TotalSchoolDays ?? semesterInfo.TotalSchoolDays,
+                            Type = TransportFeeItemType.Register
+                        };
+
+                        var transportFeeItem = await _transportFeeItemService.CreateAsync(createItemRequest);
+
+                        transportFeeItems.Add(new TransportFeeItemInfo
+                        {
+                            Id = transportFeeItem.Id,
+                            StudentId = student.Id,
+                            StudentName = $"{student.FirstName} {student.LastName}",
+                            Amount = transportFeeItem.Subtotal,
+                            Description = transportFeeItem.Description
+                        });
+                    }
+
+                    await transaction.CommitAsync();
+
+                    return new AdminCreateTransactionResponse
+                    {
+                        Id = transactionEntity.Id,
+                        ParentId = request.ParentId,
+                        StudentIds = request.StudentIds,
+                        TransactionCode = transactionEntity.TransactionCode,
+                        Amount = request.Amount,
+                        Status = transactionEntity.Status,
+                        Description = request.Description,
+                        DueDate = request.DueDate,
+                        CreatedAt = transactionEntity.CreatedAt,
+                        CreatedByAdminId = adminId,
+                        TransportFeeItems = transportFeeItems,
+                        Message = $"Transaction created successfully for {students.Count} student(s). Status: Pending payment."
+                    };
+                }
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
     }
 }
