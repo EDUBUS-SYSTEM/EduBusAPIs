@@ -46,6 +46,79 @@ namespace Data.Models
 
         [BsonElement("overrideCreatedAt")]
         public DateTime OverrideCreatedAt { get; set; }
+
+        [BsonElement("currentLocation")]
+        public VehicleLocation? CurrentLocation { get; set; }
+
+        [BsonElement("summary")]
+        public TripSummary? Summary { get; set; }
+
+        // Nested types for Trip-scoped data models
+        public class VehicleLocation
+        {
+            [BsonElement("latitude")]
+            public double Latitude { get; set; }
+
+            [BsonElement("longitude")]
+            public double Longitude { get; set; }
+
+            [BsonElement("recordedAt")]
+            public DateTime RecordedAt { get; set; }
+
+            [BsonElement("speed")]
+            public double? Speed { get; set; }
+
+            [BsonElement("accuracy")]
+            public double? Accuracy { get; set; }
+
+            [BsonElement("isMoving")]
+            public bool IsMoving { get; set; }
+        }
+
+        public class TripSummary
+        {
+            [BsonElement("totalDistance")]
+            public double TotalDistance { get; set; }
+
+            [BsonElement("totalDuration")]
+            public string TotalDurationIso { get; set; } = string.Empty;
+
+            [BsonElement("averageSpeed")]
+            public double AverageSpeed { get; set; }
+
+            [BsonElement("maxSpeed")]
+            public double? MaxSpeed { get; set; }
+
+            [BsonElement("minSpeed")]
+            public double? MinSpeed { get; set; }
+
+            [BsonElement("plannedDistance")]
+            public double PlannedDistance { get; set; }
+
+            [BsonElement("actualDistance")]
+            public double ActualDistance { get; set; }
+
+            [BsonElement("distanceDeviation")]
+            public double DistanceDeviation { get; set; }
+
+            [BsonElement("stopsCompleted")]
+            public int StopsCompleted { get; set; }
+
+            [BsonElement("totalStops")]
+            public int TotalStops { get; set; }
+
+            [BsonElement("idleTime")]
+            public string IdleTimeIso { get; set; } = string.Empty;
+
+            [BsonElement("movingTime")]
+            public string MovingTimeIso { get; set; } = string.Empty;
+
+            [BsonElement("onTimePercentage")]
+            public double OnTimePercentage { get; set; }
+
+            [BsonElement("calculatedAt")]
+            public DateTime CalculatedAt { get; set; }
+        }
     }
 
     public class ScheduleSnapshot

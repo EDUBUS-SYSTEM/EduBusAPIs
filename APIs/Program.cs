@@ -324,6 +324,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var mongoContext = services.GetRequiredService<Data.Contexts.MongoDB.EduBusMongoContext>();
+            await mongoContext.CreateIndexesAsync();
         await Data.SeedConfiguration.ScheduleSeed.SeedAsync(mongoContext, logger);
         await Data.SeedConfiguration.AcademicCalendarSeed.SeedAsync(mongoContext, logger);
     }

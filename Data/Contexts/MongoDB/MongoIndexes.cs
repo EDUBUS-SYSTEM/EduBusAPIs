@@ -21,6 +21,9 @@ namespace Data.Contexts.MongoDB
             
             // Trip indexes
             await CreateTripIndexesAsync(db);
+
+            // Trip location history indexes
+            await CreateTripLocationHistoryIndexesAsync(db);
             
             // FileStorage indexes
             await CreateFileStorageIndexesAsync(db);
@@ -162,6 +165,32 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.Status)
                 .Descending(x => x.CreatedAt);
             await col.Indexes.CreateOneAsync(new CreateIndexModel<PickupPointRequestDocument>(statusIdx));
+        }
+
+        private static async Task CreateTripLocationHistoryIndexesAsync(IMongoDatabase db)
+        {
+            var historyCollection = db.GetCollection<TripLocationHistory>("trip_location_history");
+
+            // Index for quickly filtering by tripId
+            var tripIdIndex = Builders<TripLocationHistory>.IndexKeys
+                .Ascending(x => x.TripId);
+
+            await historyCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<TripLocationHistory>(tripIdIndex, new CreateIndexOptions
+                {
+                    Name = "idx_tripLocationHistory_tripId"
+                }));
+
+            // Compound index for ordering by recordedAt within each trip (supports latest-location queries)
+            var tripRecordedAtIndex = Builders<TripLocationHistory>.IndexKeys
+                .Ascending(x => x.TripId)
+                .Descending(x => x.Location.RecordedAt);
+
+            await historyCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<TripLocationHistory>(tripRecordedAtIndex, new CreateIndexOptions
+                {
+                    Name = "idx_tripLocationHistory_tripId_recordedAt"
+                }));
         }
 
     }
