@@ -1,4 +1,6 @@
-﻿namespace Services.Models.Trip
+﻿using Constants;
+
+namespace Services.Models.Trip
 {
 	public class TripDto
 	{
@@ -10,6 +12,10 @@
 		public DateTime? StartTime { get; set; }
 		public DateTime? EndTime { get; set; }
 		public string Status { get; set; } = string.Empty;
+		public Guid VehicleId { get; set; }
+		public Guid? DriverVehicleId { get; set; }
+		public VehicleSnapshotDto? Vehicle { get; set; }
+		public DriverSnapshotDto? Driver { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
 		public DateTime CreatedAt { get; set; }
@@ -23,6 +29,23 @@
 		public string StartTime { get; set; } = string.Empty;
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
+	}
+
+	public class VehicleSnapshotDto
+	{
+		public Guid Id { get; set; }
+		public string MaskedPlate { get; set; } = string.Empty;
+		public int Capacity { get; set; }
+		public string Status { get; set; } = string.Empty;
+	}
+
+	public class DriverSnapshotDto
+	{
+		public Guid Id { get; set; }
+		public string FullName { get; set; } = string.Empty;
+		public string Phone { get; set; } = string.Empty;
+		public bool IsPrimary { get; set; }
+		public DateTime SnapshottedAtUtc { get; set; }
 	}
 
 	public class TripStopDto
@@ -42,7 +65,11 @@
 		public DateTime ServiceDate { get; set; }
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
-		public string Status { get; set; } = "Scheduled";
+		public string Status { get; set; } = Constants.TripStatus.Scheduled;
+		public Guid VehicleId { get; set; }
+		public Guid? DriverVehicleId { get; set; }
+		public VehicleSnapshotDto? Vehicle { get; set; }
+		public DriverSnapshotDto? Driver { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
 	}
@@ -57,7 +84,20 @@
 		public DateTime? StartTime { get; set; }
 		public DateTime? EndTime { get; set; }
 		public string Status { get; set; } = string.Empty;
+		public Guid VehicleId { get; set; }
+		public Guid? DriverVehicleId { get; set; }
+		public VehicleSnapshotDto? Vehicle { get; set; }
+		public DriverSnapshotDto? Driver { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
+	}
+
+	public class SimpleTripDto
+	{
+		public string Name { get; set; } = string.Empty;
+		public DateTime PlannedStartAt { get; set; }
+		public DateTime PlannedEndAt { get; set; }
+		public string PlateVehicle { get; set; } = string.Empty;
+		public string Status { get; set; } = string.Empty;
 	}
 }

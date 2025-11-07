@@ -38,5 +38,14 @@ namespace Services.Models.Trip
         public double OnTimePercentage { get; set; }
         public double CompletionRate { get; set; }
     }
+
+    public class UpdateTripLocationRequest
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double? Speed { get; set; }
+        public double? Accuracy { get; set; }
+        public bool IsMoving { get; set; }
+    }
 }
 

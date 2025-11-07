@@ -142,6 +142,10 @@ namespace Services.MapperProfiles
 			CreateMap<UpdateTripDto, Trip>();
 			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();
 			CreateMap<ScheduleSnapshotDto, ScheduleSnapshot>();
+			CreateMap<Trip.VehicleSnapshot, VehicleSnapshotDto>();
+			CreateMap<VehicleSnapshotDto, Trip.VehicleSnapshot>();
+			CreateMap<Trip.DriverSnapshot, DriverSnapshotDto>();
+			CreateMap<DriverSnapshotDto, Trip.DriverSnapshot>();
 			CreateMap<TripStop, TripStopDto>();
 			CreateMap<TripStopDto, TripStop>();
 

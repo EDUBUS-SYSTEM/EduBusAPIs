@@ -5,7 +5,6 @@ namespace Services.Contracts
 {
 	public interface ITripService
 	{
-		Task<IEnumerable<Trip>> GetAllTripsAsync();
 		Task<Trip?> GetTripByIdAsync(Guid id);
 		Task<Trip> CreateTripAsync(Trip trip);
 		Task<Trip?> UpdateTripAsync(Trip trip);
@@ -33,5 +32,19 @@ namespace Services.Contracts
 		Task<IEnumerable<Trip>> GetDriverScheduleByRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
 		Task<IEnumerable<Trip>> GetDriverUpcomingScheduleAsync(Guid driverId, int days = 7);
 		Task<DriverScheduleSummary> GetDriverScheduleSummaryAsync(Guid driverId, DateTime startDate, DateTime endDate);
+		
+		// Driver-specific trip operations
+		Task<IEnumerable<Trip>> GetTripsByDateForDriverAsync(Guid driverId, DateTime? date = null);
+		Task<Trip?> GetTripDetailForDriverAsync(Guid tripId, Guid driverId);
+		Task<bool> StartTripAsync(Guid tripId, Guid driverId);
+		Task<bool> EndTripAsync(Guid tripId, Guid driverId);
+		Task<bool> UpdateTripLocationAsync(Guid tripId, Guid driverId, double latitude, double longitude, double? speed = null, double? accuracy = null, bool isMoving = false);
+		
+		// Admin-specific trip operations
+		Task<Trip?> GetTripDetailForAdminAsync(Guid tripId);
+		Task<Trip?> GetTripWithStopsAsync(Guid tripId);
+		Task<IEnumerable<Trip>> GetTripsByDateWithDetailsAsync(DateTime serviceDate);
+		Task<Trip?> GetTripDetailForDriverWithStopsAsync(Guid tripId, Guid driverId);
+		Task<object> GenerateAllTripsAutomaticAsync(int daysAhead = 7);
 	}
 }
