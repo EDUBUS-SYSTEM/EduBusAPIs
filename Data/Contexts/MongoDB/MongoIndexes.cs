@@ -127,6 +127,48 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.PlannedStartAt)
                 .Ascending(x => x.PlannedEndAt);
             await tripCollection.Indexes.CreateOneAsync(new CreateIndexModel<Trip>(plannedKeys));
+
+            //VehicleId + ServiceDate (list trip today)
+            var vehicleDay = Builders<Trip>.IndexKeys
+                .Ascending(x => x.VehicleId)
+                .Ascending(x => x.ServiceDate);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(vehicleDay, new CreateIndexOptions { Name = "idx_trip_vehicleId_serviceDate" })
+            );
+
+            // Driver snapshot + ServiceDate (only trip had driver)
+            var driverKeys = Builders<Trip>.IndexKeys
+                .Ascending("driver.id")
+                .Descending(x => x.ServiceDate);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(
+                    driverKeys,
+                    new CreateIndexOptions<Trip>
+                    {
+                        Name = "idx_trip_driverId_serviceDate",
+                        PartialFilterExpression = Builders<Trip>.Filter.Exists("driver.id", true)
+                    })
+            );
+
+            // Actual Start/End (filter follow actual time) — only apply when had startTime
+            var actualKeys = Builders<Trip>.IndexKeys
+                .Ascending(x => x.StartTime)
+                .Ascending(x => x.EndTime);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(
+                    actualKeys,
+                    new CreateIndexOptions<Trip>
+                    {
+                        Name = "idx_trip_actualStart_actualEnd",
+                        PartialFilterExpression = Builders<Trip>.Filter.Ne(t => t.StartTime, null)
+                    })
+            );
+
+            // Query follow assignment 
+            var driverVehicleIdx = Builders<Trip>.IndexKeys.Ascending(x => x.DriverVehicleId);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(driverVehicleIdx, new CreateIndexOptions { Name = "idx_trip_driverVehicleId" })
+            );
         }
 
         private static async Task CreateFileStorageIndexesAsync(IMongoDatabase db)

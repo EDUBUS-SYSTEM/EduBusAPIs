@@ -24,8 +24,8 @@ namespace Data.Models
         public DateTime? EndTime { get; set; }
 
         [BsonElement("status")]
-        public string Status { get; set; } = string.Empty;
-
+        public string Status { get; set; } = string.Empty; 
+ 
         [BsonElement("scheduleSnapshot")]
         public ScheduleSnapshot ScheduleSnapshot { get; set; } = new ScheduleSnapshot();
 
@@ -53,7 +53,18 @@ namespace Data.Models
         [BsonElement("summary")]
         public TripSummary? Summary { get; set; }
 
-        // Nested types for Trip-scoped data models
+        [BsonElement("vehicleId")]
+        public Guid VehicleId { get; set; }
+
+        [BsonElement("driverVehicleId")]
+        public Guid? DriverVehicleId { get; set; }
+
+        [BsonElement("vehicle")]
+        public VehicleSnapshot? Vehicle { get; set; }
+
+        [BsonElement("driver")]
+        public DriverSnapshot? Driver { get; set; }
+
         public class VehicleLocation
         {
             [BsonElement("latitude")]
@@ -118,6 +129,39 @@ namespace Data.Models
 
             [BsonElement("calculatedAt")]
             public DateTime CalculatedAt { get; set; }
+        }
+
+        public class VehicleSnapshot
+        {
+            [BsonElement("id")]
+            public Guid Id { get; set; }
+
+            [BsonElement("maskedPlate")]
+            public string MaskedPlate { get; set; } = string.Empty;
+
+            [BsonElement("capacity")]
+            public int Capacity { get; set; }
+
+            [BsonElement("status")]
+            public string Status { get; set; } = string.Empty;
+        }
+
+        public class DriverSnapshot
+        {
+            [BsonElement("id")]
+            public Guid Id { get; set; }
+
+            [BsonElement("fullName")]
+            public string FullName { get; set; } = string.Empty;
+
+            [BsonElement("phone")]
+            public string Phone { get; set; } = string.Empty;
+
+            [BsonElement("isPrimary")]
+            public bool IsPrimary { get; set; }
+
+            [BsonElement("snapshottedAtUtc")]
+            public DateTime SnapshottedAtUtc { get; set; }
         }
     }
 
