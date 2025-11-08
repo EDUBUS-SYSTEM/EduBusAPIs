@@ -307,8 +307,14 @@ app.UseAuthorization();
 // Serve static files from wwwroot
 app.UseStaticFiles();
 
-// Map SignalR Hub with CORS support
+// Map SignalR Hubs with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
+{
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
+                        Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+});
+
+app.MapHub<TripHub>("/tripHub", options =>
 {
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
