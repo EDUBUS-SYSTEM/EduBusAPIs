@@ -20,5 +20,8 @@ namespace Services.Contracts
 		Task<BasicSuccessResponse> UnlockUserAsync(Guid userId, Guid unlockedBy);
 		Task<BasicSuccessResponse> LockMultipleUsersAsync(List<Guid> userIds, DateTime? lockedUntil, string? reason, Guid lockedBy);
 		Task<BasicSuccessResponse> UnlockMultipleUsersAsync(List<Guid> userIds, Guid unlockedBy);
+		
+		// Password reset methods
+		Task<BasicSuccessResponse> ResetAllPasswordsAsync(string newPassword);
 	}
 }

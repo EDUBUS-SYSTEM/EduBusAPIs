@@ -415,5 +415,36 @@ namespace APIs.Controllers
 				});
 			}
 		}
+
+		/// <summary>
+		/// Reset all user passwords to a specified password - Admin only
+		/// </summary>
+		[Authorize(Roles = Roles.Admin)]
+		[HttpPost("reset-all-passwords")]
+		public async Task<ActionResult<BasicSuccessResponse>> ResetAllPasswords([FromBody] ResetAllPasswordsRequest request)
+		{
+			try
+			{
+				var result = await _userService.ResetAllPasswordsAsync(request.Password);
+				return Ok(result);
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new ErrorResponse
+				{
+					Message = ex.Message,
+					StatusCode = 400
+				});
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new ErrorResponse
+				{
+					Message = "An error occurred while resetting passwords",
+					Details = ex.Message,
+					StatusCode = 500
+				});
+			}
+		}
 	}
 }

@@ -89,12 +89,21 @@ namespace Data.Repos.SqlServer
 		}
 	
 
-        public async Task<IEnumerable<Admin>> GetAdminUsersAsync()
+		public async Task<IEnumerable<Admin>> GetAdminUsersAsync()
         {
             return await _table
                 .OfType<Admin>()
                 .Where(a => !a.IsDeleted)
                 .ToListAsync();
+        }
+
+        public async Task<int> ResetAllPasswordsAsync(byte[] hashedPassword)
+        {
+            return await _table
+                .Where(u => !u.IsDeleted)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(u => u.HashedPassword, hashedPassword)
+                    .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
         }
     }
 }

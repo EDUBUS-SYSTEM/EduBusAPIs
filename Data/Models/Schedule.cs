@@ -23,6 +23,9 @@ namespace Data.Models
         [BsonElement("academicYear")]
         public string AcademicYear { get; set; } = string.Empty;
 
+        [BsonElement("semesterCode")]
+        public string? SemesterCode { get; set; }
+
         [BsonElement("effectiveFrom")]
         public DateTime EffectiveFrom { get; set; }
 
