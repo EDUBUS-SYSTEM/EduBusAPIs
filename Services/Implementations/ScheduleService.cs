@@ -137,7 +137,7 @@ namespace Services.Implementations
 				if (string.IsNullOrWhiteSpace(schedule.EndTime))
 					throw new ArgumentException("End time is required");
 
-				// Auto-fill effective dates from academic year if provided
+				// Auto-fill effective dates from academic year or semester if provided
 				if (!string.IsNullOrWhiteSpace(schedule.AcademicYear))
 				{
 					try
@@ -145,10 +145,35 @@ namespace Services.Implementations
 						var academicCalendar = await _academicCalendarService.GetAcademicCalendarByYearAsync(schedule.AcademicYear);
 						if (academicCalendar != null)
 						{
-							schedule.EffectiveFrom = academicCalendar.StartDate;
-							schedule.EffectiveTo = academicCalendar.EndDate;
-							_logger.LogInformation("Auto-filled effective dates from academic year {AcademicYear}: {StartDate} to {EndDate}", 
-								schedule.AcademicYear, academicCalendar.StartDate, academicCalendar.EndDate);
+							// If semester code is provided, use semester dates; otherwise use academic year dates
+							if (!string.IsNullOrWhiteSpace(schedule.SemesterCode))
+							{
+								var semester = academicCalendar.Semesters.FirstOrDefault(s => 
+									s.Code.Equals(schedule.SemesterCode, StringComparison.OrdinalIgnoreCase) && s.IsActive);
+								
+								if (semester != null)
+								{
+									schedule.EffectiveFrom = semester.StartDate;
+									schedule.EffectiveTo = semester.EndDate;
+									_logger.LogInformation("Auto-filled effective dates from semester {SemesterCode} ({SemesterName}) in academic year {AcademicYear}: {StartDate} to {EndDate}", 
+										schedule.SemesterCode, semester.Name, schedule.AcademicYear, semester.StartDate, semester.EndDate);
+								}
+								else
+								{
+									_logger.LogWarning("Semester {SemesterCode} not found or inactive in academic year {AcademicYear}, falling back to academic year dates", 
+										schedule.SemesterCode, schedule.AcademicYear);
+									schedule.EffectiveFrom = academicCalendar.StartDate;
+									schedule.EffectiveTo = academicCalendar.EndDate;
+								}
+							}
+							else
+							{
+								// No semester code provided, use academic year dates (existing behavior)
+								schedule.EffectiveFrom = academicCalendar.StartDate;
+								schedule.EffectiveTo = academicCalendar.EndDate;
+								_logger.LogInformation("Auto-filled effective dates from academic year {AcademicYear}: {StartDate} to {EndDate}", 
+									schedule.AcademicYear, academicCalendar.StartDate, academicCalendar.EndDate);
+							}
 						}
 					}
 					catch (Exception ex)

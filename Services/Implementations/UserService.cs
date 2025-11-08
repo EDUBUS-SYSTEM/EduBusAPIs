@@ -5,6 +5,7 @@ using Data.Models;
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Dynamic.Core;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -263,6 +264,27 @@ namespace Services.Implementations
 			{
 				Success = true,
 				Data = new { Message = $"{affectedRows} users unlocked successfully", AffectedRows = affectedRows }
+			};
+		}
+
+		public async Task<BasicSuccessResponse> ResetAllPasswordsAsync(string newPassword)
+		{
+			if (string.IsNullOrWhiteSpace(newPassword))
+				throw new InvalidOperationException("Password cannot be empty");
+
+			// Hash the new password
+			var hashedPassword = SecurityHelper.HashPassword(newPassword);
+
+			// Reset all user passwords
+			var affectedRows = await _repository.ResetAllPasswordsAsync(hashedPassword);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("No users were found or updated");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = $"Successfully reset passwords for {affectedRows} users", AffectedRows = affectedRows }
 			};
 		}
 	}
