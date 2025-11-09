@@ -150,22 +150,22 @@ namespace Data.Contexts.MongoDB
                     })
             );
 
-            // Actual Start/End (filter follow actual time) — only apply when had startTime
-            var actualKeys = Builders<Trip>.IndexKeys
-                .Ascending(x => x.StartTime)
-                .Ascending(x => x.EndTime);
-            await tripCollection.Indexes.CreateOneAsync(
-                new CreateIndexModel<Trip>(
-                    actualKeys,
-                    new CreateIndexOptions<Trip>
-                    {
-                        Name = "idx_trip_actualStart_actualEnd",
-                        PartialFilterExpression = Builders<Trip>.Filter.Ne(t => t.StartTime, null)
-                    })
-            );
+			// Actual Start/End (filter follow actual time) — only apply when had startTime
+			var actualKeys = Builders<Trip>.IndexKeys
+	        .Ascending(x => x.StartTime)
+	        .Ascending(x => x.EndTime);
+			await tripCollection.Indexes.CreateOneAsync(
+				new CreateIndexModel<Trip>(
+					actualKeys,
+					new CreateIndexOptions<Trip>
+					{
+						Name = "idx_trip_actualStart_actualEnd",
+						PartialFilterExpression = Builders<Trip>.Filter.Exists(t => t.StartTime, true) 
+					})
+			);
 
-            // Query follow assignment 
-            var driverVehicleIdx = Builders<Trip>.IndexKeys.Ascending(x => x.DriverVehicleId);
+			// Query follow assignment 
+			var driverVehicleIdx = Builders<Trip>.IndexKeys.Ascending(x => x.DriverVehicleId);
             await tripCollection.Indexes.CreateOneAsync(
                 new CreateIndexModel<Trip>(driverVehicleIdx, new CreateIndexOptions { Name = "idx_trip_driverVehicleId" })
             );

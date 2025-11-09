@@ -135,7 +135,16 @@ namespace Data.Repos.MongoDB
             return await _collection.CountDocumentsAsync(filter);
         }
 
-        public virtual async Task<bool> ExistsAsync(Guid id)
+		public virtual async Task<long> GetCountAsync(FilterDefinition<T> filter)
+		{
+			var combinedFilter = Builders<T>.Filter.And(
+				filter,
+				Builders<T>.Filter.Eq(x => x.IsDeleted, false)
+			);
+			return await _collection.CountDocumentsAsync(combinedFilter);
+		}
+
+		public virtual async Task<bool> ExistsAsync(Guid id)
         {
             var filter = Builders<T>.Filter.And(
                 Builders<T>.Filter.Eq(x => x.Id, id),

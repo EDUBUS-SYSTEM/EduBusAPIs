@@ -1,4 +1,6 @@
-﻿using Data.Models;
+﻿using Constants;
+using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -6,7 +8,6 @@ using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Trip;
 using Utils;
-using Constants;
 
 namespace Services.Implementations
 {
@@ -14,11 +15,13 @@ namespace Services.Implementations
 	{
 		private readonly IDatabaseFactory _databaseFactory;
 		private readonly ILogger<TripService> _logger;
+		private readonly IMongoDatabase _mongoDatabase; 
 
-		public TripService(IDatabaseFactory databaseFactory, ILogger<TripService> logger)
+		public TripService(IDatabaseFactory databaseFactory, ILogger<TripService> logger, IMongoDatabase mongoDatabase) // ADD IMongoDatabase
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
+			_mongoDatabase = mongoDatabase; // ADD THIS
 		}
 
 		public async Task<IEnumerable<Trip>> QueryTripsAsync(
@@ -107,6 +110,113 @@ namespace Services.Implementations
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error querying trips with pagination/sorting");
+				throw;
+			}
+		}
+
+		public async Task<TripListResponse> QueryTripsWithPaginationAsync(
+	Guid? routeId,
+	DateTime? serviceDate,
+	DateTime? startDate,
+	DateTime? endDate,
+	string? status,
+	int page,
+	int perPage,
+	string sortBy,
+	string sortOrder)
+		{
+			try
+			{
+				if (page < 1) page = 1;
+				if (perPage < 1) perPage = 20;
+
+				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+
+				// Build filters
+				var filters = new List<FilterDefinition<Trip>>
+		{
+			Builders<Trip>.Filter.Eq(t => t.IsDeleted, false)
+		};
+
+				if (routeId.HasValue)
+					filters.Add(Builders<Trip>.Filter.Eq(t => t.RouteId, routeId.Value));
+
+				if (!string.IsNullOrWhiteSpace(status))
+					filters.Add(Builders<Trip>.Filter.Eq(t => t.Status, status));
+
+				if (serviceDate.HasValue)
+				{
+					var dayStart = serviceDate.Value.Date;
+					var dayEnd = dayStart.AddDays(1);
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, dayStart));
+					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, dayEnd));
+				}
+				else if (startDate.HasValue && endDate.HasValue)
+				{
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, startDate.Value.Date));
+					filters.Add(Builders<Trip>.Filter.Lte(t => t.ServiceDate, endDate.Value.Date));
+				}
+
+				var filter = filters.Count == 1 ? filters[0] : Builders<Trip>.Filter.And(filters);
+
+				var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
+				var totalCount = await tripsCollection.CountDocumentsAsync(filter);
+
+				// Build sort
+				var desc = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+				SortDefinition<Trip> sort = sortBy?.ToLowerInvariant() switch
+				{
+					"plannedstartat" => desc ? Builders<Trip>.Sort.Descending(x => x.PlannedStartAt) : Builders<Trip>.Sort.Ascending(x => x.PlannedStartAt),
+					"plannedendat" => desc ? Builders<Trip>.Sort.Descending(x => x.PlannedEndAt) : Builders<Trip>.Sort.Ascending(x => x.PlannedEndAt),
+					"status" => desc ? Builders<Trip>.Sort.Descending(x => x.Status) : Builders<Trip>.Sort.Ascending(x => x.Status),
+					"servicedate" or _ => desc ? Builders<Trip>.Sort.Descending(x => x.ServiceDate) : Builders<Trip>.Sort.Ascending(x => x.ServiceDate),
+				};
+
+				// Get paginated trips
+				var skip = (page - 1) * perPage;
+				var trips = await repository.FindByFilterAsync(filter, sort, skip, perPage);
+				var tripsList = trips.ToList();
+
+				// Populate stops with pickup point names for all trips
+				await PopulateStopsWithPickupPointNamesForTripsAsync(tripsList);
+
+				// Decrypt vehicle plates
+				var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
+				foreach (var trip in tripsList)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}. Using existing masked plate.", trip.Id);
+						}
+					}
+				}
+
+				// Calculate total pages
+				var totalPages = (int)Math.Ceiling(totalCount / (double)perPage);
+
+				// Create and return response
+				return new TripListResponse
+				{
+					Trips = tripsList,
+					TotalCount = (int)totalCount,
+					Page = page,
+					PerPage = perPage,
+					TotalPages = totalPages
+				};
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error querying trips with pagination");
 				throw;
 			}
 		}
@@ -1101,87 +1211,154 @@ namespace Services.Implementations
 
 		private async Task PopulateTripSnapshotsAsync(Trip trip)
 		{
-			if (trip.VehicleId != Guid.Empty)
+			// Validate routeId is provided
+			if (trip.RouteId == Guid.Empty)
 			{
-				try
+				_logger.LogWarning("Trip {TripId} has no RouteId. Cannot populate snapshots.", trip.Id);
+				return;
+			}
+
+			try
+			{
+				// Step 1: Get Route from MongoDB to get VehicleId
+				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+				var route = await routeRepo.FindAsync(trip.RouteId);
+
+				if (route == null || route.IsDeleted)
 				{
-					var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
-					var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
-					if (vehicle != null)
+					_logger.LogWarning("Route {RouteId} not found or deleted for trip {TripId}. Cannot populate snapshots.", trip.RouteId, trip.Id);
+					return;
+				}
+
+				// Step 2: Get Vehicle using VehicleId from Route
+				if (route.VehicleId == Guid.Empty)
+				{
+					_logger.LogWarning("Route {RouteId} has no VehicleId for trip {TripId}. Cannot populate vehicle snapshot.", trip.RouteId, trip.Id);
+				}
+				else
+				{
+					try
 					{
-						string maskedPlate = string.Empty;
-						if (vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+						var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
+						var vehicle = await vehicleRepo.FindAsync(route.VehicleId);
+
+						if (vehicle != null)
 						{
-							try
+							string maskedPlate = string.Empty;
+							if (vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
 							{
-								maskedPlate = Convert.ToBase64String(vehicle.HashedLicensePlate);
+								try
+								{
+									// Use SecurityHelper to decrypt the plate (as done elsewhere in the codebase)
+									maskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+								}
+								catch (Exception decryptEx)
+								{
+									_logger.LogWarning(decryptEx, "Failed to decrypt HashedLicensePlate for vehicle {VehicleId} on trip {TripId}. Using empty string.", vehicle.Id, trip.Id);
+									maskedPlate = string.Empty;
+								}
 							}
-							catch (Exception convertEx)
+							else
 							{
-								_logger.LogWarning(convertEx, "Failed to convert HashedLicensePlate to Base64 for vehicle {VehicleId}. Using empty string.", vehicle.Id);
-								maskedPlate = string.Empty;
+								_logger.LogWarning("Vehicle {VehicleId} has null or empty HashedLicensePlate for trip {TripId}.", vehicle.Id, trip.Id);
+							}
+
+							trip.Vehicle = new Trip.VehicleSnapshot
+							{
+								Id = vehicle.Id,
+								MaskedPlate = maskedPlate,
+								Capacity = vehicle.Capacity,
+								Status = vehicle.Status.ToString()
+							};
+
+							// Update trip.VehicleId to match the route's vehicle
+							trip.VehicleId = route.VehicleId;
+
+							_logger.LogDebug("Populated vehicle snapshot for trip {TripId} from route {RouteId}, vehicle {VehicleId}", trip.Id, trip.RouteId, vehicle.Id);
+						}
+						else
+						{
+							_logger.LogWarning("Vehicle {VehicleId} not found for route {RouteId} on trip {TripId}. Vehicle snapshot will not be populated.", route.VehicleId, trip.RouteId, trip.Id);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Error populating vehicle snapshot for trip {TripId} from route {RouteId}. Continuing without vehicle snapshot.", trip.Id, trip.RouteId);
+					}
+				}
+
+				// Step 3: Get DriverVehicle assignments for the vehicle to find the driver
+				if (route.VehicleId != Guid.Empty)
+				{
+					try
+					{
+						var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
+
+						// Get active driver-vehicle assignments for this vehicle
+						// We want assignments that are active at the trip's service date
+						var serviceDate = trip.ServiceDate;
+						var activeAssignments = await driverVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+
+						// Filter to assignments that are active on the service date
+						var assignmentsOnServiceDate = activeAssignments
+							.Where(dv => dv.StartTimeUtc.Date <= serviceDate.Date &&
+										 (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc.Value.Date >= serviceDate.Date) &&
+										 dv.Status == DriverVehicleStatus.Assigned &&
+										 !dv.IsDeleted &&
+										 dv.Driver != null &&
+										 !dv.Driver.IsDeleted)
+							.ToList();
+
+						if (assignmentsOnServiceDate.Any())
+						{
+							// Prefer primary driver, otherwise use the first active assignment
+							var driverVehicle = assignmentsOnServiceDate
+								.FirstOrDefault(dv => dv.IsPrimaryDriver)
+								?? assignmentsOnServiceDate.FirstOrDefault();
+
+							if (driverVehicle != null && driverVehicle.Driver != null)
+							{
+								trip.Driver = new Trip.DriverSnapshot
+								{
+									Id = driverVehicle.Driver.Id,
+									FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
+									Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
+									IsPrimary = driverVehicle.IsPrimaryDriver,
+									SnapshottedAtUtc = DateTime.UtcNow
+								};
+
+								// Update trip.DriverVehicleId to match the found assignment
+								trip.DriverVehicleId = driverVehicle.Id;
+
+								_logger.LogDebug("Populated driver snapshot for trip {TripId} from route {RouteId}, driver {DriverId} (DriverVehicleId: {DriverVehicleId})",
+									trip.Id, trip.RouteId, driverVehicle.Driver.Id, driverVehicle.Id);
+							}
+							else
+							{
+								_logger.LogWarning("No valid driver found in active assignments for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
+									route.VehicleId, trip.RouteId, trip.Id, serviceDate);
 							}
 						}
 						else
 						{
-							_logger.LogWarning("Vehicle {VehicleId} has null or empty HashedLicensePlate.", vehicle.Id);
+							_logger.LogWarning("No active driver-vehicle assignments found for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
+								route.VehicleId, trip.RouteId, trip.Id, serviceDate);
 						}
-
-						trip.Vehicle = new Trip.VehicleSnapshot
-						{
-							Id = vehicle.Id,
-							MaskedPlate = maskedPlate,
-							Capacity = vehicle.Capacity,
-							Status = vehicle.Status.ToString()
-						};
 					}
-					else
+					catch (Exception ex)
 					{
-						_logger.LogWarning("Vehicle {VehicleId} not found for trip {TripId}. Vehicle snapshot will not be populated.", trip.VehicleId, trip.Id);
+						_logger.LogWarning(ex, "Error populating driver snapshot for trip {TripId} from route {RouteId}. Continuing without driver snapshot.", trip.Id, trip.RouteId);
 					}
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Error populating vehicle snapshot for trip {TripId}. Continuing without vehicle snapshot.", trip.Id);
 				}
 			}
-
-			if (trip.DriverVehicleId.HasValue && trip.DriverVehicleId.Value != Guid.Empty)
+			catch (Exception ex)
 			{
-				try
-				{
-					var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
-					var driverVehicles = await driverVehicleRepo.FindByConditionAsync(
-						dv => dv.Id == trip.DriverVehicleId.Value && !dv.IsDeleted,
-						dv => dv.Driver
-					);
-					
-					var driverVehicle = driverVehicles.FirstOrDefault();
-					
-					if (driverVehicle != null && driverVehicle.Driver != null && !driverVehicle.Driver.IsDeleted)
-					{
-						trip.Driver = new Trip.DriverSnapshot
-						{
-							Id = driverVehicle.Driver.Id,
-							FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
-							Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
-							IsPrimary = driverVehicle.IsPrimaryDriver,
-							SnapshottedAtUtc = DateTime.UtcNow
-						};
-					}
-					else
-					{
-						_logger.LogWarning("DriverVehicle {DriverVehicleId} not found or Driver is null/deleted for trip {TripId}. Driver snapshot will not be populated.", trip.DriverVehicleId.Value, trip.Id);
-					}
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Error populating driver snapshot for trip {TripId}. Continuing without driver snapshot.", trip.Id);
-				}
+				_logger.LogError(ex, "Error populating snapshots for trip {TripId} from route {RouteId}.", trip.Id, trip.RouteId);
+				// Don't throw - allow trip to continue without snapshots
 			}
 		}
 
-	public async Task<IEnumerable<Trip>> GetTripsByDateForDriverAsync(Guid driverId, DateTime? date = null)
+		public async Task<IEnumerable<Trip>> GetTripsByDateForDriverAsync(Guid driverId, DateTime? date = null)
 	{
 		try
 		{
