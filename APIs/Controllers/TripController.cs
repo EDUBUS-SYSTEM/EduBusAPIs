@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Constants;
 using Data.Models;
+using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -8,6 +9,7 @@ using Services.Contracts;
 using Services.Models.Trip;
 using System.Security.Claims;
 using Utils;
+using Route = Data.Models.Route;
 
 namespace APIs.Controllers
 {
@@ -19,43 +21,78 @@ namespace APIs.Controllers
 		private readonly ITripService _tripService;
 		private readonly ILogger<TripController> _logger;
 		private readonly IMapper _mapper;
+		private readonly IDatabaseFactory _databaseFactory;
 
-		public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper)
+		public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper, IDatabaseFactory databaseFactory)
 		{
 			_tripService = tripService;
 			_logger = logger;
 			_mapper = mapper;
+			_databaseFactory = databaseFactory;
 		}
 
 		[HttpGet]
 		[Authorize(Roles = Roles.Admin)]
-		public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips(
-			[FromQuery] Guid? routeId = null,
-			[FromQuery] DateTime? serviceDate = null,
-			[FromQuery] DateTime? startDate = null,
-			[FromQuery] DateTime? endDate = null,
-			[FromQuery] string? status = null,
-			[FromQuery] int? upcomingDays = null,
-			[FromQuery] int page = 1,
-			[FromQuery] int perPage = 20,
-			[FromQuery] string sortBy = "serviceDate",
-			[FromQuery] string sortOrder = "desc")
+		public async Task<ActionResult<object>> GetTrips(
+	[FromQuery] Guid? routeId = null,
+	[FromQuery] DateTime? serviceDate = null,
+	[FromQuery] DateTime? startDate = null,
+	[FromQuery] DateTime? endDate = null,
+	[FromQuery] string? status = null,
+	[FromQuery] int? upcomingDays = null,
+	[FromQuery] int page = 1,
+	[FromQuery] int perPage = 20,
+	[FromQuery] string sortBy = "serviceDate",
+	[FromQuery] string sortOrder = "desc")
 		{
 			try
 			{
-				// Preserve current logic: upcoming path keeps its own semantics
+				// Handle upcomingDays special case (returns all upcoming trips, no pagination)
 				if (upcomingDays.HasValue)
 				{
 					var tripsUpcoming = await _tripService.GetUpcomingTripsAsync(DateTime.UtcNow, upcomingDays.Value);
-					return Ok(MapTripsToDto(tripsUpcoming));
+					var tripDtosUpcoming = MapTripsToDto(tripsUpcoming).ToList();
+					await PopulateRouteNamesAndVehiclePlatesAsync(tripDtosUpcoming, tripsUpcoming);
+					// Return as simple array for upcoming trips (no pagination needed)
+					return Ok(tripDtosUpcoming);
 				}
 
-				// Database-level filtering + pagination + sorting (stops populated)
-				var trips = await _tripService.QueryTripsAsync(
+				// Use new paginated method for regular queries
+				var response = await _tripService.QueryTripsWithPaginationAsync(
 					routeId, serviceDate, startDate, endDate, status,
 					page, perPage, sortBy, sortOrder);
 
-				return Ok(MapTripsToDto(trips));
+				// Map trips to DTOs
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(response.Trips).ToList();
+
+				// Map stops for each trip
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = response.Trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				// Populate route names and vehicle plates
+				await PopulateRouteNamesAndVehiclePlatesAsync(tripDtos, response.Trips);
+
+				// Extract computed properties to avoid CS0828 error
+				var hasNextPage = response.HasNextPage;
+				var hasPreviousPage = response.HasPreviousPage;
+
+				// Return paginated response with DTOs
+				return Ok(new
+				{
+					data = tripDtos,
+					total = response.TotalCount,
+					page = response.Page,
+					perPage = response.PerPage,
+					totalPages = response.TotalPages,
+					hasNextPage = hasNextPage,
+					hasPreviousPage = hasPreviousPage
+				});
 			}
 			catch (Exception ex)
 			{
@@ -817,6 +854,73 @@ namespace APIs.Controllers
 				})
 				.OrderBy(s => s.Sequence)
 				.ToList();
+		}
+
+		private async Task PopulateRouteNamesAndVehiclePlatesAsync(List<TripDto> tripDtos, IEnumerable<Trip> trips)
+		{
+			try
+			{
+				// Get unique route IDs
+				var routeIds = tripDtos.Select(t => t.RouteId).Distinct().ToList();
+
+				// Fetch routes from MongoDB
+				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+				var routes = new List<Route>();
+
+				foreach (var routeId in routeIds)
+				{
+					try
+					{
+						var route = await routeRepo.FindAsync(routeId);
+						if (route != null && !route.IsDeleted)
+						{
+							routes.Add(route);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Error fetching route {RouteId} for trip", routeId);
+					}
+				}
+
+				// Create route lookup dictionary
+				var routeLookup = routes.ToDictionary(r => r.Id, r => r.RouteName);
+
+				// Populate route names in trip DTOs
+				foreach (var tripDto in tripDtos)
+				{
+					if (routeLookup.TryGetValue(tripDto.RouteId, out var routeName))
+					{
+						tripDto.RouteName = routeName;
+					}
+
+					// Ensure vehicle plate is populated (it should already be set in QueryTripsAsync)
+					// But we verify it's there from the trip entity
+					var trip = trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null && trip.Vehicle != null && !string.IsNullOrEmpty(trip.Vehicle.MaskedPlate))
+					{
+						if (tripDto.Vehicle == null)
+						{
+							tripDto.Vehicle = new VehicleSnapshotDto
+							{
+								Id = trip.Vehicle.Id,
+								MaskedPlate = trip.Vehicle.MaskedPlate,
+								Capacity = trip.Vehicle.Capacity,
+								Status = trip.Vehicle.Status
+							};
+						}
+						else if (string.IsNullOrEmpty(tripDto.Vehicle.MaskedPlate))
+						{
+							tripDto.Vehicle.MaskedPlate = trip.Vehicle.MaskedPlate;
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error populating route names and vehicle plates");
+				// Don't throw - just log the error
+			}
 		}
 
 	}

@@ -46,6 +46,16 @@ namespace Services.Contracts
 		Task<IEnumerable<Trip>> GetTripsByDateWithDetailsAsync(DateTime serviceDate);
 		Task<Trip?> GetTripDetailForDriverWithStopsAsync(Guid tripId, Guid driverId);
 		Task<object> GenerateAllTripsAutomaticAsync(int daysAhead = 7);
+		Task<TripListResponse> QueryTripsWithPaginationAsync(
+			Guid? routeId,
+			DateTime? serviceDate,
+			DateTime? startDate,
+			DateTime? endDate,
+			string? status,
+			int page,
+			int perPage,
+			string sortBy,
+			string sortOrder);
 		
 		// Parent-specific trip operations
 		Task<IEnumerable<Trip>> GetTripsByScheduleForParentAsync(string parentEmail, int days = 7);

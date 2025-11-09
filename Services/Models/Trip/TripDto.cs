@@ -6,6 +6,7 @@ namespace Services.Models.Trip
 	{
 		public Guid Id { get; set; }
 		public Guid RouteId { get; set; }
+		public string RouteName { get; set; } = string.Empty;
 		public DateTime ServiceDate { get; set; }
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
