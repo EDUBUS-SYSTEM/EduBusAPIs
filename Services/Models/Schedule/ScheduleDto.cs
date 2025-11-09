@@ -11,6 +11,7 @@ namespace Services.Models.Schedule
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
 		public string AcademicYear { get; set; } = string.Empty;
+		public string? SemesterCode { get; set; }
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
@@ -28,6 +29,7 @@ namespace Services.Models.Schedule
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
 		public string AcademicYear { get; set; } = string.Empty;
+		public string? SemesterCode { get; set; }
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
@@ -44,6 +46,7 @@ namespace Services.Models.Schedule
 		public string RRule { get; set; } = string.Empty;
 		public string Timezone { get; set; } = string.Empty;
 		public string AcademicYear { get; set; } = string.Empty;
+		public string? SemesterCode { get; set; }
 		public DateTime EffectiveFrom { get; set; }
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
