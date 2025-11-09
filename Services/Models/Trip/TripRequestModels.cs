@@ -16,6 +16,7 @@ namespace Services.Models.Trip
     public class AttendanceDto
     {
         public Guid StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
         public DateTime? BoardedAt { get; set; }
         public string State { get; set; } = string.Empty;
     }

@@ -57,6 +57,7 @@ namespace Services.Models.Trip
 		public DateTime PlannedDeparture { get; set; }
 		public DateTime? ActualDeparture { get; set; }
 		public int Sequence { get; set; }
+		public List<ParentAttendanceDto> Attendance { get; set; } = new List<ParentAttendanceDto>();
 	}
 
 	public class CreateTripDto
@@ -99,5 +100,50 @@ namespace Services.Models.Trip
 		public DateTime PlannedEndAt { get; set; }
 		public string PlateVehicle { get; set; } = string.Empty;
 		public string Status { get; set; } = string.Empty;
+	}
+
+	public class ParentTripDto
+	{
+		public Guid Id { get; set; }
+		public DateTime ServiceDate { get; set; }
+		public DateTime PlannedStartAt { get; set; }
+		public DateTime PlannedEndAt { get; set; }
+		public DateTime? StartTime { get; set; }
+		public DateTime? EndTime { get; set; }
+		public string Status { get; set; } = string.Empty;
+		public VehicleSnapshotDto? Vehicle { get; set; }
+		public DriverSnapshotDto? Driver { get; set; }
+		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
+		public List<ParentTripStopDto> Stops { get; set; } = new List<ParentTripStopDto>();
+	}
+
+	public class ParentTripStopDto
+	{
+		public Guid Id { get; set; }
+		public string Name { get; set; } = string.Empty;
+		public DateTime PlannedArrival { get; set; }
+		public DateTime? ActualArrival { get; set; }
+		public DateTime PlannedDeparture { get; set; }
+		public DateTime? ActualDeparture { get; set; }
+		public int Sequence { get; set; }
+		public List<ParentAttendanceDto> Attendance { get; set; } = new List<ParentAttendanceDto>();
+	}
+
+	public class ParentAttendanceDto
+	{
+		public Guid StudentId { get; set; }
+		public string StudentName { get; set; } = string.Empty;
+		public DateTime? BoardedAt { get; set; }
+		public string State { get; set; } = string.Empty;
+	}
+
+	public class TripLocationDto
+	{
+		public double Latitude { get; set; }
+		public double Longitude { get; set; }
+		public DateTime RecordedAt { get; set; }
+		public double? Speed { get; set; }
+		public double? Accuracy { get; set; }
+		public bool IsMoving { get; set; }
 	}
 }

@@ -10,5 +10,6 @@ namespace Data.Repos.Interfaces
     public interface IStudentRepository: ISqlRepository<Student>
     {
         Task<List<Student>> GetStudentsByParentEmailAsync(string email);
+        Task<List<Student>> GetActiveStudentsByPickupPointIdAsync(Guid pickupPointId);
     }
 }

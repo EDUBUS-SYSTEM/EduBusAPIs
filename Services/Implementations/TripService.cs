@@ -14,11 +14,25 @@ namespace Services.Implementations
 	{
 		private readonly IDatabaseFactory _databaseFactory;
 		private readonly ILogger<TripService> _logger;
+		private readonly IStudentRepository _studentRepository;
+		private readonly IPickupPointRepository _pickupPointRepository;
+		private readonly IStudentPickupPointHistoryRepository _studentPickupPointHistoryRepository;
+		private readonly IVehicleRepository _vehicleRepository;
 
-		public TripService(IDatabaseFactory databaseFactory, ILogger<TripService> logger)
+		public TripService(
+			IDatabaseFactory databaseFactory, 
+			ILogger<TripService> logger,
+			IStudentRepository studentRepository,
+			IPickupPointRepository pickupPointRepository,
+			IStudentPickupPointHistoryRepository studentPickupPointHistoryRepository,
+			IVehicleRepository vehicleRepository)
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
+			_studentRepository = studentRepository;
+			_pickupPointRepository = pickupPointRepository;
+			_studentPickupPointHistoryRepository = studentPickupPointHistoryRepository;
+			_vehicleRepository = vehicleRepository;
 		}
 
 		public async Task<IEnumerable<Trip>> QueryTripsAsync(
@@ -82,14 +96,13 @@ namespace Services.Implementations
 				await PopulateStopsWithPickupPointNamesForTripsAsync(tripsList);
 
 				// Decrypt vehicle plates
-				var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
 				foreach (var trip in tripsList)
 				{
 					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
 					{
 						try
 						{
-							var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
 							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
 							{
 								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
@@ -129,14 +142,17 @@ namespace Services.Implementations
 		{
 			try
 			{
-			await ValidateTripCreationAsync(trip);
+		await ValidateTripCreationAsync(trip);
 
-			await GenerateTripStopsFromRouteAsync(trip);
+		await GenerateTripStopsFromRouteAsync(trip);
 
-			trip.Status = TripStatus.Scheduled;
+		// Populate attendance for all stops with active students
+		await PopulateAttendanceForTripStopsAsync(trip);
 
-			// Populate snapshots if VehicleId or DriverVehicleId are provided
-			await PopulateTripSnapshotsAsync(trip);
+		trip.Status = TripStatus.Scheduled;
+
+		// Populate snapshots if VehicleId or DriverVehicleId are provided
+		await PopulateTripSnapshotsAsync(trip);
 
 				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
 				return await repository.AddAsync(trip);
@@ -227,7 +243,33 @@ namespace Services.Implementations
 			try
 			{
 				var repository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				return await repository.GetUpcomingTripsAsync(fromDate, days);
+				var trips = await repository.GetUpcomingTripsAsync(fromDate, days);
+				var tripsList = trips.ToList();
+				
+				// Populate stops with pickup point names for all trips
+				await PopulateStopsWithPickupPointNamesForTripsAsync(tripsList);
+				
+				// Decrypt vehicle plates
+				foreach (var trip in tripsList)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}. Using existing masked plate.", trip.Id);
+						}
+					}
+				}
+				
+				return tripsList;
 			}
 			catch (Exception ex)
 			{
@@ -480,12 +522,15 @@ namespace Services.Implementations
 								};
 							}
 
-							// Generate stops from route pickup points (pass route to avoid re-querying)
-							_logger.LogDebug("Generating stops for trip on route {RouteId}", link.RouteId);
-							await GenerateTripStopsFromRouteAsync(trip, route);
-							_logger.LogDebug("Generated {StopCount} stops for trip", trip.Stops.Count);
+						// Generate stops from route pickup points (pass route to avoid re-querying)
+						_logger.LogDebug("Generating stops for trip on route {RouteId}", link.RouteId);
+						await GenerateTripStopsFromRouteAsync(trip, route);
+						_logger.LogDebug("Generated {StopCount} stops for trip", trip.Stops.Count);
 
-							// Populate snapshots (driver, vehicle) if VehicleId or DriverVehicleId are set
+						// Populate attendance for all stops with active students
+						await PopulateAttendanceForTripStopsAsync(trip);
+
+						// Populate snapshots (driver, vehicle) if VehicleId or DriverVehicleId are set
 							_logger.LogDebug("Populating snapshots for trip with VehicleId={VehicleId}, DriverVehicleId={DriverVehicleId}", 
 								trip.VehicleId, trip.DriverVehicleId);
 							await PopulateTripSnapshotsAsync(trip);
@@ -688,27 +733,31 @@ namespace Services.Implementations
 				throw new ArgumentException($"Trip end time ({trip.PlannedEndAt:HH:mm}) deviates more than 30 minutes from schedule end time ({scheduleEnd:HH:mm})");
 		}
 
-		public static void ValidateTripPickupPoints(Trip trip, Route route)
+	public static void ValidateTripPickupPoints(Trip trip, Route route)
+	{
+		if (trip.Stops == null || !trip.Stops.Any())
+			return; 
+
+		var routePickupPointIds = route.PickupPoints.Select(pp => pp.PickupPointId).ToHashSet();
+		var invalidPickupPoints = new List<Guid>();
+
+		foreach (var stop in trip.Stops)
 		{
-			if (trip.Stops == null || !trip.Stops.Any())
-				return; 
+			// Skip stops with empty PickupPointId (they are filtered out elsewhere)
+			if (stop.PickupPointId == Guid.Empty)
+				continue;
 
-			var routePickupPointIds = route.PickupPoints.Select(pp => pp.PickupPointId).ToHashSet();
-			var invalidPickupPoints = new List<Guid>();
-
-			foreach (var stop in trip.Stops)
+			if (!routePickupPointIds.Contains(stop.PickupPointId))
 			{
-				if (!routePickupPointIds.Contains(stop.PickupPointId))
-				{
-					invalidPickupPoints.Add(stop.PickupPointId);
-				}
-			}
-
-			if (invalidPickupPoints.Any())
-			{
-				throw new InvalidOperationException($"The following pickup points do not belong to route {trip.RouteId}: {string.Join(", ", invalidPickupPoints)}");
+				invalidPickupPoints.Add(stop.PickupPointId);
 			}
 		}
+
+		if (invalidPickupPoints.Any())
+		{
+			throw new InvalidOperationException($"The following pickup points do not belong to route {trip.RouteId}: {string.Join(", ", invalidPickupPoints)}");
+		}
+	}
 
 		private async Task GenerateTripStopsFromRouteAsync(Trip trip, Route? route = null)
 		{
@@ -759,6 +808,81 @@ namespace Services.Implementations
 			}
 
 			_logger.LogInformation("Generated {Count} trip stops for trip on route {RouteId}", trip.Stops.Count, trip.RouteId);
+		}
+
+		/// Populates attendance list for each trip stop with active students assigned to the pickup point
+		private async Task PopulateAttendanceForTripStopsAsync(Trip trip)
+		{
+			if (trip.Stops == null || !trip.Stops.Any())
+			{
+				_logger.LogDebug("Trip {TripId} has no stops to populate attendance for", trip.Id);
+				return;
+			}
+
+			try
+			{
+				// Get all unique pickup point IDs from stops
+				var pickupPointIds = trip.Stops
+					.Where(s => s.PickupPointId != Guid.Empty)
+					.Select(s => s.PickupPointId)
+					.Distinct()
+					.ToList();
+
+				if (!pickupPointIds.Any())
+				{
+					_logger.LogDebug("Trip {TripId} has no valid pickup point IDs in stops", trip.Id);
+					return;
+				}
+
+				// Fetch all active students for all pickup points in one batch
+				var allStudentsByPickupPoint = new Dictionary<Guid, List<Student>>();
+				foreach (var pickupPointId in pickupPointIds)
+				{
+					var students = await _studentRepository.GetActiveStudentsByPickupPointIdAsync(pickupPointId);
+					if (students.Any())
+					{
+						allStudentsByPickupPoint[pickupPointId] = students;
+						_logger.LogDebug("Found {Count} active students for pickup point {PickupPointId}", 
+							students.Count, pickupPointId);
+					}
+				}
+
+				// Populate attendance for each stop
+				foreach (var stop in trip.Stops)
+				{
+					if (stop.PickupPointId == Guid.Empty)
+						continue;
+
+					// Initialize attendance list if null
+					if (stop.Attendance == null)
+					{
+						stop.Attendance = new List<Attendance>();
+					}
+
+					// Only populate if attendance is empty (to avoid overwriting existing attendance)
+					if (!stop.Attendance.Any() && allStudentsByPickupPoint.TryGetValue(stop.PickupPointId, out var students))
+					{
+						stop.Attendance = students.Select(student => new Attendance
+						{
+							StudentId = student.Id,
+							StudentName = $"{student.FirstName} {student.LastName}".Trim(),
+							BoardedAt = null, // Not boarded yet
+							State = Constants.AttendanceStates.Pending // Initial state is Pending
+						}).ToList();
+
+						_logger.LogDebug("Populated {Count} attendance records for stop {SequenceOrder} (pickup point {PickupPointId})", 
+							stop.Attendance.Count, stop.SequenceOrder, stop.PickupPointId);
+					}
+				}
+
+				var totalAttendance = trip.Stops.Sum(s => s.Attendance?.Count ?? 0);
+				_logger.LogInformation("Populated attendance for trip {TripId}: {TotalAttendance} total attendance records across {StopCount} stops", 
+					trip.Id, totalAttendance, trip.Stops.Count);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error populating attendance for trip {TripId}", trip.Id);
+			}
 		}
 
 		public async Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date)
@@ -871,9 +995,14 @@ namespace Services.Implementations
 				var attendance = stop.Attendance.FirstOrDefault(a => a.StudentId == studentId);
 				if (attendance == null)
 				{
+					// Get student info to populate name
+					var student = await _studentRepository.FindAsync(studentId);
+					var studentName = student != null ? $"{student.FirstName} {student.LastName}".Trim() : string.Empty;
+
 					attendance = new Attendance
 					{
 						StudentId = studentId,
+						StudentName = studentName,
 						State = state,
 						BoardedAt = state == AttendanceStates.Present ? DateTime.UtcNow : null
 					};
@@ -881,8 +1010,19 @@ namespace Services.Implementations
 				}
 				else
 				{
+					// Update state and boarded time
 					attendance.State = state;
 					attendance.BoardedAt = state == AttendanceStates.Present ? DateTime.UtcNow : null;
+
+					// Populate student name if missing (for backward compatibility)
+					if (string.IsNullOrEmpty(attendance.StudentName))
+					{
+						var student = await _studentRepository.FindAsync(studentId);
+						if (student != null)
+						{
+							attendance.StudentName = $"{student.FirstName} {student.LastName}".Trim();
+						}
+					}
 				}
 
 				await repository.UpdateAsync(trip);
@@ -1105,8 +1245,7 @@ namespace Services.Implementations
 			{
 				try
 				{
-					var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
-					var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+					var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
 					if (vehicle != null)
 					{
 						string maskedPlate = string.Empty;
@@ -1203,14 +1342,13 @@ namespace Services.Implementations
 			var driverTrips = tripsList.Where(t => t.Driver?.Id == driverId).ToList();
 
 			// Decrypt vehicle plates
-			var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
 			foreach (var trip in driverTrips)
 			{
 				if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
 				{
 					try
 					{
-						var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+						var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
 						if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
 						{
 							trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
@@ -1288,8 +1426,7 @@ namespace Services.Implementations
 			{
 				try
 				{
-					var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
-					var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+					var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
 					if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
 					{
 						trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
@@ -1306,13 +1443,12 @@ namespace Services.Implementations
 			{
 				try
 				{
-					var pickupPointRepo = _databaseFactory.GetRepository<IPickupPointRepository>();
 					var pickupPointIds = trip.Stops.Select(s => s.PickupPointId).Distinct().ToList();
 					
 					var pickupPoints = new Dictionary<Guid, PickupPoint>();
 					foreach (var pickupPointId in pickupPointIds)
 					{
-						var pickupPoint = await pickupPointRepo.FindAsync(pickupPointId);
+						var pickupPoint = await _pickupPointRepository.FindAsync(pickupPointId);
 						if (pickupPoint != null && !pickupPoint.IsDeleted)
 						{
 							pickupPoints[pickupPointId] = pickupPoint;
@@ -1478,14 +1614,13 @@ namespace Services.Implementations
 				var tripsList = trips.ToList();
 				
 				// Decrypt vehicle plates
-				var vehicleRepo = _databaseFactory.GetRepository<IVehicleRepository>();
 				foreach (var trip in tripsList)
 				{
 					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
 					{
 						try
 						{
-							var vehicle = await vehicleRepo.FindAsync(trip.VehicleId);
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
 							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
 							{
 								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
@@ -1622,7 +1757,6 @@ namespace Services.Implementations
 
 			try
 			{
-				var pickupPointRepo = _databaseFactory.GetRepository<IPickupPointRepository>();
 				var pickupPointIds = trip.Stops
 					.Select(s => s.PickupPointId)
 					.Where(id => id != Guid.Empty)
@@ -1632,7 +1766,7 @@ namespace Services.Implementations
 				var pickupPoints = new Dictionary<Guid, PickupPoint>();
 				foreach (var pickupPointId in pickupPointIds)
 				{
-					var pickupPoint = await pickupPointRepo.FindAsync(pickupPointId);
+					var pickupPoint = await _pickupPointRepository.FindAsync(pickupPointId);
 					if (pickupPoint != null && !pickupPoint.IsDeleted)
 					{
 						pickupPoints[pickupPointId] = pickupPoint;
@@ -1667,7 +1801,6 @@ namespace Services.Implementations
 
 			try
 			{
-				var pickupPointRepo = _databaseFactory.GetRepository<IPickupPointRepository>();
 				
 				// Collect all unique pickup point IDs from all trips (skip empty GUIDs)
 				var allPickupPointIds = trips
@@ -1681,7 +1814,7 @@ namespace Services.Implementations
 				var pickupPoints = new Dictionary<Guid, PickupPoint>();
 				foreach (var pickupPointId in allPickupPointIds)
 				{
-					var pickupPoint = await pickupPointRepo.FindAsync(pickupPointId);
+					var pickupPoint = await _pickupPointRepository.FindAsync(pickupPointId);
 					if (pickupPoint != null && !pickupPoint.IsDeleted)
 					{
 						pickupPoints[pickupPointId] = pickupPoint;
@@ -1717,6 +1850,285 @@ namespace Services.Implementations
 			{
 				_logger.LogWarning(ex, "Error populating stops with pickup point names for trips. Continuing with existing stop data.");
 			}
+		}
+
+		public async Task<IEnumerable<Trip>> GetTripsByScheduleForParentAsync(string parentEmail, int days = 7)
+		{
+			try
+			{
+				var fromDate = DateTime.UtcNow.Date;
+				var toDate = fromDate.AddDays(days);
+
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return Enumerable.Empty<Trip>();
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return Enumerable.Empty<Trip>();
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var allTrips = await tripRepo.GetUpcomingTripsAsync(fromDate, days);
+				var tripsList = allTrips.ToList();
+
+				var filteredTrips = tripsList.Where(trip => 
+					trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId))
+				).ToList();
+
+				foreach (var trip in filteredTrips)
+				{
+					await PopulateTripSnapshotsAsync(trip);
+					await PopulateStopsWithPickupPointNamesAsync(trip);
+					FilterTripForParent(trip, studentIds, pickupPointIds);
+				}
+
+				foreach (var trip in filteredTrips)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}", trip.Id);
+						}
+					}
+				}
+
+				return filteredTrips;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by schedule for parent: {ParentEmail}", parentEmail);
+				throw;
+			}
+		}
+
+		public async Task<IEnumerable<Trip>> GetTripsByDateForParentAsync(string parentEmail, DateTime? date = null)
+		{
+			try
+			{
+				var targetDate = (date ?? DateTime.UtcNow).Date;
+
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return Enumerable.Empty<Trip>();
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return Enumerable.Empty<Trip>();
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var allTrips = await tripRepo.GetTripsByDateAsync(targetDate);
+				var tripsList = allTrips.ToList();
+
+				var filteredTrips = tripsList.Where(trip => 
+					trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId))
+				).ToList();
+
+				foreach (var trip in filteredTrips)
+				{
+					await PopulateTripSnapshotsAsync(trip);
+					await PopulateStopsWithPickupPointNamesAsync(trip);
+					FilterTripForParent(trip, studentIds, pickupPointIds);
+				}
+
+				foreach (var trip in filteredTrips)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}", trip.Id);
+						}
+					}
+				}
+
+				return filteredTrips;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date for parent: {ParentEmail}, {Date}", parentEmail, date);
+				throw;
+			}
+		}
+
+		public async Task<Trip?> GetTripDetailForParentAsync(Guid tripId, string parentEmail)
+		{
+			try
+			{
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return null;
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return null;
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var trip = await tripRepo.FindAsync(tripId);
+				
+				if (trip == null || trip.IsDeleted)
+					return null;
+
+				var hasAccess = trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId));
+
+				if (!hasAccess)
+					return null;
+
+				await PopulateTripSnapshotsAsync(trip);
+				await PopulateStopsWithPickupPointNamesAsync(trip);
+				FilterTripForParent(trip, studentIds, pickupPointIds);
+
+				if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+				{
+					try
+					{
+						var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+						if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+						{
+							trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}", trip.Id);
+					}
+				}
+
+				return trip;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip detail for parent: {TripId}, {ParentEmail}", tripId, parentEmail);
+				throw;
+			}
+		}
+
+		public async Task<Trip.VehicleLocation?> GetTripCurrentLocationAsync(Guid tripId, string parentEmail)
+		{
+			try
+			{
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return null;
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return null;
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var trip = await tripRepo.FindAsync(tripId);
+				
+				if (trip == null || trip.IsDeleted)
+					return null;
+
+				var hasAccess = trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId));
+
+				if (!hasAccess)
+					return null;
+
+				return trip.CurrentLocation;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip current location for parent: {TripId}, {ParentEmail}", tripId, parentEmail);
+				throw;
+			}
+		}
+
+		private async Task<List<Guid>> GetPickupPointIdsForStudentsAsync(List<Guid> studentIds)
+		{
+			try
+			{
+				
+				var pickupPointIds = new HashSet<Guid>();
+				var now = DateTime.UtcNow;
+
+				foreach (var studentId in studentIds)
+				{
+					var student = await _studentRepository.FindAsync(studentId);
+					if (student != null && !student.IsDeleted)
+					{
+						if (student.CurrentPickupPointId.HasValue)
+						{
+							pickupPointIds.Add(student.CurrentPickupPointId.Value);
+						}
+
+						var allHistory = await _studentPickupPointHistoryRepository.FindByConditionAsync(
+							h => h.StudentId == studentId && 
+							h.AssignedAt <= now && 
+							(h.RemovedAt == null || h.RemovedAt > now) &&
+							!h.IsDeleted
+						);
+
+						foreach (var history in allHistory)
+						{
+							pickupPointIds.Add(history.PickupPointId);
+						}
+					}
+				}
+
+				return pickupPointIds.ToList();
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting pickup point IDs for students");
+				throw;
+			}
+		}
+
+		private void FilterTripForParent(Trip trip, List<Guid> studentIds, List<Guid> pickupPointIds)
+		{
+			if (trip.Stops == null)
+				return;
+
+			var filteredStops = trip.Stops
+				.Where(stop => pickupPointIds.Contains(stop.PickupPointId))
+				.Select(stop => new TripStop
+				{
+					SequenceOrder = stop.SequenceOrder,
+					PickupPointId = stop.PickupPointId,
+					PlannedAt = stop.PlannedAt,
+					ArrivedAt = stop.ArrivedAt,
+					DepartedAt = stop.DepartedAt,
+					Location = stop.Location,
+					Attendance = stop.Attendance?.Where(a => studentIds.Contains(a.StudentId)).ToList() ?? new List<Attendance>()
+				})
+				.OrderBy(s => s.SequenceOrder)
+				.ToList();
+
+			trip.Stops = filteredStops;
 		}
 
 	}

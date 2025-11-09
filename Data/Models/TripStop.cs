@@ -32,6 +32,9 @@ namespace Data.Models
         [BsonElement("studentId")]
         public Guid StudentId { get; set; }
 
+        [BsonElement("studentName")]
+        public string StudentName { get; set; } = string.Empty;
+
         [BsonElement("boardedAt")]
         public DateTime? BoardedAt { get; set; }
 
