@@ -1,4 +1,5 @@
 ﻿using Constants;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Services.Models.Trip
 {
@@ -58,7 +59,9 @@ namespace Services.Models.Trip
 		public DateTime PlannedDeparture { get; set; }
 		public DateTime? ActualDeparture { get; set; }
 		public int Sequence { get; set; }
-		public List<ParentAttendanceDto> Attendance { get; set; } = new List<ParentAttendanceDto>();
+		public StopLocationDto Location { get; set; } = new StopLocationDto();
+        public List<ParentAttendanceDto> Attendance { get; set; } = new List<ParentAttendanceDto>();
+		
 	}
 
 	public class CreateTripDto
@@ -96,12 +99,15 @@ namespace Services.Models.Trip
 
 	public class SimpleTripDto
 	{
-		public string Name { get; set; } = string.Empty;
+		public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
 		public string PlateVehicle { get; set; } = string.Empty;
 		public string Status { get; set; } = string.Empty;
-	}
+        public int TotalStops { get; set; }
+        public int CompletedStops { get; set; }
+    }
 
 	public class ParentTripDto
 	{
@@ -147,4 +153,11 @@ namespace Services.Models.Trip
 		public double? Accuracy { get; set; }
 		public bool IsMoving { get; set; }
 	}
+    public class StopLocationDto
+    {
+        public double Latitude { get; set; }
+
+        public double Longitude { get; set; }
+        public string Address { get; set; } = string.Empty;
+    }
 }

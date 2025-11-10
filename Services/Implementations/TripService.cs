@@ -1955,7 +1955,7 @@ namespace Services.Implementations
 						{
 							Latitude = pickupPoint.Geog?.Y ?? stop.Location?.Latitude ?? 0,
 							Longitude = pickupPoint.Geog?.X ?? stop.Location?.Longitude ?? 0,
-							Address = pickupPoint.Description ?? pickupPoint.Location ?? stop.Location?.Address ?? string.Empty
+							Address = pickupPoint.Location ?? stop.Location?.Address ?? string.Empty
 						};
 					}
 				}

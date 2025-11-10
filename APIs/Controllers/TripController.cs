@@ -526,12 +526,15 @@ namespace APIs.Controllers
 				// Map to simple DTO with only required fields
 				var simpleTrips = trips.Select(trip => new SimpleTripDto
 				{
+					Id = trip.Id,
 					Name = trip.ScheduleSnapshot?.Name ?? string.Empty,
 					PlannedStartAt = trip.PlannedStartAt,
 					PlannedEndAt = trip.PlannedEndAt,
 					PlateVehicle = trip.Vehicle?.MaskedPlate ?? string.Empty,
-					Status = trip.Status
-				});
+					Status = trip.Status,
+                    TotalStops = trip.Stops?.Count(s => s.PickupPointId != Guid.Empty) ?? 0,
+                    CompletedStops = trip.Stops?.Count(s => s.DepartedAt != null && s.PickupPointId != Guid.Empty) ?? 0
+                });
 				
 				return Ok(new { 
 					date = targetDate,
@@ -844,7 +847,13 @@ namespace APIs.Controllers
 					PlannedDeparture = stop.PlannedAt,
 					ActualDeparture = stop.DepartedAt,
 					Sequence = stop.SequenceOrder,
-					Attendance = stop.Attendance?.Select(a => new ParentAttendanceDto
+					Location = stop.Location != null ? new StopLocationDto
+					{
+						Latitude = stop.Location.Latitude,
+						Longitude = stop.Location.Longitude,
+						Address = stop.Location.Address
+					} : null,
+                    Attendance = stop.Attendance?.Select(a => new ParentAttendanceDto
 					{
 						StudentId = a.StudentId,
 						StudentName = a.StudentName ?? string.Empty,
