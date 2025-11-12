@@ -1,10 +1,11 @@
 ﻿// backend/EduBusAPIs/APIs/Hubs/TripHub.cs
 using Constants;
+using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
 using Services.Contracts;
-using Data.Repos.Interfaces;
+using System.Security.Claims;
 using Utils;
 
 namespace APIs.Hubs
@@ -13,13 +14,17 @@ namespace APIs.Hubs
     public class TripHub : Hub
     {
         private readonly ILogger<TripHub> _logger;
-
+        private readonly ITripService _tripService;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         public TripHub(
             ILogger<TripHub> logger,
             IDatabaseFactory databaseFactory,
-            ITripService? tripService = null)
+            ITripService tripService,
+            IServiceScopeFactory serviceScopeFactory)
         {
             _logger = logger;
+            _tripService = tripService;
+            _serviceScopeFactory = serviceScopeFactory;
         }
 
         public override async Task OnConnectedAsync()
@@ -76,7 +81,6 @@ namespace APIs.Hubs
         {
             try
             {
-                Console.WriteLine($"SendLocation called: {tripId.ToString()}");
                 var driverId = GetUserId();
                 var userRole = GetUserRole();
                 if (userRole != Roles.Driver || driverId == Guid.Empty)
@@ -96,11 +100,38 @@ namespace APIs.Hubs
                     timestamp = DateTime.UtcNow.ToLocalTime()
                 };
 
-                // Broadcast đến tất cả parents trong group Trip_{tripId}
+                // Broadcast to parents have children in this trip
                 await Clients.Group($"Trip_{tripId}").SendAsync("ReceiveLocationUpdate", locationData);
                 _logger.LogDebug(
                     "Driver {DriverId} sent location for trip {TripId}: ({Lat}, {Lng})",
                     driverId, tripId, latitude, longitude);
+                // save to database in background
+                _ = Task.Run(async () =>
+                {
+                    using var scope = _serviceScopeFactory.CreateScope();
+                    var tripService = scope.ServiceProvider.GetRequiredService<ITripService>();
+
+                    try
+                    {
+                        var ok = await tripService.UpdateTripLocationAsync(
+                            tripId, driverId, latitude, longitude, speed, accuracy, isMoving);
+
+                        if (!ok)
+                        {
+                            _logger.LogWarning(
+                                "Failed to update trip location: TripId={TripId}, DriverId={DriverId}",
+                                tripId, driverId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            "Error saving location to database: TripId={TripId}, DriverId={DriverId}",
+                            tripId, driverId);
+                    }
+              
+                });
+
             }
             catch (Exception ex)
             {

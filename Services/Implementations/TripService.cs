@@ -1738,19 +1738,29 @@ namespace Services.Implementations
 				if (trip.Driver?.Id != driverId)
 					return false;
 
-				// Update current location
-				trip.CurrentLocation = new Trip.VehicleLocation
-				{
-					Latitude = latitude,
-					Longitude = longitude,
-					RecordedAt = DateTime.UtcNow,
-					Speed = speed,
-					Accuracy = accuracy,
-					IsMoving = isMoving
-				};
+                var location = new Trip.VehicleLocation
+                {
+                    Latitude = latitude,
+                    Longitude = longitude,
+                    RecordedAt = DateTime.UtcNow,
+                    Speed = speed,
+                    Accuracy = accuracy,
+                    IsMoving = isMoving
+                };
 
-				await tripRepo.UpdateAsync(trip);
-				return true;
+                // Update current location
+                trip.CurrentLocation = location;
+                await tripRepo.UpdateAsync(trip);
+
+                // Save location in TripLocationHistory using repository
+                var historyRepo = _databaseFactory.GetRepositoryByType<ITripLocationHistoryRepository>(DatabaseType.MongoDb);
+                var historyRecord = new TripLocationHistory
+                {
+                    TripId = tripId,
+                    Location = location
+                };
+                await historyRepo.AddAsync(historyRecord);
+                return true;
 			}
 			catch (Exception ex)
 			{

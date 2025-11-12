@@ -169,6 +169,7 @@ builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepo
 
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
 builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<ITripLocationHistoryRepository, TripLocationHistoryRepository>();
 builder.Services.AddScoped<IRouteScheduleRepository, RouteScheduleRepository>();
 builder.Services.AddScoped<IAcademicCalendarRepository, AcademicCalendarRepository>();
 
