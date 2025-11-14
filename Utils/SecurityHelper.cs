@@ -81,5 +81,24 @@ namespace Utils
 
             return sr.ReadToEnd();
         }
+
+        public static string DecryptFromBase64String(string base64EncryptedString)
+        {
+            if (string.IsNullOrEmpty(base64EncryptedString))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                byte[] cipherBytes = Convert.FromBase64String(base64EncryptedString);
+                return DecryptFromBytes(cipherBytes);
+            }
+            catch (Exception)
+            {
+                // Return empty string if decryption fails
+                return string.Empty;
+            }
+        }
     }
 }

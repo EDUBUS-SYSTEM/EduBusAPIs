@@ -50,9 +50,25 @@ namespace Data.Repos.MongoDB
 
 		public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(Guid driverId)
 		{
-			// This would require joining with driver assignments
-			// For now, return empty - this should be handled in the service layer
-			return new List<Trip>();
+			var filter = Builders<Trip>.Filter.And(
+				Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
+				Builders<Trip>.Filter.Eq("driver.id", driverId)
+			);
+			return await FindByFilterAsync(filter);
+		}
+
+		public async Task<IEnumerable<Trip>> GetTripsByDriverAndDateAsync(Guid driverId, DateTime serviceDate)
+		{
+			var startOfDay = serviceDate.Date;
+			var endOfDay = startOfDay.AddDays(1);
+
+			var filter = Builders<Trip>.Filter.And(
+				Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
+				Builders<Trip>.Filter.Eq("driver.id", driverId),
+				Builders<Trip>.Filter.Gte(t => t.ServiceDate, startOfDay),
+				Builders<Trip>.Filter.Lt(t => t.ServiceDate, endOfDay)
+			);
+			return await FindByFilterAsync(filter);
 		}
 
 		public async Task<IEnumerable<Trip>> GetUpcomingTripsAsync(DateTime fromDate, int days = 7)
@@ -68,34 +84,24 @@ namespace Data.Repos.MongoDB
 
 			var filter = Builders<Trip>.Filter.And(
 				Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
+				Builders<Trip>.Filter.Eq(t => t.VehicleId, vehicleId),
 				Builders<Trip>.Filter.Gte(t => t.ServiceDate, startOfDay),
 				Builders<Trip>.Filter.Lt(t => t.ServiceDate, endOfDay)
 			);
 
-			// Get all trips for the date, then filter by vehicle through route
-			var allTrips = await FindByFilterAsync(filter);
-			
-			// Filter trips by vehicle through route relationship
-			// Note: This requires joining with Route collection to get vehicle assignments
-			// For now, we'll return all trips and let the service layer handle vehicle filtering
-			return allTrips;
+			return await FindByFilterAsync(filter);
 		}
 
 		public async Task<IEnumerable<Trip>> GetTripsByVehicleAndDateRangeAsync(Guid vehicleId, DateTime startDate, DateTime endDate)
 		{
 			var filter = Builders<Trip>.Filter.And(
 				Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
+				Builders<Trip>.Filter.Eq(t => t.VehicleId, vehicleId),
 				Builders<Trip>.Filter.Gte(t => t.ServiceDate, startDate.Date),
 				Builders<Trip>.Filter.Lte(t => t.ServiceDate, endDate.Date)
 			);
 
-			// Get all trips for the date range, then filter by vehicle through route
-			var allTrips = await FindByFilterAsync(filter);
-			
-			// Filter trips by vehicle through route relationship
-			// Note: This requires joining with Route collection to get vehicle assignments
-			// For now, we'll return all trips and let the service layer handle vehicle filtering
-			return allTrips;
+			return await FindByFilterAsync(filter);
 		}
 	}
 }

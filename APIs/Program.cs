@@ -169,6 +169,7 @@ builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepo
 
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
 builder.Services.AddScoped<ITripRepository, TripRepository>();
+builder.Services.AddScoped<ITripLocationHistoryRepository, TripLocationHistoryRepository>();
 builder.Services.AddScoped<IRouteScheduleRepository, RouteScheduleRepository>();
 builder.Services.AddScoped<IAcademicCalendarRepository, AcademicCalendarRepository>();
 
@@ -307,8 +308,14 @@ app.UseAuthorization();
 // Serve static files from wwwroot
 app.UseStaticFiles();
 
-// Map SignalR Hub with CORS support
+// Map SignalR Hubs with CORS support
 app.MapHub<NotificationHub>("/notificationHub", options =>
+{
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
+                        Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+});
+
+app.MapHub<TripHub>("/tripHub", options =>
 {
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets |
                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
@@ -324,6 +331,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var mongoContext = services.GetRequiredService<Data.Contexts.MongoDB.EduBusMongoContext>();
+            await mongoContext.CreateIndexesAsync();
         await Data.SeedConfiguration.ScheduleSeed.SeedAsync(mongoContext, logger);
         await Data.SeedConfiguration.AcademicCalendarSeed.SeedAsync(mongoContext, logger);
     }

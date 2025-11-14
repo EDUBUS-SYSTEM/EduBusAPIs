@@ -267,25 +267,5 @@ namespace Services.Implementations
 			};
 		}
 
-		public async Task<BasicSuccessResponse> ResetAllPasswordsAsync(string newPassword)
-		{
-			if (string.IsNullOrWhiteSpace(newPassword))
-				throw new InvalidOperationException("Password cannot be empty");
-
-			// Hash the new password
-			var hashedPassword = SecurityHelper.HashPassword(newPassword);
-
-			// Reset all user passwords
-			var affectedRows = await _repository.ResetAllPasswordsAsync(hashedPassword);
-
-			if (affectedRows == 0)
-				throw new InvalidOperationException("No users were found or updated");
-
-			return new BasicSuccessResponse
-			{
-				Success = true,
-				Data = new { Message = $"Successfully reset passwords for {affectedRows} users", AffectedRows = affectedRows }
-			};
-		}
 	}
 }

@@ -24,8 +24,8 @@ namespace Data.Models
         public DateTime? EndTime { get; set; }
 
         [BsonElement("status")]
-        public string Status { get; set; } = string.Empty;
-
+        public string Status { get; set; } = Constants.TripStatus.Scheduled; 
+ 
         [BsonElement("scheduleSnapshot")]
         public ScheduleSnapshot ScheduleSnapshot { get; set; } = new ScheduleSnapshot();
 
@@ -46,6 +46,123 @@ namespace Data.Models
 
         [BsonElement("overrideCreatedAt")]
         public DateTime OverrideCreatedAt { get; set; }
+
+        [BsonElement("currentLocation")]
+        public VehicleLocation? CurrentLocation { get; set; }
+
+        [BsonElement("summary")]
+        public TripSummary? Summary { get; set; }
+
+        [BsonElement("vehicleId")]
+        public Guid VehicleId { get; set; }
+
+        [BsonElement("driverVehicleId")]
+        public Guid? DriverVehicleId { get; set; }
+
+        [BsonElement("vehicle")]
+        public VehicleSnapshot? Vehicle { get; set; }
+
+        [BsonElement("driver")]
+        public DriverSnapshot? Driver { get; set; }
+
+        public class VehicleLocation
+        {
+            [BsonElement("latitude")]
+            public double Latitude { get; set; }
+
+            [BsonElement("longitude")]
+            public double Longitude { get; set; }
+
+            [BsonElement("recordedAt")]
+            public DateTime RecordedAt { get; set; }
+
+            [BsonElement("speed")]
+            public double? Speed { get; set; }
+
+            [BsonElement("accuracy")]
+            public double? Accuracy { get; set; }
+
+            [BsonElement("isMoving")]
+            public bool IsMoving { get; set; }
+        }
+
+        public class TripSummary
+        {
+            [BsonElement("totalDistance")]
+            public double TotalDistance { get; set; }
+
+            [BsonElement("totalDuration")]
+            public string TotalDurationIso { get; set; } = string.Empty;
+
+            [BsonElement("averageSpeed")]
+            public double AverageSpeed { get; set; }
+
+            [BsonElement("maxSpeed")]
+            public double? MaxSpeed { get; set; }
+
+            [BsonElement("minSpeed")]
+            public double? MinSpeed { get; set; }
+
+            [BsonElement("plannedDistance")]
+            public double PlannedDistance { get; set; }
+
+            [BsonElement("actualDistance")]
+            public double ActualDistance { get; set; }
+
+            [BsonElement("distanceDeviation")]
+            public double DistanceDeviation { get; set; }
+
+            [BsonElement("stopsCompleted")]
+            public int StopsCompleted { get; set; }
+
+            [BsonElement("totalStops")]
+            public int TotalStops { get; set; }
+
+            [BsonElement("idleTime")]
+            public string IdleTimeIso { get; set; } = string.Empty;
+
+            [BsonElement("movingTime")]
+            public string MovingTimeIso { get; set; } = string.Empty;
+
+            [BsonElement("onTimePercentage")]
+            public double OnTimePercentage { get; set; }
+
+            [BsonElement("calculatedAt")]
+            public DateTime CalculatedAt { get; set; }
+        }
+
+        public class VehicleSnapshot
+        {
+            [BsonElement("id")]
+            public Guid Id { get; set; }
+
+            [BsonElement("maskedPlate")]
+            public string MaskedPlate { get; set; } = string.Empty;
+
+            [BsonElement("capacity")]
+            public int Capacity { get; set; }
+
+            [BsonElement("status")]
+            public string Status { get; set; } = string.Empty;
+        }
+
+        public class DriverSnapshot
+        {
+            [BsonElement("id")]
+            public Guid Id { get; set; }
+
+            [BsonElement("fullName")]
+            public string FullName { get; set; } = string.Empty;
+
+            [BsonElement("phone")]
+            public string Phone { get; set; } = string.Empty;
+
+            [BsonElement("isPrimary")]
+            public bool IsPrimary { get; set; }
+
+            [BsonElement("snapshottedAtUtc")]
+            public DateTime SnapshottedAtUtc { get; set; }
+        }
     }
 
     public class ScheduleSnapshot

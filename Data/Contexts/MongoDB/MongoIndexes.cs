@@ -21,6 +21,9 @@ namespace Data.Contexts.MongoDB
             
             // Trip indexes
             await CreateTripIndexesAsync(db);
+
+            // Trip location history indexes
+            await CreateTripLocationHistoryIndexesAsync(db);
             
             // FileStorage indexes
             await CreateFileStorageIndexesAsync(db);
@@ -124,6 +127,48 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.PlannedStartAt)
                 .Ascending(x => x.PlannedEndAt);
             await tripCollection.Indexes.CreateOneAsync(new CreateIndexModel<Trip>(plannedKeys));
+
+            //VehicleId + ServiceDate (list trip today)
+            var vehicleDay = Builders<Trip>.IndexKeys
+                .Ascending(x => x.VehicleId)
+                .Ascending(x => x.ServiceDate);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(vehicleDay, new CreateIndexOptions { Name = "idx_trip_vehicleId_serviceDate" })
+            );
+
+            // Driver snapshot + ServiceDate (only trip had driver)
+            var driverKeys = Builders<Trip>.IndexKeys
+                .Ascending("driver.id")
+                .Descending(x => x.ServiceDate);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(
+                    driverKeys,
+                    new CreateIndexOptions<Trip>
+                    {
+                        Name = "idx_trip_driverId_serviceDate",
+                        PartialFilterExpression = Builders<Trip>.Filter.Exists("driver.id", true)
+                    })
+            );
+
+			// Actual Start/End (filter follow actual time) — only apply when had startTime
+			var actualKeys = Builders<Trip>.IndexKeys
+	        .Ascending(x => x.StartTime)
+	        .Ascending(x => x.EndTime);
+			await tripCollection.Indexes.CreateOneAsync(
+				new CreateIndexModel<Trip>(
+					actualKeys,
+					new CreateIndexOptions<Trip>
+					{
+						Name = "idx_trip_actualStart_actualEnd",
+						PartialFilterExpression = Builders<Trip>.Filter.Exists(t => t.StartTime, true) 
+					})
+			);
+
+			// Query follow assignment 
+			var driverVehicleIdx = Builders<Trip>.IndexKeys.Ascending(x => x.DriverVehicleId);
+            await tripCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<Trip>(driverVehicleIdx, new CreateIndexOptions { Name = "idx_trip_driverVehicleId" })
+            );
         }
 
         private static async Task CreateFileStorageIndexesAsync(IMongoDatabase db)
@@ -162,6 +207,32 @@ namespace Data.Contexts.MongoDB
                 .Ascending(x => x.Status)
                 .Descending(x => x.CreatedAt);
             await col.Indexes.CreateOneAsync(new CreateIndexModel<PickupPointRequestDocument>(statusIdx));
+        }
+
+        private static async Task CreateTripLocationHistoryIndexesAsync(IMongoDatabase db)
+        {
+            var historyCollection = db.GetCollection<TripLocationHistory>("trip_location_history");
+
+            // Index for quickly filtering by tripId
+            var tripIdIndex = Builders<TripLocationHistory>.IndexKeys
+                .Ascending(x => x.TripId);
+
+            await historyCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<TripLocationHistory>(tripIdIndex, new CreateIndexOptions
+                {
+                    Name = "idx_tripLocationHistory_tripId"
+                }));
+
+            // Compound index for ordering by recordedAt within each trip (supports latest-location queries)
+            var tripRecordedAtIndex = Builders<TripLocationHistory>.IndexKeys
+                .Ascending(x => x.TripId)
+                .Descending(x => x.Location.RecordedAt);
+
+            await historyCollection.Indexes.CreateOneAsync(
+                new CreateIndexModel<TripLocationHistory>(tripRecordedAtIndex, new CreateIndexOptions
+                {
+                    Name = "idx_tripLocationHistory_tripId_recordedAt"
+                }));
         }
 
     }

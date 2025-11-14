@@ -1,14 +1,15 @@
 ﻿using AutoMapper;
 using Constants;
 using Data.Models;
+using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
 using Services.Models.Trip;
-using MongoDB.Driver;
+using System.Security.Claims;
 using Utils;
-using Data.Repos.Interfaces;
+using Route = Data.Models.Route;
 
 namespace APIs.Controllers
 {
@@ -32,33 +33,66 @@ namespace APIs.Controllers
 
 		[HttpGet]
 		[Authorize(Roles = Roles.Admin)]
-		public async Task<ActionResult<IEnumerable<TripDto>>> GetTrips(
-			[FromQuery] Guid? routeId = null,
-			[FromQuery] DateTime? serviceDate = null,
-			[FromQuery] DateTime? startDate = null,
-			[FromQuery] DateTime? endDate = null,
-			[FromQuery] string? status = null,
-			[FromQuery] int? upcomingDays = null,
-			[FromQuery] int page = 1,
-			[FromQuery] int perPage = 20,
-			[FromQuery] string sortBy = "serviceDate",
-			[FromQuery] string sortOrder = "desc")
+		public async Task<ActionResult<object>> GetTrips(
+	[FromQuery] Guid? routeId = null,
+	[FromQuery] DateTime? serviceDate = null,
+	[FromQuery] DateTime? startDate = null,
+	[FromQuery] DateTime? endDate = null,
+	[FromQuery] string? status = null,
+	[FromQuery] int? upcomingDays = null,
+	[FromQuery] int page = 1,
+	[FromQuery] int perPage = 20,
+	[FromQuery] string sortBy = "serviceDate",
+	[FromQuery] string sortOrder = "desc")
 		{
 			try
 			{
-				// Preserve current logic: upcoming path keeps its own semantics
+				// Handle upcomingDays special case (returns all upcoming trips, no pagination)
 				if (upcomingDays.HasValue)
 				{
 					var tripsUpcoming = await _tripService.GetUpcomingTripsAsync(DateTime.UtcNow, upcomingDays.Value);
-					return Ok(_mapper.Map<IEnumerable<TripDto>>(tripsUpcoming));
+					var tripDtosUpcoming = MapTripsToDto(tripsUpcoming).ToList();
+					await PopulateRouteNamesAndVehiclePlatesAsync(tripDtosUpcoming, tripsUpcoming);
+					// Return as simple array for upcoming trips (no pagination needed)
+					return Ok(tripDtosUpcoming);
 				}
 
-				// Database-level filtering + pagination + sorting
-				var result = await _tripService.QueryTripsAsync(
+				// Use new paginated method for regular queries
+				var response = await _tripService.QueryTripsWithPaginationAsync(
 					routeId, serviceDate, startDate, endDate, status,
 					page, perPage, sortBy, sortOrder);
 
-				return Ok(_mapper.Map<IEnumerable<TripDto>>(result));
+				// Map trips to DTOs
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(response.Trips).ToList();
+
+				// Map stops for each trip
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = response.Trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				// Populate route names and vehicle plates
+				await PopulateRouteNamesAndVehiclePlatesAsync(tripDtos, response.Trips);
+
+				// Extract computed properties to avoid CS0828 error
+				var hasNextPage = response.HasNextPage;
+				var hasPreviousPage = response.HasPreviousPage;
+
+				// Return paginated response with DTOs
+				return Ok(new
+				{
+					data = tripDtos,
+					total = response.TotalCount,
+					page = response.Page,
+					perPage = response.PerPage,
+					totalPages = response.TotalPages,
+					hasNextPage = hasNextPage,
+					hasPreviousPage = hasPreviousPage
+				});
 			}
 			catch (Exception ex)
 			{
@@ -73,13 +107,13 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var trip = await _tripService.GetTripByIdAsync(id);
+				var trip = await _tripService.GetTripWithStopsAsync(id);
 				if (trip == null)
 				{
 					return NotFound(new { message = "Trip not found" });
 				}
 
-				return Ok(_mapper.Map<TripDto>(trip));
+				return Ok(MapTripToDto(trip));
 			}
 			catch (Exception ex)
 			{
@@ -96,7 +130,7 @@ namespace APIs.Controllers
 			{
 				var entity = _mapper.Map<Trip>(request);
 				var createdTrip = await _tripService.CreateTripAsync(entity);
-				return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.Id }, _mapper.Map<TripDto>(createdTrip));
+				return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.Id }, MapTripToDto(createdTrip));
 			}
 			catch (ArgumentException ex)
 			{
@@ -169,7 +203,20 @@ namespace APIs.Controllers
 			try
 			{
 				var trips = await _tripService.GetTripsByRouteAsync(routeId);
-				return Ok(_mapper.Map<IEnumerable<TripDto>>(trips));
+				var tripsList = trips.ToList();
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(tripsList).ToList();
+
+				// Map stops for each trip
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = tripsList.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				return Ok(tripDtos);
 			}
 			catch (Exception ex)
 			{
@@ -183,8 +230,23 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var trips = await _tripService.GetTripsByDateAsync(serviceDate);
-				return Ok(_mapper.Map<IEnumerable<TripDto>>(trips));
+				var trips = await _tripService.GetTripsByDateWithDetailsAsync(serviceDate);
+				var tripsList = trips.ToList();
+
+				// Map to DTOs
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(tripsList).ToList();
+
+				// Map stops for each trip
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = tripsList.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				return Ok(tripDtos);
 			}
 			catch (Exception ex)
 			{
@@ -199,7 +261,19 @@ namespace APIs.Controllers
 			try
 			{
 				var trips = await _tripService.GetUpcomingTripsAsync(DateTime.UtcNow, days);
-				return Ok(_mapper.Map<IEnumerable<TripDto>>(trips));
+				var tripsList = trips.ToList();
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(tripsList).ToList();
+				
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = tripsList.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+				
+				return Ok(tripDtos);
 			}
 			catch (Exception ex)
 			{
@@ -218,7 +292,7 @@ namespace APIs.Controllers
 			try
 			{
 				var trips = await _tripService.GenerateTripsFromScheduleAsync(scheduleId, startDate, endDate);
-				return Ok(_mapper.Map<IEnumerable<TripDto>>(trips));
+				return Ok(MapTripsToDto(trips));
 			}
 			catch (Exception ex)
 			{
@@ -234,80 +308,8 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var startDate = DateTime.UtcNow.Date;
-				var endDate = startDate.AddDays(daysAhead);
-
-				var scheduleRepo = _databaseFactory.GetRepositoryByType<IScheduleRepository>(DatabaseType.MongoDb);
-				var routeScheduleRepo = _databaseFactory.GetRepositoryByType<IRouteScheduleRepository>(DatabaseType.MongoDb);
-
-				// Get all active schedules
-				var activeSchedules = await scheduleRepo.FindByFilterAsync(
-					Builders<Schedule>.Filter.And(
-						Builders<Schedule>.Filter.Eq(s => s.IsActive, true),
-						Builders<Schedule>.Filter.Eq(s => s.IsDeleted, false),
-						Builders<Schedule>.Filter.Lte(s => s.EffectiveFrom, endDate),
-						Builders<Schedule>.Filter.Or(
-							Builders<Schedule>.Filter.Eq(s => s.EffectiveTo, null),
-							Builders<Schedule>.Filter.Gte(s => s.EffectiveTo, startDate)
-						)
-					)
-				);
-
-				var totalGenerated = 0;
-				var processedSchedules = 0;
-				var results = new List<object>();
-
-				foreach (var schedule in activeSchedules)
-				{
-					try
-					{
-						// Check if schedule has active route schedules
-						var routeSchedules = await routeScheduleRepo.GetRouteSchedulesByScheduleAsync(schedule.Id);
-						var activeRouteSchedules = routeSchedules.Where(rs => rs.IsActive && !rs.IsDeleted).ToList();
-
-						if (!activeRouteSchedules.Any())
-							continue;
-
-						// Generate trips for this schedule
-						var generatedTrips = await _tripService.GenerateTripsFromScheduleAsync(
-							schedule.Id, 
-							startDate, 
-							endDate
-						);
-
-						var tripCount = generatedTrips.Count();
-						totalGenerated += tripCount;
-						processedSchedules++;
-
-						results.Add(new
-						{
-							scheduleId = schedule.Id,
-							scheduleName = schedule.Name,
-							tripCount = tripCount,
-							routeScheduleCount = activeRouteSchedules.Count
-						});
-					}
-					catch (Exception ex)
-					{
-						_logger.LogError(ex, "Error generating trips for schedule {ScheduleId}", schedule.Id);
-						results.Add(new
-						{
-							scheduleId = schedule.Id,
-							scheduleName = schedule.Name,
-							error = ex.Message
-						});
-					}
-				}
-
-				return Ok(new
-				{
-					message = "Automatic trip generation completed",
-					startDate = startDate,
-					endDate = endDate,
-					processedSchedules = processedSchedules,
-					totalGenerated = totalGenerated,
-					results = results
-				});
+				var result = await _tripService.GenerateAllTripsAutomaticAsync(daysAhead);
+				return Ok(result);
 			}
 			catch (Exception ex)
 			{
@@ -381,13 +383,14 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var trip = await _tripService.GetTripByIdAsync(id);
+				var trip = await _tripService.GetTripWithStopsAsync(id);
 				if (trip == null)
 				{
 					return NotFound(new { message = "Trip not found" });
 				}
 
-				return Ok(_mapper.Map<IEnumerable<TripStopDto>>(trip.Stops));
+				var stops = MapStopsToDto(trip);
+				return Ok(stops);
 			}
 			catch (Exception ex)
 			{
@@ -500,6 +503,432 @@ namespace APIs.Controllers
 			{
 				_logger.LogError(ex, "Error getting driver schedule summary: {DriverId}", driverId);
 				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		#region Driver Trip 
+
+		[HttpGet("by-date")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<object>> GetTripsByDate([FromQuery] DateTime? date = null)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var targetDate = date ?? DateTime.UtcNow.Date;
+				var trips = await _tripService.GetTripsByDateForDriverAsync(driverId.Value, targetDate);
+				
+				// Map to simple DTO with only required fields
+				var simpleTrips = trips.Select(trip => new SimpleTripDto
+				{
+					Id = trip.Id,
+					Name = trip.ScheduleSnapshot?.Name ?? string.Empty,
+					PlannedStartAt = trip.PlannedStartAt,
+					PlannedEndAt = trip.PlannedEndAt,
+					PlateVehicle = trip.Vehicle?.MaskedPlate ?? string.Empty,
+					Status = trip.Status,
+                    TotalStops = trip.Stops?.Count(s => s.PickupPointId != Guid.Empty) ?? 0,
+                    CompletedStops = trip.Stops?.Count(s => s.DepartedAt != null && s.PickupPointId != Guid.Empty) ?? 0
+                });
+				
+				return Ok(new { 
+					date = targetDate,
+					trips = simpleTrips
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date for driver: {Date}", date);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("{tripId}/detail-for-driver")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<TripDto>> GetTripDetailForDriver(Guid tripId)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var trip = await _tripService.GetTripDetailForDriverWithStopsAsync(tripId, driverId.Value);
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				return Ok(MapTripToDto(trip));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip detail for driver: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPost("{tripId}/start")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<object>> StartTrip(Guid tripId)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var success = await _tripService.StartTripAsync(tripId, driverId.Value);
+				if (!success)
+				{
+					return BadRequest(new { message = "Cannot start trip. Trip not found, you don't have access, or trip is not in Scheduled status" });
+				}
+
+				return Ok(new { 
+					tripId = tripId, 
+					message = "Trip started successfully",
+					startedAt = DateTime.UtcNow
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error starting trip: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPost("{tripId}/end")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<object>> EndTrip(Guid tripId)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var success = await _tripService.EndTripAsync(tripId, driverId.Value);
+				if (!success)
+				{
+					return BadRequest(new { message = "Cannot end trip. Trip not found, you don't have access, or trip is not in InProgress status" });
+				}
+
+				return Ok(new { 
+					tripId = tripId, 
+					message = "Trip ended successfully",
+					endedAt = DateTime.UtcNow
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error ending trip: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPost("{tripId}/location")]
+		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+		public async Task<ActionResult<object>> UpdateTripLocation(Guid tripId, [FromBody] UpdateTripLocationRequest request)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var success = await _tripService.UpdateTripLocationAsync(
+					tripId, 
+					driverId.Value, 
+					request.Latitude, 
+					request.Longitude, 
+					request.Speed, 
+					request.Accuracy, 
+					request.IsMoving
+				);
+
+				if (!success)
+				{
+					return BadRequest(new { message = "Cannot update location. Trip not found or you don't have access to this trip" });
+				}
+
+				return Ok(new { 
+					tripId = tripId, 
+					message = "Location updated successfully",
+					updatedAt = DateTime.UtcNow
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating trip location: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		#endregion
+
+		#region Parent Endpoints
+
+		[HttpGet("parent/upcoming")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<ActionResult<IEnumerable<TripDto>>> GetUpcomingTripsForParent([FromQuery] int days = 7)
+		{
+			try
+			{
+				var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+				if (string.IsNullOrEmpty(parentEmail))
+				{
+					return Unauthorized(new { message = "Email not found in token" });
+				}
+
+				var trips = await _tripService.GetTripsByScheduleForParentAsync(parentEmail, days);
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(trips).ToList();
+
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				return Ok(tripDtos);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting upcoming trips for parent");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("parent/date")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByDateForParent([FromQuery] DateTime? date = null)
+		{
+			try
+			{
+				var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+				if (string.IsNullOrEmpty(parentEmail))
+				{
+					return Unauthorized(new { message = "Email not found in token" });
+				}
+
+				var trips = await _tripService.GetTripsByDateForParentAsync(parentEmail, date);
+				var tripDtos = _mapper.Map<IEnumerable<TripDto>>(trips).ToList();
+
+				foreach (var tripDto in tripDtos)
+				{
+					var trip = trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null)
+					{
+						tripDto.Stops = MapStopsToDto(trip);
+					}
+				}
+
+				return Ok(tripDtos);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date for parent");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("parent/{tripId}")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<ActionResult<TripDto>> GetTripDetailForParent(Guid tripId)
+		{
+			try
+			{
+				var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+				if (string.IsNullOrEmpty(parentEmail))
+				{
+					return Unauthorized(new { message = "Email not found in token" });
+				}
+
+				var trip = await _tripService.GetTripDetailForParentAsync(tripId, parentEmail);
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				return Ok(MapTripToDto(trip));
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip detail for parent: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpGet("parent/{tripId}/location")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<ActionResult<Trip.VehicleLocation>> GetTripCurrentLocationForParent(Guid tripId)
+		{
+			try
+			{
+				var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+				if (string.IsNullOrEmpty(parentEmail))
+				{
+					return Unauthorized(new { message = "Email not found in token" });
+				}
+
+				var location = await _tripService.GetTripCurrentLocationAsync(tripId, parentEmail);
+				if (location == null)
+				{
+					return NotFound(new { message = "Trip not found, location not available, or you don't have access to this trip" });
+				}
+
+				return Ok(location);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trip current location for parent: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		#endregion
+
+		private TripDto? MapTripToDto(Trip? trip)
+		{
+			if (trip == null) return null;
+			
+			var tripDto = _mapper.Map<TripDto>(trip);
+			tripDto.Stops = MapStopsToDto(trip);
+			return tripDto;
+		}
+
+		private IEnumerable<TripDto> MapTripsToDto(IEnumerable<Trip> trips)
+		{
+			if (trips == null) return Enumerable.Empty<TripDto>();
+			
+			var tripsList = trips.ToList();
+			var tripDtos = _mapper.Map<IEnumerable<TripDto>>(tripsList).ToList();
+			
+			foreach (var tripDto in tripDtos)
+			{
+				var trip = tripsList.FirstOrDefault(t => t.Id == tripDto.Id);
+				if (trip != null)
+				{
+					tripDto.Stops = MapStopsToDto(trip);
+				}
+			}
+			
+			return tripDtos;
+		}
+
+		private List<TripStopDto> MapStopsToDto(Trip trip)
+		{
+			if (trip.Stops == null || !trip.Stops.Any())
+				return new List<TripStopDto>();
+
+			return trip.Stops
+				.Where(stop => stop.PickupPointId != Guid.Empty) // Filter out stops with empty PickupPointId
+				.Select(stop => new TripStopDto
+				{
+					Id = stop.PickupPointId,
+					Name = stop.Location?.Address ?? string.Empty, // Use Address as Name since service populates it
+					PlannedArrival = stop.PlannedAt,
+					ActualArrival = stop.ArrivedAt,
+					PlannedDeparture = stop.PlannedAt,
+					ActualDeparture = stop.DepartedAt,
+					Sequence = stop.SequenceOrder,
+					Location = stop.Location != null ? new StopLocationDto
+					{
+						Latitude = stop.Location.Latitude,
+						Longitude = stop.Location.Longitude,
+						Address = stop.Location.Address
+					} : null,
+                    Attendance = stop.Attendance?.Select(a => new ParentAttendanceDto
+					{
+						StudentId = a.StudentId,
+						StudentName = a.StudentName ?? string.Empty,
+						BoardedAt = a.BoardedAt,
+						State = a.State ?? string.Empty
+					}).ToList() ?? new List<ParentAttendanceDto>()
+				})
+				.OrderBy(s => s.Sequence)
+				.ToList();
+		}
+
+		private async Task PopulateRouteNamesAndVehiclePlatesAsync(List<TripDto> tripDtos, IEnumerable<Trip> trips)
+		{
+			try
+			{
+				// Get unique route IDs
+				var routeIds = tripDtos.Select(t => t.RouteId).Distinct().ToList();
+
+				// Fetch routes from MongoDB
+				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+				var routes = new List<Route>();
+
+				foreach (var routeId in routeIds)
+				{
+					try
+					{
+						var route = await routeRepo.FindAsync(routeId);
+						if (route != null && !route.IsDeleted)
+						{
+							routes.Add(route);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Error fetching route {RouteId} for trip", routeId);
+					}
+				}
+
+				// Create route lookup dictionary
+				var routeLookup = routes.ToDictionary(r => r.Id, r => r.RouteName);
+
+				// Populate route names in trip DTOs
+				foreach (var tripDto in tripDtos)
+				{
+					if (routeLookup.TryGetValue(tripDto.RouteId, out var routeName))
+					{
+						tripDto.RouteName = routeName;
+					}
+
+					// Ensure vehicle plate is populated (it should already be set in QueryTripsAsync)
+					// But we verify it's there from the trip entity
+					var trip = trips.FirstOrDefault(t => t.Id == tripDto.Id);
+					if (trip != null && trip.Vehicle != null && !string.IsNullOrEmpty(trip.Vehicle.MaskedPlate))
+					{
+						if (tripDto.Vehicle == null)
+						{
+							tripDto.Vehicle = new VehicleSnapshotDto
+							{
+								Id = trip.Vehicle.Id,
+								MaskedPlate = trip.Vehicle.MaskedPlate,
+								Capacity = trip.Vehicle.Capacity,
+								Status = trip.Vehicle.Status
+							};
+						}
+						else if (string.IsNullOrEmpty(tripDto.Vehicle.MaskedPlate))
+						{
+							tripDto.Vehicle.MaskedPlate = trip.Vehicle.MaskedPlate;
+						}
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error populating route names and vehicle plates");
+				// Don't throw - just log the error
 			}
 		}
 

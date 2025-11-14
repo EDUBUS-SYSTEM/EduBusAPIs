@@ -16,6 +16,7 @@ namespace Services.Models.Trip
     public class AttendanceDto
     {
         public Guid StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
         public DateTime? BoardedAt { get; set; }
         public string State { get; set; } = string.Empty;
     }
@@ -37,6 +38,15 @@ namespace Services.Models.Trip
         public int DelayedTrips { get; set; }
         public double OnTimePercentage { get; set; }
         public double CompletionRate { get; set; }
+    }
+
+    public class UpdateTripLocationRequest
+    {
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
+        public double? Speed { get; set; }
+        public double? Accuracy { get; set; }
+        public bool IsMoving { get; set; }
     }
 }
 

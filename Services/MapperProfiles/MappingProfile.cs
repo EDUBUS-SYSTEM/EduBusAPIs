@@ -137,12 +137,18 @@ namespace Services.MapperProfiles
 				.ForMember(dest => dest.TimeOverrides, opt => opt.Ignore());
 
 			// Trip mappings
-			CreateMap<Trip, TripDto>();
-			CreateMap<CreateTripDto, Trip>();
-			CreateMap<UpdateTripDto, Trip>();
+			CreateMap<Trip, TripDto>()
+				.ForMember(dest => dest.Stops, opt => opt.Ignore()); // Stops are mapped manually in controller
+			CreateMap<CreateTripDto, Trip>()
+				.ForMember(dest => dest.Stops, opt => opt.Ignore()); // Stops will be generated from route in service
+			CreateMap<UpdateTripDto, Trip>()
+				.ForMember(dest => dest.Stops, opt => opt.Ignore()); // Stops will be handled separately in service
 			CreateMap<ScheduleSnapshot, ScheduleSnapshotDto>();
 			CreateMap<ScheduleSnapshotDto, ScheduleSnapshot>();
-			CreateMap<TripStop, TripStopDto>();
+			CreateMap<Trip.VehicleSnapshot, VehicleSnapshotDto>();
+			CreateMap<VehicleSnapshotDto, Trip.VehicleSnapshot>();
+			CreateMap<Trip.DriverSnapshot, DriverSnapshotDto>();
+			CreateMap<DriverSnapshotDto, Trip.DriverSnapshot>();
 			CreateMap<TripStopDto, TripStop>();
 
 			// Driver Schedule mappings

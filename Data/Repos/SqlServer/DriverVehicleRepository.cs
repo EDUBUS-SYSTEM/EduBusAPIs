@@ -420,5 +420,22 @@ namespace Data.Repos.SqlServer
                 .OrderBy(dv => dv.StartTimeUtc)
                 .ToListAsync();
         }
+
+        public async Task<DriverVehicle?> GetActiveDriverVehicleForVehicleByDateAsync(Guid vehicleId, DateTime serviceDate)
+        {
+            var startOfDay = serviceDate.Date;
+            var endOfDay = startOfDay.AddDays(1);
+
+            return await _context.DriverVehicles
+                .Include(dv => dv.Driver)
+                .Where(dv => dv.VehicleId == vehicleId &&
+                           !dv.IsDeleted &&
+                           dv.Status == DriverVehicleStatus.Assigned &&
+                           dv.StartTimeUtc < endOfDay &&
+                           (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc >= startOfDay))
+                .OrderByDescending(dv => dv.IsPrimaryDriver)
+                .ThenBy(dv => dv.StartTimeUtc)
+                .FirstOrDefaultAsync();
+        }
     }
 }

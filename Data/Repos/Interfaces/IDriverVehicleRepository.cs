@@ -48,5 +48,6 @@ namespace Data.Repos.Interfaces
 
         Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateAsync(Guid driverId, DateTime serviceDate);
         Task<IEnumerable<DriverVehicle>> GetActiveDriverVehiclesByDateRangeAsync(Guid driverId, DateTime startDate, DateTime endDate);
+        Task<DriverVehicle?> GetActiveDriverVehicleForVehicleByDateAsync(Guid vehicleId, DateTime serviceDate);
     }
 }

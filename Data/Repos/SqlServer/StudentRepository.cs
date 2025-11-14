@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -18,6 +19,15 @@ namespace Data.Repos.SqlServer
         {
             return await _table.Where(s => s.ParentEmail == email && !s.IsDeleted)
                                .ToListAsync();
+        }
+
+        public async Task<List<Student>> GetActiveStudentsByPickupPointIdAsync(Guid pickupPointId)
+        {
+            return await _table.Where(s => 
+                s.CurrentPickupPointId == pickupPointId && 
+                s.Status == StudentStatus.Active && 
+                !s.IsDeleted)
+                .ToListAsync();
         }
     }
 }
