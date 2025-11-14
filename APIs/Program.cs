@@ -197,6 +197,7 @@ builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 builder.Services.AddScoped<IRouteService, RouteService>();
 builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
 builder.Services.AddScoped<IPickupPointService, PickupPointService>();
+builder.Services.AddScoped<ISchoolService, SchoolService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();

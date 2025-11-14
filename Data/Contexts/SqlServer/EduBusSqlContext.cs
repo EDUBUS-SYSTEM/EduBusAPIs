@@ -52,6 +52,7 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<DriverLeaveRequest> DriverLeaveRequests { get; set; }
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
+        public virtual DbSet<School> Schools { get; set; }
 
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -237,6 +238,34 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.Location).HasMaxLength(500);
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
+                entity.Property(e => e.Geog)
+                      .HasColumnType("geography");
+            });
+
+            modelBuilder.Entity<School>(entity =>
+            {
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                    .HasPrecision(3)
+                    .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.UpdatedAt)
+                    .HasPrecision(3);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.IsPublished).HasDefaultValue(false);
+                
+                entity.Property(e => e.SchoolName).HasMaxLength(200).IsRequired();
+                entity.Property(e => e.Slogan).HasMaxLength(300);
+                entity.Property(e => e.ShortDescription).HasMaxLength(1000);
+                entity.Property(e => e.FullDescription).HasMaxLength(5000);
+                entity.Property(e => e.Email).HasMaxLength(320);
+                entity.Property(e => e.PhoneNumber).HasMaxLength(32);
+                entity.Property(e => e.Website).HasMaxLength(500);
+                entity.Property(e => e.FullAddress).HasMaxLength(500);
+                entity.Property(e => e.DisplayAddress).HasMaxLength(500);
+                entity.Property(e => e.FooterText).HasMaxLength(500);
+                entity.Property(e => e.InternalNotes).HasMaxLength(2000);
+                
                 entity.Property(e => e.Geog)
                       .HasColumnType("geography");
             });
