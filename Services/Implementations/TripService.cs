@@ -25,8 +25,9 @@ namespace Services.Implementations
 		private readonly IMongoDatabase _mongoDatabase; 
 		private readonly IVietMapService _vietMapService;
 		private readonly INotificationService _notificationService;
+		private readonly ITripHubService? _tripHubService;
 
-        public TripService(
+		public TripService(
 			IDatabaseFactory databaseFactory, 
 			ILogger<TripService> logger,
             IMongoDatabase mongoDatabase,
@@ -35,7 +36,8 @@ namespace Services.Implementations
 			IStudentPickupPointHistoryRepository studentPickupPointHistoryRepository,
 			IVehicleRepository vehicleRepository,
 			IVietMapService vietMapService,
-			INotificationService notificationService)
+			INotificationService notificationService,
+			ITripHubService? tripHubService = null)
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
@@ -45,7 +47,8 @@ namespace Services.Implementations
 			_vehicleRepository = vehicleRepository;
 			_vietMapService = vietMapService;
 			_notificationService = notificationService;
-            _mongoDatabase = mongoDatabase; // ADD THIS
+            _mongoDatabase = mongoDatabase; 
+			_tripHubService = tripHubService;
 		}
 
 		public async Task<IEnumerable<Trip>> QueryTripsAsync(
@@ -817,8 +820,8 @@ namespace Services.Implementations
 			if (duration.TotalMinutes < 15)
 				throw new ArgumentException("Trip duration must be at least 15 minutes");
 
-			if (duration.TotalHours > 8)
-				throw new ArgumentException("Trip duration cannot exceed 8 hours");
+			//if (duration.TotalHours > 8)
+			//	throw new ArgumentException("Trip duration cannot exceed 8 hours");
 
 			var now = DateTime.UtcNow;
 			if (trip.ServiceDate.Date == now.Date)
@@ -1096,7 +1099,7 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<bool> UpdateAttendanceAsync(Guid tripId, Guid stopId, Guid studentId, string state)
+		public async Task<bool> UpdateAttendanceAsync(Guid tripId, Guid? stopId, Guid studentId, string state)
 		{
 			try
 			{
@@ -1107,9 +1110,38 @@ namespace Services.Implementations
 				if (trip == null)
 					return false;
 
-				var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == stopId);
+				Guid? actualStopId = stopId;
+
+				// ✅ If stopId is not provided, derive it from student's CurrentPickupPointId
+				if (!actualStopId.HasValue || actualStopId.Value == Guid.Empty)
+				{
+					var student = await _studentRepository.FindAsync(studentId);
+					if (student == null || !student.CurrentPickupPointId.HasValue)
+					{
+						_logger.LogWarning("Cannot derive stopId for student {StudentId} - student not found or has no pickup point assigned", studentId);
+						return false;
+					}
+
+					// Find the stop in this trip that matches the student's pickup point
+					var matchingStop = trip.Stops.FirstOrDefault(s => s.PickupPointId == student.CurrentPickupPointId.Value);
+					if (matchingStop == null)
+					{
+						_logger.LogWarning("Student {StudentId} has pickup point {PickupPointId} but no matching stop found in trip {TripId}",
+							studentId, student.CurrentPickupPointId.Value, tripId);
+						return false;
+					}
+
+					actualStopId = student.CurrentPickupPointId.Value;
+					_logger.LogDebug("Derived stopId {StopId} from student {StudentId}'s CurrentPickupPointId", actualStopId.Value, studentId);
+				}
+
+				// Find the stop using the actualStopId (which is the PickupPointId)
+				var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == actualStopId.Value);
 				if (stop == null)
+				{
+					_logger.LogWarning("Stop with PickupPointId {StopId} not found in trip {TripId}", actualStopId.Value, tripId);
 					return false;
+				}
 
 				// Find existing attendance or create new
 				var attendance = stop.Attendance.FirstOrDefault(a => a.StudentId == studentId);
@@ -1145,8 +1177,62 @@ namespace Services.Implementations
 					}
 				}
 
+				// ✅ Update stop arrival/departure times based on attendance
+				var now = DateTime.UtcNow;
+
+				// Set ArrivedAt when first student is marked Present (vehicle arrived at stop)
+				if (state == AttendanceStates.Present && !stop.ArrivedAt.HasValue)
+				{
+					stop.ArrivedAt = now;
+					_logger.LogDebug("Set ArrivedAt for stop {StopId} in trip {TripId}", actualStopId.Value, tripId);
+				}
+
+				// Set DepartedAt when all students are accounted for (no pending students)
+				var allAccountedFor = stop.Attendance.All(a =>
+					a.State == AttendanceStates.Present ||
+					a.State == AttendanceStates.Absent ||
+					a.State == AttendanceStates.Excused ||
+					a.State == AttendanceStates.Late);
+
+				if (allAccountedFor && stop.ArrivedAt.HasValue && !stop.DepartedAt.HasValue)
+				{
+					stop.DepartedAt = now;
+					_logger.LogDebug("Set DepartedAt for stop {StopId} in trip {TripId} - all students accounted for", actualStopId.Value, tripId);
+				}
+
 				await repository.UpdateAsync(trip);
-				_logger.LogInformation("Updated attendance for student {StudentId} at stop {StopId} in trip {TripId}", studentId, stopId, tripId);
+				_logger.LogInformation("Updated attendance for student {StudentId} at stop {StopId} in trip {TripId}", studentId, actualStopId.Value, tripId);
+
+				if (_tripHubService != null)
+				{
+					try
+					{
+						// Calculate attendance summary for the stop (including stop progress times)
+						var attendanceSummary = new
+						{
+							total = stop.Attendance.Count,
+							present = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Present),
+							absent = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Absent),
+							pending = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Pending),
+							late = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Late),
+							excused = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Excused),
+							// ✅ Include stop progress times in the same broadcast
+							arrivedAt = stop.ArrivedAt,
+							departedAt = stop.DepartedAt
+						};
+
+						await _tripHubService.BroadcastAttendanceUpdatedAsync(
+							tripId,
+							actualStopId.Value,  // Use the actual stopId (PickupPointId)
+							attendanceSummary);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to broadcast attendance update for trip {TripId}, stop {StopId}", tripId, actualStopId.Value);
+						// Don't fail the operation if broadcast fails
+					}
+				}
+
 				return true;
 			}
 			catch (Exception ex)
@@ -1688,6 +1774,24 @@ namespace Services.Implementations
 
 				await tripRepo.UpdateAsync(trip);
 				_logger.LogInformation("Trip {TripId} started by driver {DriverId}", tripId, driverId);
+
+				if (_tripHubService != null)
+				{
+					try
+					{
+						await _tripHubService.BroadcastTripStatusChangedAsync(
+							tripId,
+							trip.Status,
+							trip.StartTime,
+							null);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to broadcast trip status change for trip {TripId}", tripId);
+						// Don't fail the operation if broadcast fails
+					}
+				}
+
 				return true;
 			}
 			catch (Exception ex)
@@ -1724,6 +1828,24 @@ namespace Services.Implementations
 
 				await tripRepo.UpdateAsync(trip);
 				_logger.LogInformation("Trip {TripId} ended by driver {DriverId}", tripId, driverId);
+
+				if (_tripHubService != null)
+				{
+					try
+					{
+						await _tripHubService.BroadcastTripStatusChangedAsync(
+							tripId,
+							trip.Status,
+							trip.StartTime,
+							trip.EndTime);
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Failed to broadcast trip status change for trip {TripId}", tripId);
+						// Don't fail the operation if broadcast fails
+					}
+				}
+
 				return true;
 			}
 			catch (Exception ex)
