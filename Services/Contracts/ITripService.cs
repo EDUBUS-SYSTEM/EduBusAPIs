@@ -25,7 +25,7 @@ namespace Services.Contracts
 			string sortOrder);
 
 		Task<bool> UpdateTripStatusAsync(Guid tripId, string newStatus, string? reason = null);
-		Task<bool> UpdateAttendanceAsync(Guid tripId, Guid stopId, Guid studentId, string state);
+		Task<bool> UpdateAttendanceAsync(Guid tripId, Guid? stopId, Guid studentId, string state);
 		Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId);
 		Task<IEnumerable<Trip>> RegenerateTripsForDateAsync(Guid scheduleId, DateTime date);
 		Task<IEnumerable<Trip>> GetDriverScheduleByDateAsync(Guid driverId, DateTime serviceDate);
