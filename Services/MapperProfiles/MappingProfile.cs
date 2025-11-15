@@ -15,6 +15,7 @@ using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
 using Services.Models.Route;
+using Services.Models.School;
 
 using Utils;
 
@@ -190,6 +191,21 @@ namespace Services.MapperProfiles
             CreateMap<UnitPrice, UnitPriceResponseDto>();
             CreateMap<CreateUnitPriceDto, UnitPrice>();
             CreateMap<UpdateUnitPriceDto, UnitPrice>();
+
+            // School mapping
+            // Base entity to DTO mapping (file content mapped separately via extensions)
+            CreateMap<School, SchoolDto>()
+                .ForMember(dest => dest.LogoFileId, opt => opt.Ignore())
+                .ForMember(dest => dest.LogoImageBase64, opt => opt.Ignore())
+                .ForMember(dest => dest.LogoImageContentType, opt => opt.Ignore())
+                .ForMember(dest => dest.BannerImage, opt => opt.Ignore())
+                .ForMember(dest => dest.StayConnectedImage, opt => opt.Ignore())
+                .ForMember(dest => dest.FeatureImage, opt => opt.Ignore())
+                .ForMember(dest => dest.GalleryImages, opt => opt.Ignore());
+
+            // Request to entity mappings
+            CreateMap<CreateSchoolRequest, School>();
+            CreateMap<UpdateSchoolRequest, School>();
         }
     }
 }
