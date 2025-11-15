@@ -62,5 +62,7 @@ namespace Services.Contracts
 		Task<IEnumerable<Trip>> GetTripsByDateForParentAsync(string parentEmail, DateTime? date = null);
 		Task<Trip?> GetTripDetailForParentAsync(Guid tripId, string parentEmail);
 		Task<Trip.VehicleLocation?> GetTripCurrentLocationAsync(Guid tripId, string parentEmail);
-	}
+        Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId);
+        Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId);
+    }
 }

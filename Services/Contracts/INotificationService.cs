@@ -22,5 +22,6 @@ namespace Services.Contracts
         Task CleanupExpiredNotificationsAsync();
         Task<NotificationResponse> CreateDriverLeaveNotificationAsync(Guid leaveRequestId, NotificationType type, string message, Dictionary<string, object>? metadata = null);
         Task<NotificationResponse> CreateReplacementSuggestionNotificationAsync(Guid leaveRequestId, int suggestionCount, Dictionary<string, object>? metadata = null);
+        Task<NotificationResponse?> GetNotificationByMetadataAsync(Guid userId, string relatedEntityType, string metadataKey);
     }
 }
