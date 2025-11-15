@@ -220,6 +220,9 @@ builder.Services.AddHttpClient<IPayOSService, PayOSService>();
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
 
+// Trip Hub Service for admin monitoring
+builder.Services.AddScoped<Services.Contracts.ITripHubService, APIs.Services.TripHubService>();
+
 // Background Services
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestionService>();
@@ -257,7 +260,31 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2)
         };
-    });
+		o.Events = new JwtBearerEvents
+		{
+			OnMessageReceived = context =>
+			{
+				// SignalR sends token in query string for WebSocket connections
+				var accessToken = context.Request.Query["access_token"];
+
+				if (!string.IsNullOrEmpty(accessToken))
+				{
+					context.Token = accessToken;
+				}
+				// Fallback to Authorization header for LongPolling
+				else
+				{
+					var authHeader = context.Request.Headers["Authorization"].ToString();
+					if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+					{
+						context.Token = authHeader.Substring("Bearer ".Length).Trim();
+					}
+				}
+
+				return Task.CompletedTask;
+			}
+		};
+	});
 
 builder.Services.AddAuthorization();
 
