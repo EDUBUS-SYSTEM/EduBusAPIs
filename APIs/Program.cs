@@ -220,12 +220,14 @@ builder.Services.AddHttpClient<IPayOSService, PayOSService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
-
+//VietMap Service
+builder.Services.AddHttpClient<Services.Contracts.IVietMapService, Services.Implementations.VietMapService>();
 // Background Services
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestionService>();
 builder.Services.AddHostedService<Services.Backgrounds.NotificationCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoTripGenerationService>();
+builder.Services.AddHostedService<Services.Backgrounds.PickupApproachNotificationService>();
 
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());

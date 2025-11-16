@@ -11,6 +11,7 @@ namespace Data.Models.Enums
         SystemAlert = 7,                  
         MaintenanceReminder = 8,          
         ScheduleChange = 9,               
-        EmergencyNotification = 10        
+        EmergencyNotification = 10,
+        TripInfo = 11,
     }
 }

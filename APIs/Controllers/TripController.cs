@@ -1,11 +1,14 @@
 ﻿using AutoMapper;
 using Constants;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
+using Services.Implementations;
+using Services.Models.Notification;
 using Services.Models.Trip;
 using System.Security.Claims;
 using Utils;
@@ -23,13 +26,13 @@ namespace APIs.Controllers
 		private readonly IMapper _mapper;
 		private readonly IDatabaseFactory _databaseFactory;
 
-		public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper, IDatabaseFactory databaseFactory)
+        public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper, IDatabaseFactory databaseFactory)
 		{
 			_tripService = tripService;
 			_logger = logger;
 			_mapper = mapper;
 			_databaseFactory = databaseFactory;
-		}
+        }
 
 		[HttpGet]
 		[Authorize(Roles = Roles.Admin)]
@@ -677,11 +680,49 @@ namespace APIs.Controllers
 			}
 		}
 
-		#endregion
+        [HttpPost("{tripId}/stops/{stopId}/confirm-arrival")]
+        [Authorize(Roles = $"{Roles.Driver}")]
+        public async Task<ActionResult<object>> ConfirmArrival(Guid tripId, Guid stopId)
+        {
+            try
+            {
+                var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+                if (!driverId.HasValue)
+                {
+                    return Unauthorized(new { message = "User ID not found in token" });
+                }
+                try
+                {
+                    await _tripService.ConfirmArrivalAtStopAsync(tripId, stopId, driverId.Value);
+                }
+                catch (ArgumentException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return BadRequest(new { message = ex.Message });
+                }
+                return Ok(new
+                {
+                    tripId = tripId,
+                    stopId = stopId,
+                    message = "Arrival confirmed and parents notified",
+                    confirmedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error confirming arrival at stop: {TripId}, {StopId}", tripId, stopId);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
 
-		#region Parent Endpoints
+        #endregion
 
-		[HttpGet("parent/upcoming")]
+        #region Parent Endpoints
+
+        [HttpGet("parent/upcoming")]
 		[Authorize(Roles = Roles.Parent)]
 		public async Task<ActionResult<IEnumerable<TripDto>>> GetUpcomingTripsForParent([FromQuery] int days = 7)
 		{

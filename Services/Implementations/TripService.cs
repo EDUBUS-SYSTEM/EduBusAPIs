@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
+using Services.Models.Notification;
 using Services.Models.Trip;
 using Utils;
 
@@ -13,22 +14,28 @@ namespace Services.Implementations
 {
 	public class TripService : ITripService
 	{
-		private readonly IDatabaseFactory _databaseFactory;
+        const double ARRIVAL_THRESHOLD_KM = 0.3; //300 meters
+
+        private readonly IDatabaseFactory _databaseFactory;
 		private readonly ILogger<TripService> _logger;
 		private readonly IStudentRepository _studentRepository;
 		private readonly IPickupPointRepository _pickupPointRepository;
 		private readonly IStudentPickupPointHistoryRepository _studentPickupPointHistoryRepository;
 		private readonly IVehicleRepository _vehicleRepository;
 		private readonly IMongoDatabase _mongoDatabase; 
+		private readonly IVietMapService _vietMapService;
+		private readonly INotificationService _notificationService;
 
-		public TripService(
+        public TripService(
 			IDatabaseFactory databaseFactory, 
 			ILogger<TripService> logger,
             IMongoDatabase mongoDatabase,
             IStudentRepository studentRepository,
 			IPickupPointRepository pickupPointRepository,
 			IStudentPickupPointHistoryRepository studentPickupPointHistoryRepository,
-			IVehicleRepository vehicleRepository)
+			IVehicleRepository vehicleRepository,
+			IVietMapService vietMapService,
+			INotificationService notificationService)
 		{
 			_databaseFactory = databaseFactory;
 			_logger = logger;
@@ -36,7 +43,9 @@ namespace Services.Implementations
 			_pickupPointRepository = pickupPointRepository;
 			_studentPickupPointHistoryRepository = studentPickupPointHistoryRepository;
 			_vehicleRepository = vehicleRepository;
-			_mongoDatabase = mongoDatabase; // ADD THIS
+			_vietMapService = vietMapService;
+			_notificationService = notificationService;
+            _mongoDatabase = mongoDatabase; // ADD THIS
 		}
 
 		public async Task<IEnumerable<Trip>> QueryTripsAsync(
@@ -2248,8 +2257,137 @@ namespace Services.Implementations
 				throw;
 			}
 		}
+        public async Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId)
+        {
+            try
+            {
+                var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+                var trip = await tripRepo.FindAsync(tripId);
 
-		private async Task<List<Guid>> GetPickupPointIdsForStudentsAsync(List<Guid> studentIds)
+                if (trip == null || trip.IsDeleted || trip.Stops == null)
+                    return Enumerable.Empty<Guid>();
+
+                // Find the stop with this pickup point
+                var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == pickupPointId);
+                if (stop == null || stop.Attendance == null || !stop.Attendance.Any())
+                    return Enumerable.Empty<Guid>();
+
+                // Get student IDs from attendance
+                var studentIds = stop.Attendance
+                    .Where(a => a.StudentId != Guid.Empty)
+                    .Select(a => a.StudentId)
+                    .Distinct()
+                    .ToList();
+
+                if (!studentIds.Any())
+                    return Enumerable.Empty<Guid>();
+
+                // Get students and their parent IDs
+                var parentIds = new HashSet<Guid>();
+                foreach (var studentId in studentIds)
+                {
+                    var student = await _studentRepository.FindAsync(studentId);
+                    if (student != null && !student.IsDeleted && student.ParentId.HasValue)
+                    {
+                        parentIds.Add(student.ParentId.Value);
+                    }
+                }
+
+                return parentIds;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting parents for pickup point {PickupPointId} in trip {TripId}", pickupPointId, tripId);
+                return Enumerable.Empty<Guid>();
+            }
+        }
+        public async Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId)
+        {
+            var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+            var trip = await tripRepo.FindAsync(tripId);
+
+            if (trip == null || trip.IsDeleted)
+                throw new ArgumentException("Trip not found");
+
+            // Verify driver owns this trip
+            if (trip.Driver?.Id != driverId)
+                throw new ArgumentException("You don't have access to this trip");
+
+            // Find the stop
+            var stop = trip.Stops?.FirstOrDefault(s => s.PickupPointId == stopId);
+            if (stop == null)
+                throw new ArgumentException("Stop not found in this trip");
+
+			// Check if already arrived
+			if (stop.ArrivedAt != null)
+				throw new InvalidOperationException("Already confirmed arrival at this stop");
+
+			// Verify vehicle location using VietMapService
+			if (trip.CurrentLocation == null || stop.Location == null)
+                throw new InvalidOperationException("Vehicle location not available. Please ensure location tracking is enabled");
+            var distance = await _vietMapService.CalculateDistanceAsync(
+                trip.CurrentLocation.Latitude,
+                trip.CurrentLocation.Longitude,
+                stop.Location.Latitude,
+                stop.Location.Longitude
+            );
+
+            if (distance == null)
+            {
+                _logger.LogWarning("Failed to calculate distance for trip {TripId}, stop {StopId}", tripId, stopId);
+                throw new InvalidOperationException("Unable to verify vehicle location. Please try again");
+            }
+
+            if (distance > ARRIVAL_THRESHOLD_KM)
+            {
+                var distanceMeters = Math.Round(distance.Value * 1000);
+                _logger.LogWarning(
+                    "Driver {DriverId} attempted to confirm arrival at stop {StopId}, but vehicle is {Distance} km away (threshold: {Threshold} km)",
+                    driverId, stopId, distance, ARRIVAL_THRESHOLD_KM);
+                throw new InvalidOperationException($"Vehicle is {distanceMeters} meters away. Please move closer to the pickup point");
+            }
+
+            // Update arrival time
+            stop.ArrivedAt = DateTime.UtcNow;
+            await tripRepo.UpdateAsync(trip);
+
+            // Get parents for this pickup point
+            var parentIds = await GetParentsForPickupPointAsync(tripId, stopId);
+
+            // Create notification for each parent
+            foreach (var parentId in parentIds)
+            {
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = parentId,
+                    Title = "Driver Arrived at Pickup Point",
+                    Message = "The driver has arrived at the pickup point for your child.",
+                    NotificationType = NotificationType.TripInfo,
+                    RecipientType = RecipientType.Parent,
+                    Priority = 2,
+                    RelatedEntityId = tripId,
+                    RelatedEntityType = "Trip",
+                    ActionRequired = false,
+                    ActionUrl = $"/trip/{tripId}",
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "tripId", tripId.ToString() },
+                        { "stopId", stopId.ToString() },
+                        { "stopName", stop.Location?.Address ?? "Unknown Stop" },
+                        { "driverName", trip.Driver?.FullName ?? "Driver" },
+                        { "arrivedAt", stop.ArrivedAt?.ToString("O") ?? DateTime.UtcNow.ToString("O") }
+                    }
+                };
+
+                // Create notification (automatically sends real-time via SignalR)
+                await _notificationService.CreateNotificationAsync(notificationDto);
+            }
+
+            _logger.LogInformation(
+                "Driver {DriverId} confirmed arrival at stop {StopId} for trip {TripId}. Vehicle distance: {Distance} km",
+                driverId, stopId, tripId, distance);
+        }
+        private async Task<List<Guid>> GetPickupPointIdsForStudentsAsync(List<Guid> studentIds)
 		{
 			try
 			{

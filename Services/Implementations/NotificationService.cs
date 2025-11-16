@@ -458,5 +458,29 @@ namespace Services.Implementations
                 return 0;
             }
         }
+
+        
+        public async Task<NotificationResponse?> GetNotificationByMetadataAsync(Guid userId, string relatedEntityType, string metadataKey)
+        {
+            try
+            {
+                var repository = GetRepository();
+                var filter = Builders<Notification>.Filter.And(
+                    Builders<Notification>.Filter.Eq(n => n.UserId, userId),
+                    Builders<Notification>.Filter.Eq(n => n.RelatedEntityType, relatedEntityType),
+                    Builders<Notification>.Filter.Eq("metadata.notificationKey", metadataKey)
+                );
+
+                var notification = await repository.FindByFilterAsync(filter);
+                var firstNotification = notification.FirstOrDefault();
+
+                return firstNotification != null ? _mapper.Map<NotificationResponse>(firstNotification) : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting notification by metadata for user {UserId}", userId);
+                return null;
+            }
+        }
     }
 }
