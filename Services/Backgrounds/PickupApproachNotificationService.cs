@@ -85,7 +85,7 @@ namespace Services.Backgrounds
                 var filter = Builders<Trip>.Filter.And(
                     Builders<Trip>.Filter.Eq(t => t.Status, Constants.TripStatus.InProgress),
                     Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
-                    Builders<Trip>.Filter.Ne(t => t.CurrentLocation, null)
+                    Builders<Trip>.Filter.Ne(t => t.CurrentLocation, null),
                     Builders<Trip>.Filter.Gte(t => t.ServiceDate, startOfDay),
                     Builders<Trip>.Filter.Lt(t => t.ServiceDate, endOfDay)
                 );
