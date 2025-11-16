@@ -18,7 +18,7 @@ namespace Services.Backgrounds
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<PickupApproachNotificationService> _logger;
         private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1); // Check every 1 minute
-        private const int APPROACH_THRESHOLD_MINUTES = 10; // Notify when 5 minutes away
+        private const int APPROACH_THRESHOLD_MINUTES = 5; // Notify when 5 minutes away
 
         public PickupApproachNotificationService(
             IServiceScopeFactory scopeFactory,
@@ -128,110 +128,76 @@ namespace Services.Backgrounds
             {
                 return;
             }
-            // Find all pending pickup points (not arrived yet)
-            var pendingStops = trip.Stops
-                .Where(s => s.ArrivedAt == null)
-                .ToList();
 
-            if (!pendingStops.Any())
+            // Find the next pending stop (not arrived yet), sorted by sequence order
+            var nextPendingStop = trip.Stops
+                //.Where(s => s.ArrivedAt == null)
+                .OrderBy(s => s.SequenceOrder)
+                .FirstOrDefault();
+
+            if (nextPendingStop == null)
             {
                 _logger.LogDebug("Trip {TripId} has no pending stops", trip.Id);
                 return;
             }
-            // Calculate route time for all pending stops
-            var stopsWithTime = new List<(TripStop stop, double durationMinutes)>();
 
-            foreach (var stop in pendingStops)
+            // Check if notification already sent for this stop
+            var notificationKey = $"pickup_approach_{trip.Id}_{nextPendingStop.SequenceOrder}";
+
+            // Get all parents who have children at this pickup point
+            var parents = await tripService.GetParentsForPickupPointAsync(trip.Id, nextPendingStop.PickupPointId);
+
+            if (!parents.Any())
             {
-                var routeResult = await vietMapService.GetRouteAsync(
-                    trip.CurrentLocation.Latitude,
-                    trip.CurrentLocation.Longitude,
-                    stop.Location.Latitude,
-                    stop.Location.Longitude,
-                    "car"
-                );
+                _logger.LogDebug("No parents found for trip {TripId}, stop {StopOrder}",
+                    trip.Id, nextPendingStop.SequenceOrder);
+                return;
+            }          
 
-                if (routeResult != null)
-                {
-                    stopsWithTime.Add((stop, routeResult.DurationMinutes));
-                    _logger.LogDebug("Trip {TripId}, Stop {SequenceOrder}: {Minutes} minutes away",
-                        trip.Id, stop.SequenceOrder, routeResult.DurationMinutes);
-                }
-            }
+            // Only call VietMap API for the next stop
+            var routeResult = await vietMapService.GetRouteAsync(
+                trip.CurrentLocation.Latitude,
+                trip.CurrentLocation.Longitude,
+                nextPendingStop.Location.Latitude,
+                nextPendingStop.Location.Longitude,
+                "car"
+            );
 
-            if (!stopsWithTime.Any())
+            if (routeResult == null)
             {
-                _logger.LogWarning("Failed to calculate routes for any stops in trip {TripId}", trip.Id);
+                _logger.LogWarning("Failed to calculate route for trip {TripId}, stop {StopOrder}",
+                    trip.Id, nextPendingStop.SequenceOrder);
                 return;
             }
-            // Find stops within threshold (10 minutes)
-            var approachingStops = stopsWithTime
-                .Where(s => s.durationMinutes <= APPROACH_THRESHOLD_MINUTES)
-                .ToList();
 
-            if (!approachingStops.Any())
+            _logger.LogDebug("Trip {TripId}, Stop {SequenceOrder}: {Minutes} minutes away",
+                trip.Id, nextPendingStop.SequenceOrder, routeResult.DurationMinutes);
+
+            // Check if within threshold
+            if (routeResult.DurationMinutes > APPROACH_THRESHOLD_MINUTES)
             {
-                _logger.LogDebug("No stops approaching within {Threshold} minutes for trip {TripId}",
-                    APPROACH_THRESHOLD_MINUTES, trip.Id);
+                _logger.LogDebug("Stop {StopOrder} for trip {TripId} is {Minutes} minutes away, not within threshold",
+                    nextPendingStop.SequenceOrder, trip.Id, routeResult.DurationMinutes);
                 return;
             }
-            // Send notification for all approaching stops (if not already sent)
-            foreach (var (stop, durationMinutes) in approachingStops)
+
+            var notificationTasks = parents.Select(async parentId =>
             {
-                // Get all parents who have children at this pickup point
-                var parents = await tripService.GetParentsForPickupPointAsync(trip.Id, stop.PickupPointId);
-                
-                if (!parents.Any())
+                var existingNotification = await notificationService.GetNotificationByMetadataAsync(
+                    parentId, "Trip", notificationKey);
+
+                if (existingNotification != null)
                 {
-                    _logger.LogDebug("No parents found for trip {TripId}, stop {StopOrder}",
-                        trip.Id, stop.SequenceOrder);
-                    continue;
+                    _logger.LogDebug("Notification already sent to parent {ParentId}...", parentId, trip.Id, nextPendingStop.SequenceOrder);
+                    return;
                 }
 
-                // Create a RouteResult for the notification
-                var routeResult = new RouteResult
-                {
-                    DurationMinutes = durationMinutes,
-                };
+                await SendApproachNotificationToParentAsync(
+                    trip, nextPendingStop, routeResult,
+                    notificationService, parentId, notificationKey);
+            });
 
-                var notificationKey = $"pickup_approach_{trip.Id}_{stop.SequenceOrder}";
-                
-                // Check and send notification for each parent individually
-                var notifiedCount = 0;
-                foreach (var parentId in parents)
-                {
-                    // Check if this specific parent already received notification for this stop
-                    var existingNotification = await notificationService.GetNotificationByMetadataAsync(
-                        parentId,        
-                        "Trip",          
-                        notificationKey);
-
-                    if (existingNotification != null)
-                    {
-                        _logger.LogDebug("Notification already sent to parent {ParentId} for trip {TripId}, stop {StopOrder}",
-                            parentId, trip.Id, stop.SequenceOrder);
-                        continue;
-                    }
-
-                    // Send notification to this parent
-                    await SendApproachNotificationToParentAsync(
-                        trip,
-                        stop,
-                        routeResult,
-                        notificationService,
-                        parentId,
-                        notificationKey);
-
-                    notifiedCount++;
-                }
-
-                if (notifiedCount > 0)
-                {
-                    _logger.LogInformation("Sent approach notification to {Count} parents for trip {TripId}, stop {StopOrder} ({Minutes} minutes away)",
-                        notifiedCount, trip.Id, stop.SequenceOrder, durationMinutes);
-                }
-            }
-
+            await Task.WhenAll(notificationTasks);
         }
 
         private async Task SendApproachNotificationToParentAsync(
