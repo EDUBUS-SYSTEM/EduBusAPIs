@@ -324,15 +324,8 @@ if (!app.Environment.IsDevelopment())
 // Enable static files
 app.UseStaticFiles();
 
-// Use CORS - Choose one policy based on your needs
-if (app.Environment.IsDevelopment())
-{
-    app.UseCors("AllowAll"); // Allow all origins in development
-}
-else
-{
-    app.UseCors("AllowSpecificOrigins"); // Restrict to specific origins in production
-}
+// Use CORS
+app.UseCors("AllowSpecificOrigins"); // Restrict to specific origins
 
 app.UseAuthentication();
 app.UseAuthorization();
