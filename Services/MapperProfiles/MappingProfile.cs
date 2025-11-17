@@ -1,10 +1,12 @@
 ﻿using AutoMapper;
+using Constants;
 using Data.Models;
 using Services.Models.AcademicCalendar;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
+using Services.Models.Supervisor;
 using Services.Models.Payment;
 using Services.Models.RouteSchedule;
 using Services.Models.Schedule;
@@ -32,6 +34,15 @@ namespace Services.MapperProfiles
                opt => opt.MapFrom(src => DateHelper.ParseDate(src.DateOfBirthString)));
             CreateMap<Parent, CreateUserResponse>();
             CreateMap<Parent, ImportUserSuccess>();
+
+            // supervisor mapping
+            CreateMap<CreateSupervisorRequest, Supervisor>();
+            CreateMap<ImportSupervisorDto, Supervisor>()
+               .ForMember(dest => dest.DateOfBirth,
+               opt => opt.MapFrom(src => DateHelper.ParseDate(src.DateOfBirthString)));
+            CreateMap<Supervisor, CreateUserResponse>();
+            CreateMap<Supervisor, ImportUserSuccess>();
+            CreateMap<Supervisor, SupervisorResponse>();
 
             // driver mapping
             CreateMap<CreateDriverRequest, Driver>();
@@ -61,7 +72,8 @@ namespace Services.MapperProfiles
             CreateMap<StudentGradeEnrollment, StudentGradeDto>();
 
             // user account mapping
-            CreateMap<UserAccount, UserDto>();
+            CreateMap<UserAccount, UserDto>()
+                .ForMember(dest => dest.Role, opt => opt.MapFrom(src => GetUserRole(src)));
             CreateMap<UserAccount, UserResponse>();
             CreateMap<UserUpdateRequest, UserAccount>();
 
@@ -206,6 +218,18 @@ namespace Services.MapperProfiles
             // Request to entity mappings
             CreateMap<CreateSchoolRequest, School>();
             CreateMap<UpdateSchoolRequest, School>();
+        }
+
+        private static string GetUserRole(UserAccount user)
+        {
+            return user switch
+            {
+                Admin => Constants.Roles.Admin,
+                Driver => Constants.Roles.Driver,
+                Parent => Constants.Roles.Parent,
+                Supervisor => Constants.Roles.Supervisor,
+                _ => Constants.Roles.Unknown
+            };
         }
     }
 }

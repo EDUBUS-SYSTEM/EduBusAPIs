@@ -34,14 +34,15 @@ namespace APIs.Controllers
 			[FromQuery] string? sortBy,
             [FromQuery] string? sortOrder,
             [FromQuery] int page = 1,
-            [FromQuery] int perPage = 20)
+            [FromQuery] int perPage = 20,
+            [FromQuery] string? role = null)
         {
             try
             {
                 if (page < 1) page = 1;
                 if (perPage < 1 || perPage > 100) perPage = 20;
 
-                var result = await _userService.GetUsersAsync(status, search, page, perPage, sortBy, sortOrder);
+                var result = await _userService.GetUsersAsync(status, search, page, perPage, sortBy, sortOrder, role);
                 return Ok(result);
             }
             catch (Exception ex)

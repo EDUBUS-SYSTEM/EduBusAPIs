@@ -19,7 +19,14 @@ namespace Data.Repos.SqlServer
         public async Task<UserAccount?> GetByEmailAsync(string email)
         {
             return await _table
-                .Where(u => !u.IsDeleted && u.Email == email)
+                .Where(u => !u.IsDeleted && u.Email.ToLower() == email.ToLower())
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<UserAccount?> GetByPhoneNumberAsync(string phoneNumber)
+        {
+            return await _table
+                .Where(u => !u.IsDeleted && u.PhoneNumber == phoneNumber)
                 .FirstOrDefaultAsync();
         }
 
