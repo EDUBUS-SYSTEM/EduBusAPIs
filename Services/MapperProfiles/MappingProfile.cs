@@ -1,22 +1,23 @@
 ﻿using AutoMapper;
 using Data.Models;
+using Data.Models.Enums;
 using Services.Models.AcademicCalendar;
 using Services.Models.Driver;
 using Services.Models.DriverVehicle;
 using Services.Models.Notification;
 using Services.Models.Parent;
 using Services.Models.Payment;
+using Services.Models.Route;
 using Services.Models.RouteSchedule;
 using Services.Models.Schedule;
+using Services.Models.School;
 using Services.Models.Student;
+using Services.Models.StudentAbsenceRequest;
 using Services.Models.StudentGrade;
 using Services.Models.Trip;
 using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
-using Services.Models.Route;
-using Services.Models.School;
-
 using Utils;
 
 namespace Services.MapperProfiles
@@ -206,6 +207,18 @@ namespace Services.MapperProfiles
             // Request to entity mappings
             CreateMap<CreateSchoolRequest, School>();
             CreateMap<UpdateSchoolRequest, School>();
+
+            // StudentAbsenceRequest request mapping
+            CreateMap<CreateStudentAbsenceRequestDto, StudentAbsenceRequest>()
+            .ForMember(d => d.Status, o => o.MapFrom(_ => AbsenceRequestStatus.Pending))
+            .ForMember(d => d.CreatedAt, o => o.MapFrom(_ => DateTime.UtcNow));
+
+            CreateMap<UpdateStudentAbsenceStatusDto, StudentAbsenceRequest>()
+                .ForMember(d => d.Id, o => o.Ignore()) 
+                .ForMember(d => d.ReviewedAt, o => o.MapFrom(_ => DateTime.UtcNow))
+                .ForMember(d => d.UpdatedAt, o => o.MapFrom(_ => DateTime.UtcNow));
+
+            CreateMap<StudentAbsenceRequest, StudentAbsenceRequestResponseDto>();
         }
     }
 }
