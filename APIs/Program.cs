@@ -220,8 +220,13 @@ builder.Services.AddHttpClient<IPayOSService, PayOSService>();
 
 // SignalR Hub Service
 builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Services.NotificationHubService>();
+
+// Trip Hub Service for admin monitoring
+builder.Services.AddScoped<Services.Contracts.ITripHubService, APIs.Services.TripHubService>();
+
 //VietMap Service
 builder.Services.AddHttpClient<Services.Contracts.IVietMapService, Services.Implementations.VietMapService>();
+
 // Background Services
 builder.Services.AddHostedService<Services.Backgrounds.RefreshTokenCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestionService>();
@@ -260,7 +265,31 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2)
         };
-    });
+		o.Events = new JwtBearerEvents
+		{
+			OnMessageReceived = context =>
+			{
+				// SignalR sends token in query string for WebSocket connections
+				var accessToken = context.Request.Query["access_token"];
+
+				if (!string.IsNullOrEmpty(accessToken))
+				{
+					context.Token = accessToken;
+				}
+				// Fallback to Authorization header for LongPolling
+				else
+				{
+					var authHeader = context.Request.Headers["Authorization"].ToString();
+					if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+					{
+						context.Token = authHeader.Substring("Bearer ".Length).Trim();
+					}
+				}
+
+				return Task.CompletedTask;
+			}
+		};
+	});
 
 builder.Services.AddAuthorization();
 
@@ -295,15 +324,8 @@ if (!app.Environment.IsDevelopment())
 // Enable static files
 app.UseStaticFiles();
 
-// Use CORS - Choose one policy based on your needs
-if (app.Environment.IsDevelopment())
-{
-    app.UseCors("AllowAll"); // Allow all origins in development
-}
-else
-{
-    app.UseCors("AllowSpecificOrigins"); // Restrict to specific origins in production
-}
+// Use CORS
+app.UseCors("AllowSpecificOrigins"); // Restrict to specific origins
 
 app.UseAuthentication();
 app.UseAuthorization();

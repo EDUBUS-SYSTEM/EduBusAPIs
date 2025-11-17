@@ -8,7 +8,7 @@ namespace Services.Models.Trip
 
     public class UpdateAttendanceRequest
     {
-        public Guid StopId { get; set; }
+        public Guid? StopId { get; set; }
         public Guid StudentId { get; set; }
         public string State { get; set; } = string.Empty;
     }
