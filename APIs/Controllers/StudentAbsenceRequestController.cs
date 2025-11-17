@@ -25,7 +25,7 @@ namespace APIs.Controllers
         }
 
         [Authorize(Roles = Roles.Parent)]
-        [HttpPost("/parent")]
+        [HttpPost("parent")]
         public async Task<IActionResult> Create([FromBody] CreateStudentAbsenceRequestDto request)
         {
             if (!ModelState.IsValid)
