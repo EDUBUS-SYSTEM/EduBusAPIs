@@ -22,6 +22,9 @@ namespace Data.Models
         [BsonElement("endDate")]
         public DateTime EndDate { get; set; }
 
+        [BsonElement("studentName")]
+        public string StudentName { get; set; } = string.Empty;
+
         [BsonElement("reason")]
         public string Reason { get; set; } = string.Empty;
 

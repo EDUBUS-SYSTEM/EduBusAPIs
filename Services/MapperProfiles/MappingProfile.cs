@@ -219,6 +219,7 @@ namespace Services.MapperProfiles
                 .ForMember(d => d.UpdatedAt, o => o.MapFrom(_ => DateTime.UtcNow));
 
             CreateMap<StudentAbsenceRequest, StudentAbsenceRequestResponseDto>();
+            CreateMap<StudentAbsenceRequest, StudentAbsenceRequestListItemDto>();
         }
     }
 }

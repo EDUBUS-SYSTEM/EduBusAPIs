@@ -1,9 +1,15 @@
 ﻿using AutoMapper;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Services.Contracts;
+using Services.Models.Common;
 using Services.Models.StudentAbsenceRequest;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -11,20 +17,36 @@ namespace Services.Implementations
     {
         private readonly IStudentAbsenceRequestRepository _repository;
         private readonly ITripRepository _tripRepository;
+        private readonly IStudentService _studentService;
         private readonly IMapper _mapper;
 
         public StudentAbsenceRequestService(
             IStudentAbsenceRequestRepository repository,
             ITripRepository tripRepository,
+            IStudentService studentService,
             IMapper mapper)
         {
             _repository = repository;
             _tripRepository = tripRepository;
+            _studentService = studentService;
             _mapper = mapper;
         }
 
-        public async Task<StudentAbsenceRequestResponseDto> CreateAsync(CreateStudentAbsenceRequestDto createDto)
+        public async Task<StudentAbsenceRequestResponseDto> CreateAsync(CreateStudentAbsenceRequestDto createDto, HttpContext httpContext)
         {
+            var student = await _studentService.GetStudentByIdAsync(createDto.StudentId);
+            if (student is null)
+                throw new KeyNotFoundException("Student not found.");
+
+            if (!student.ParentId.HasValue)
+                throw new ArgumentException("Student has not been assigned to a parent yet.");
+
+            if (!AuthorizationHelper.CanAccessStudentData(httpContext, student.ParentId))
+                throw new UnauthorizedAccessException("You are not allowed to request absence for this student.");
+
+            var parentId = student.ParentId.Value;
+            createDto.ParentId = parentId;
+
             var today = DateTime.UtcNow.Date;
             var normalizedStart = createDto.StartDate.Date;
 
@@ -61,21 +83,193 @@ namespace Services.Implementations
                 throw new InvalidOperationException("Student already has an approved absence request for the selected period.");
 
             var entity = _mapper.Map<StudentAbsenceRequest>(createDto);
+            entity.StudentName = BuildStudentFullName(student.FirstName, student.LastName);
 
             await _repository.AddAsync(entity);
             return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
         }
 
-        public async Task<IEnumerable<StudentAbsenceRequestResponseDto>> GetByStudentAsync(Guid studentId)
+        private static string BuildStudentFullName(string firstName, string lastName)
         {
-            var entities = await _repository.GetByStudentAsync(studentId);
-            return _mapper.Map<IEnumerable<StudentAbsenceRequestResponseDto>>(entities);
+            var trimmedFirst = firstName?.Trim();
+            var trimmedLast = lastName?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(trimmedFirst) && !string.IsNullOrWhiteSpace(trimmedLast))
+            {
+                return $"{trimmedFirst} {trimmedLast}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(trimmedFirst))
+            {
+                return trimmedFirst;
+            }
+
+            if (!string.IsNullOrWhiteSpace(trimmedLast))
+            {
+                return trimmedLast;
+            }
+
+            return "Student";
         }
 
-        public async Task<IEnumerable<StudentAbsenceRequestResponseDto>> GetByParentAsync(Guid parentId)
+        public async Task<StudentAbsenceRequestListResponse> GetByStudentAsync(
+            Guid studentId,
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
         {
-            var entities = await _repository.GetByParentAsync(parentId);
-            return _mapper.Map<IEnumerable<StudentAbsenceRequestResponseDto>>(entities);
+            if (page < 1)
+                page = 1;
+
+            if (perPage < 1 || perPage > 100)
+                perPage = 20;
+
+            if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+                throw new ArgumentException("Start date cannot be later than end date.");
+
+            var normalizedStart = startDate?.Date;
+            DateTime? normalizedEnd = null;
+            if (endDate.HasValue)
+                normalizedEnd = endDate.Value.Date.AddDays(1).AddTicks(-1);
+
+            var (entities, totalCount) = await _repository.GetByStudentAsync(
+                studentId,
+                normalizedStart,
+                normalizedEnd,
+                status,
+                sort,
+                page,
+                perPage);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / perPage);
+
+            return new StudentAbsenceRequestListResponse
+            {
+                Data = _mapper.Map<List<StudentAbsenceRequestListItemDto>>(entities),
+                Pagination = new PaginationInfo
+                {
+                    CurrentPage = page,
+                    PerPage = perPage,
+                    TotalItems = totalCount,
+                    TotalPages = totalPages,
+                    HasNextPage = page < totalPages,
+                    HasPreviousPage = page > 1
+                }
+            };
+        }
+
+        public async Task<StudentAbsenceRequestListResponse> GetByParentAsync(
+            Guid parentId,
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
+        {
+            if (page < 1)
+                page = 1;
+
+            if (perPage < 1 || perPage > 100)
+                perPage = 20;
+
+            if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+                throw new ArgumentException("Start date cannot be later than end date.");
+
+            var normalizedStart = startDate?.Date;
+            DateTime? normalizedEnd = null;
+            if (endDate.HasValue)
+                normalizedEnd = endDate.Value.Date.AddDays(1).AddTicks(-1);
+
+            var (entities, totalCount) = await _repository.GetByParentAsync(
+                parentId,
+                normalizedStart,
+                normalizedEnd,
+                status,
+                sort,
+                page,
+                perPage);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / perPage);
+
+            return new StudentAbsenceRequestListResponse
+            {
+                Data = _mapper.Map<List<StudentAbsenceRequestListItemDto>>(entities),
+                Pagination = new PaginationInfo
+                {
+                    CurrentPage = page,
+                    PerPage = perPage,
+                    TotalItems = totalCount,
+                    TotalPages = totalPages,
+                    HasNextPage = page < totalPages,
+                    HasPreviousPage = page > 1
+                }
+            };
+        }
+
+        public async Task<StudentAbsenceRequestListResponse> GetAllAsync(
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            string? studentName,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
+        {
+            if (page < 1)
+                page = 1;
+
+            if (perPage < 1 || perPage > 100)
+                perPage = 20;
+
+            if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+                throw new ArgumentException("Start date cannot be later than end date.");
+
+            var normalizedStart = startDate?.Date;
+            DateTime? normalizedEnd = null;
+            if (endDate.HasValue)
+                normalizedEnd = endDate.Value.Date.AddDays(1).AddTicks(-1);
+
+            var normalizedSearch = string.IsNullOrWhiteSpace(studentName)
+                ? null
+                : studentName!.Trim();
+
+            var (entities, totalCount) = await _repository.GetAllAsync(
+                normalizedStart,
+                normalizedEnd,
+                status,
+                normalizedSearch,
+                sort,
+                page,
+                perPage);
+
+            var totalPages = (int)Math.Ceiling((double)totalCount / perPage);
+
+            return new StudentAbsenceRequestListResponse
+            {
+                Data = _mapper.Map<List<StudentAbsenceRequestListItemDto>>(entities),
+                Pagination = new PaginationInfo
+                {
+                    CurrentPage = page,
+                    PerPage = perPage,
+                    TotalItems = totalCount,
+                    TotalPages = totalPages,
+                    HasNextPage = page < totalPages,
+                    HasPreviousPage = page > 1
+                }
+            };
+        }
+
+        public async Task<StudentAbsenceRequestResponseDto?> GetByIdAsync(Guid requestId)
+        {
+            var entity = await _repository.FindAsync(requestId);
+            if (entity == null || entity.IsDeleted)
+                return null;
+
+            return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
         }
 
         public Task<StudentAbsenceRequest?> GetPendingOverlapAsync(Guid studentId, DateTime start, DateTime end) =>
@@ -91,6 +285,94 @@ namespace Services.Implementations
 
             await _repository.UpdateAsync(entity);
             return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
+        }
+
+        public async Task<StudentAbsenceRequestResponseDto> RejectRequestAsync(Guid requestId, RejectStudentAbsenceRequestDto dto, Guid adminId)
+        {
+            var entity = await _repository.FindAsync(requestId);
+            if (entity == null || entity.IsDeleted)
+                throw new InvalidOperationException("Absence request not found.");
+
+            if (entity.Status != AbsenceRequestStatus.Pending)
+            {
+                throw new InvalidOperationException($"Cannot reject absence request. Current status: {entity.Status}. Only pending absence requests can be rejected.");
+            }
+
+            entity.Status = AbsenceRequestStatus.Rejected;
+            entity.ReviewedBy = adminId;
+            entity.ReviewedAt = DateTime.UtcNow;
+            entity.Notes = dto.Reason;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _repository.UpdateAsync(entity);
+            return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
+        }
+
+        public async Task<StudentAbsenceRequestResponseDto> ApproveRequestAsync(Guid requestId, ApproveStudentAbsenceRequestDto dto, Guid adminId)
+        {
+            dto ??= new ApproveStudentAbsenceRequestDto();
+
+            var entity = await _repository.FindAsync(requestId);
+            if (entity == null || entity.IsDeleted)
+                throw new InvalidOperationException("Absence request not found.");
+
+            if (entity.Status != AbsenceRequestStatus.Pending)
+                throw new InvalidOperationException($"Cannot approve absence request. Current status: {entity.Status}. Only pending absence requests can be approved.");
+
+            var trips = (await _tripRepository.GetTripsByStudentAndDateRangeAsync(
+                entity.StudentId,
+                entity.StartDate,
+                entity.EndDate))?.ToList();
+
+            if (trips == null || trips.Count == 0)
+                throw new InvalidOperationException("Student has no scheduled trips within the requested absence period.");
+
+            await RemoveStudentFromTripsAsync(entity.StudentId, trips);
+
+            entity.Status = AbsenceRequestStatus.Approved;
+            entity.ReviewedBy = adminId;
+            entity.ReviewedAt = DateTime.UtcNow;
+            entity.Notes = dto.Notes;
+            entity.UpdatedAt = DateTime.UtcNow;
+
+            await _repository.UpdateAsync(entity);
+            return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
+        }
+
+        private async Task RemoveStudentFromTripsAsync(Guid studentId, IEnumerable<Trip> trips)
+        {
+            if (trips == null)
+                return;
+
+            var tripsToUpdate = new List<Trip>();
+
+            foreach (var trip in trips)
+            {
+                if (trip.Stops == null || trip.Stops.Count == 0)
+                    continue;
+
+                var updated = false;
+
+                foreach (var stop in trip.Stops)
+                {
+                    if (stop.Attendance == null || stop.Attendance.Count == 0)
+                        continue;
+
+                    var removedCount = stop.Attendance.RemoveAll(a => a.StudentId == studentId);
+                    if (removedCount > 0)
+                        updated = true;
+                }
+
+                if (updated)
+                {
+                    tripsToUpdate.Add(trip);
+                }
+            }
+
+            if (tripsToUpdate.Any())
+            {
+                await _tripRepository.BulkUpdateAsync(tripsToUpdate);
+            }
         }
     }
 }
