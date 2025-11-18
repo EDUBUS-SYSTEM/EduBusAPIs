@@ -31,6 +31,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<Parent> Parents { get; set; }
 
+        public virtual DbSet<Supervisor> Supervisors { get; set; }
+
         public virtual DbSet<PickupPoint> PickupPoints { get; set; }
 
         public virtual DbSet<Student> Students { get; set; }
@@ -72,6 +74,9 @@ namespace Data.Contexts.SqlServer
 
             modelBuilder.Entity<Parent>()
                 .ToTable("Parents");
+
+            modelBuilder.Entity<Supervisor>()
+                .ToTable("Supervisors");
 
             modelBuilder.Entity<Driver>()
                 .ToTable("Drivers");
@@ -223,6 +228,16 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne<UserAccount>()
                     .WithOne()
                     .HasForeignKey<Parent>(e => e.Id);
+            });
+
+            modelBuilder.Entity<Supervisor>(entity =>
+            {
+                entity.HasOne<UserAccount>()
+                    .WithOne()
+                    .HasForeignKey<Supervisor>(e => e.Id);
+                
+                entity.Property(e => e.Status)
+                      .HasConversion<int>();
             });
 
             modelBuilder.Entity<PickupPoint>(entity =>

@@ -10,6 +10,7 @@ namespace Data.Repos.Interfaces
     public interface IUserAccountRepository : ISqlRepository<UserAccount>
     {
         Task<UserAccount?> GetByEmailAsync(string email);
+        Task<UserAccount?> GetByPhoneNumberAsync(string phoneNumber);
         Task<bool> IsEmailExistAsync(string email);
         Task<bool> IsPhoneNumberExistAsync(string phoneNumber);
         Task<int> LockUserAsync(Guid userId, DateTime? lockedUntil, string? reason, Guid lockedBy);
