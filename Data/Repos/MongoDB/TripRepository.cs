@@ -2,6 +2,7 @@
 using Data.Models;
 using Data.Repos.Interfaces;
 using MongoDB.Driver;
+using System.Linq;
 
 namespace Data.Repos.MongoDB
 {
@@ -102,6 +103,31 @@ namespace Data.Repos.MongoDB
 			);
 
 			return await FindByFilterAsync(filter);
+		}
+
+		public async Task<bool> StudentHasTripsBetweenDatesAsync(Guid studentId, DateTime startDate, DateTime endDate)
+		{
+			var start = startDate.Date;
+			var end = endDate.Date;
+
+			var dateFilter = Builders<Trip>.Filter.And(
+				Builders<Trip>.Filter.Gte(t => t.ServiceDate, start),
+				Builders<Trip>.Filter.Lte(t => t.ServiceDate, end)
+			);
+
+			var attendanceFilter = Builders<Trip>.Filter.ElemMatch(
+				t => t.Stops,
+				stop => stop.Attendance != null &&
+						stop.Attendance.Any(a => a.StudentId == studentId)
+			);
+
+			var filter = Builders<Trip>.Filter.And(
+				Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
+				dateFilter,
+				attendanceFilter
+			);
+
+			return await _collection.Find(filter).AnyAsync();
 		}
 	}
 }
