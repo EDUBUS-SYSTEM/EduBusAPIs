@@ -25,6 +25,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<DriverVehicle> DriverVehicles { get; set; }
 
+        public virtual DbSet<SupervisorVehicle> SupervisorVehicles { get; set; }
+
         public virtual DbSet<Grade> Grades { get; set; }
 
         public virtual DbSet<Image> Images { get; set; }
@@ -60,6 +62,7 @@ namespace Data.Contexts.SqlServer
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
             => optionsBuilder.UseSqlServer(
+                "Server=localhost,49898;Database=edubus_dev_Test;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
                 sql => sql.UseNetTopologySuite()
             );
 
@@ -238,6 +241,34 @@ namespace Data.Contexts.SqlServer
                 
                 entity.Property(e => e.Status)
                       .HasConversion<int>();
+            });
+
+            modelBuilder.Entity<SupervisorVehicle>(entity =>
+            {
+                entity.HasIndex(e => e.SupervisorId, "IX_SupervisorVehicles_SupervisorId");
+
+                entity.HasIndex(e => e.VehicleId, "IX_SupervisorVehicles_VehicleId");
+
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.EndTimeUtc).HasPrecision(3);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                entity.Property(e => e.StartTimeUtc).HasPrecision(3);
+                entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+                entity.HasOne(d => d.Supervisor).WithMany(p => p.SupervisorVehicles).HasForeignKey(d => d.SupervisorId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.Vehicle).WithMany(p => p.SupervisorVehicles).HasForeignKey(d => d.VehicleId);
+
+                entity.HasOne(d => d.AssignedByAdmin)
+                      .WithMany(a => a.AssignedSupervisorVehicles)
+                      .HasForeignKey(d => d.AssignedByAdminId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(d => d.ApprovedByAdmin)
+                      .WithMany(a => a.ApprovedSupervisorVehicles)
+                      .HasForeignKey(d => d.ApprovedByAdminId)
+                      .OnDelete(DeleteBehavior.SetNull);
             });
 
             modelBuilder.Entity<PickupPoint>(entity =>

@@ -7,4 +7,6 @@ public partial class Admin : UserAccount
     public virtual ICollection<DriverVehicle> AssignedDriverVehicles { get; set; } = new List<DriverVehicle>();
     public virtual ICollection<DriverVehicle> ApprovedDriverVehicles { get; set; } = new List<DriverVehicle>();
     public virtual ICollection<DriverLeaveRequest> ApprovedLeaveRequests { get; set; } = new List<DriverLeaveRequest>();
+    public virtual ICollection<SupervisorVehicle> AssignedSupervisorVehicles { get; set; } = new List<SupervisorVehicle>();
+    public virtual ICollection<SupervisorVehicle> ApprovedSupervisorVehicles { get; set; } = new List<SupervisorVehicle>();
 }

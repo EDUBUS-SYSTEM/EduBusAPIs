@@ -59,11 +59,17 @@ namespace Data.Models
         [BsonElement("driverVehicleId")]
         public Guid? DriverVehicleId { get; set; }
 
+        [BsonElement("supervisorVehicleId")]
+        public Guid? SupervisorVehicleId { get; set; }
+
         [BsonElement("vehicle")]
         public VehicleSnapshot? Vehicle { get; set; }
 
         [BsonElement("driver")]
         public DriverSnapshot? Driver { get; set; }
+
+        [BsonElement("supervisor")]
+        public SupervisorSnapshot? Supervisor { get; set; }
 
         public class VehicleLocation
         {
@@ -159,6 +165,21 @@ namespace Data.Models
 
             [BsonElement("isPrimary")]
             public bool IsPrimary { get; set; }
+
+            [BsonElement("snapshottedAtUtc")]
+            public DateTime SnapshottedAtUtc { get; set; }
+        }
+
+        public class SupervisorSnapshot
+        {
+            [BsonElement("id")]
+            public Guid Id { get; set; }
+
+            [BsonElement("fullName")]
+            public string FullName { get; set; } = string.Empty;
+
+            [BsonElement("phone")]
+            public string Phone { get; set; } = string.Empty;
 
             [BsonElement("snapshottedAtUtc")]
             public DateTime SnapshottedAtUtc { get; set; }

@@ -144,6 +144,7 @@ builder.Services.AddScoped<IDriverRepository, DriverRepository>();
 builder.Services.AddScoped<IDriverLicenseRepository, DriverLicenseRepository>();
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IDriverVehicleRepository, DriverVehicleRepository>();
+builder.Services.AddScoped<ISupervisorVehicleRepository, SupervisorVehicleRepository>();
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<IGradeRepository, GradeRepository>();
 builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
@@ -165,6 +166,7 @@ builder.Services.AddScoped<IMongoRepository<Notification>, NotificationRepositor
 builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>();
 builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
+builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 
@@ -187,6 +189,8 @@ builder.Services.AddScoped<LicensePlateValidator>();
 builder.Services.AddScoped<UserAccountValidationService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
 builder.Services.AddScoped<IDriverVehicleService, DriverVehicleService>();
+builder.Services.AddScoped<ISupervisorVehicleService, SupervisorVehicleService>();
+builder.Services.AddScoped<ISupervisorTripService, SupervisorTripService>();
 builder.Services.AddScoped<IStudentService, StudentService>();
 builder.Services.AddScoped<IStudentGradeService, StudentGradeService>();
 builder.Services.AddScoped<IDriverLeaveService, DriverLeaveService>();

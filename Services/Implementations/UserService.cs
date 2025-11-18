@@ -282,5 +282,20 @@ namespace Services.Implementations
 			};
 		}
 
+		public async Task<BasicSuccessResponse> ResetAllPasswordsAsync()
+		{
+			var hashedPassword = SecurityHelper.HashPassword("password");
+			var affectedRows = await _repository.ResetAllPasswordsAsync(hashedPassword);
+
+			if (affectedRows == 0)
+				throw new InvalidOperationException("No users were found or updated");
+
+			return new BasicSuccessResponse
+			{
+				Success = true,
+				Data = new { Message = $"Password reset successfully to 'password' for {affectedRows} users", AffectedRows = affectedRows }
+			};
+		}
+
 	}
 }

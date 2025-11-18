@@ -1579,6 +1579,54 @@ namespace Services.Implementations
 						_logger.LogWarning(ex, "Error populating driver snapshot for trip {TripId} from route {RouteId}. Continuing without driver snapshot.", trip.Id, trip.RouteId);
 					}
 				}
+
+				// Step 3: Get SupervisorVehicle assignments for the vehicle to find the supervisor
+				if (route.VehicleId != Guid.Empty)
+				{
+					try
+					{
+						var supervisorVehicleRepo = _databaseFactory.GetRepository<ISupervisorVehicleRepository>();
+
+						var serviceDate = trip.ServiceDate;
+						var activeSupervisorAssignments = await supervisorVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+
+						var supervisorsOnServiceDate = activeSupervisorAssignments
+							.Where(sv => sv.StartTimeUtc.Date <= serviceDate.Date &&
+										 (!sv.EndTimeUtc.HasValue || sv.EndTimeUtc.Value.Date >= serviceDate.Date) &&
+										 sv.Status == SupervisorVehicleStatus.Assigned &&
+										 !sv.IsDeleted &&
+										 sv.Supervisor != null &&
+										 !sv.Supervisor.IsDeleted)
+							.ToList();
+
+						if (supervisorsOnServiceDate.Any())
+						{
+							var supervisorVehicle = supervisorsOnServiceDate.First();
+
+							trip.Supervisor = new Trip.SupervisorSnapshot
+							{
+								Id = supervisorVehicle.Supervisor.Id,
+								FullName = $"{supervisorVehicle.Supervisor.FirstName} {supervisorVehicle.Supervisor.LastName}".Trim(),
+								Phone = supervisorVehicle.Supervisor.PhoneNumber ?? string.Empty,
+								SnapshottedAtUtc = DateTime.UtcNow
+							};
+
+							trip.SupervisorVehicleId = supervisorVehicle.Id;
+
+							_logger.LogDebug("Populated supervisor snapshot for trip {TripId} from route {RouteId}, supervisor {SupervisorId} (SupervisorVehicleId: {SupervisorVehicleId})",
+								trip.Id, trip.RouteId, supervisorVehicle.Supervisor.Id, supervisorVehicle.Id);
+						}
+						else
+						{
+							_logger.LogWarning("No active supervisor assignments found for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Supervisor snapshot will not be populated.",
+								route.VehicleId, trip.RouteId, trip.Id, serviceDate);
+						}
+					}
+					catch (Exception ex)
+					{
+						_logger.LogWarning(ex, "Error populating supervisor snapshot for trip {TripId} from route {RouteId}. Continuing without supervisor snapshot.", trip.Id, trip.RouteId);
+					}
+				}
 			}
 			catch (Exception ex)
 			{
