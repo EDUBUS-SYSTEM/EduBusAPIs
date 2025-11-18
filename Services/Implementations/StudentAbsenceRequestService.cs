@@ -18,17 +18,20 @@ namespace Services.Implementations
         private readonly IStudentAbsenceRequestRepository _repository;
         private readonly ITripRepository _tripRepository;
         private readonly IStudentService _studentService;
+        private readonly IParentRepository _parentRepository;
         private readonly IMapper _mapper;
 
         public StudentAbsenceRequestService(
             IStudentAbsenceRequestRepository repository,
             ITripRepository tripRepository,
             IStudentService studentService,
+            IParentRepository parentRepository,
             IMapper mapper)
         {
             _repository = repository;
             _tripRepository = tripRepository;
             _studentService = studentService;
+            _parentRepository = parentRepository;
             _mapper = mapper;
         }
 
@@ -82,14 +85,24 @@ namespace Services.Implementations
             if (hasApprovedExactMatch)
                 throw new InvalidOperationException("Student already has an approved absence request for the selected period.");
 
+            var parent = await _parentRepository.FindAsync(parentId);
+            if (parent is null)
+                throw new InvalidOperationException("Parent account not found.");
+
             var entity = _mapper.Map<StudentAbsenceRequest>(createDto);
             entity.StudentName = BuildStudentFullName(student.FirstName, student.LastName);
+            entity.ParentName = BuildFullName(parent.FirstName, parent.LastName, "Parent");
+            entity.ParentEmail = parent.Email ?? string.Empty;
+            entity.ParentPhoneNumber = parent.PhoneNumber ?? string.Empty;
 
             await _repository.AddAsync(entity);
             return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
         }
 
-        private static string BuildStudentFullName(string firstName, string lastName)
+        private static string BuildStudentFullName(string firstName, string lastName) =>
+            BuildFullName(firstName, lastName, "Student");
+
+        private static string BuildFullName(string? firstName, string? lastName, string defaultName)
         {
             var trimmedFirst = firstName?.Trim();
             var trimmedLast = lastName?.Trim();
@@ -109,7 +122,7 @@ namespace Services.Implementations
                 return trimmedLast;
             }
 
-            return "Student";
+            return defaultName;
         }
 
         public async Task<StudentAbsenceRequestListResponse> GetByStudentAsync(
