@@ -50,6 +50,15 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = true;
 });
 
+var corsAllowedOrigins = builder.Configuration
+    .GetSection("CorsSettings:AllowedOrigins")
+    .Get<string[]>()?
+    .Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray() ?? Array.Empty<string>();
+
+var corsAllowCredentials = builder.Configuration.GetValue<bool?>("CorsSettings:AllowCredentials") ?? false;
+
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -62,17 +71,22 @@ builder.Services.AddCors(options =>
 
     options.AddPolicy("AllowSpecificOrigins", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:3000",     // React development
-                "http://localhost:3001",     // React alternative port
-                "https://localhost:3000",    // React HTTPS
-                "https://localhost:3001",    // React HTTPS alternative
-                "http://localhost:5223",     // API HTTP
-                "https://localhost:7061"     // API HTTPS
-            )
+        if (corsAllowedOrigins.Length == 0)
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            return;
+        }
+
+        policy.WithOrigins(corsAllowedOrigins)
             .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+              .AllowAnyHeader();
+
+        if (corsAllowCredentials)
+        {
+            policy.AllowCredentials();
+        }
     });
 });
 builder.Services.AddSwaggerGen(c =>
@@ -169,6 +183,7 @@ builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
+builder.Services.AddScoped<IStudentAbsenceRequestRepository, StudentAbsenceRequestRepository>();
 
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
 builder.Services.AddScoped<ITripRepository, TripRepository>();
@@ -209,6 +224,7 @@ builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
 builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
+builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
