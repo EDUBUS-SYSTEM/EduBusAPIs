@@ -45,6 +45,21 @@ namespace Services.MapperProfiles
             CreateMap<Supervisor, ImportUserSuccess>();
             CreateMap<Supervisor, SupervisorResponse>();
 
+            // supervisor vehicle mapping
+            CreateMap<SupervisorVehicle, Services.Models.SupervisorVehicle.SupervisorAssignmentDto>()
+                .ForMember(dest => dest.SupervisorName, opt => opt.MapFrom(src => src.Supervisor != null ? $"{src.Supervisor.FirstName} {src.Supervisor.LastName}".Trim() : string.Empty))
+                .ForMember(dest => dest.SupervisorEmail, opt => opt.MapFrom(src => src.Supervisor != null ? src.Supervisor.Email : string.Empty))
+                .ForMember(dest => dest.SupervisorPhone, opt => opt.MapFrom(src => src.Supervisor != null ? src.Supervisor.PhoneNumber : string.Empty))
+                .ForMember(dest => dest.VehiclePlate, opt => opt.MapFrom(src => src.Vehicle != null ? SecurityHelper.DecryptFromBytes(src.Vehicle.HashedLicensePlate) : string.Empty))
+                .ForMember(dest => dest.VehicleCapacity, opt => opt.MapFrom(src => src.Vehicle != null ? src.Vehicle.Capacity : 0))
+                .ForMember(dest => dest.AssignedByAdminName, opt => opt.MapFrom(src => src.AssignedByAdmin != null ? $"{src.AssignedByAdmin.FirstName} {src.AssignedByAdmin.LastName}".Trim() : string.Empty))
+                .ForMember(dest => dest.ApprovedByAdminName, opt => opt.MapFrom(src => src.ApprovedByAdmin != null ? $"{src.ApprovedByAdmin.FirstName} {src.ApprovedByAdmin.LastName}".Trim() : string.Empty))
+                .AfterMap((src, dest) =>
+                {
+                    var now = DateTime.UtcNow;
+                    dest.IsActive = src.StartTimeUtc <= now && (src.EndTimeUtc == null || src.EndTimeUtc > now);
+                });
+
             // driver mapping
             CreateMap<CreateDriverRequest, Driver>();
             CreateMap<Driver, CreateUserResponse>();

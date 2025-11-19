@@ -16,8 +16,10 @@ namespace Services.Models.Trip
 		public string Status { get; set; } = string.Empty;
 		public Guid VehicleId { get; set; }
 		public Guid? DriverVehicleId { get; set; }
+		public Guid? SupervisorVehicleId { get; set; }
 		public VehicleSnapshotDto? Vehicle { get; set; }
 		public DriverSnapshotDto? Driver { get; set; }
+		public SupervisorSnapshotDto? Supervisor { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
 		public DateTime CreatedAt { get; set; }
@@ -47,6 +49,14 @@ namespace Services.Models.Trip
 		public string FullName { get; set; } = string.Empty;
 		public string Phone { get; set; } = string.Empty;
 		public bool IsPrimary { get; set; }
+		public DateTime SnapshottedAtUtc { get; set; }
+	}
+
+	public class SupervisorSnapshotDto
+	{
+		public Guid Id { get; set; }
+		public string FullName { get; set; } = string.Empty;
+		public string Phone { get; set; } = string.Empty;
 		public DateTime SnapshottedAtUtc { get; set; }
 	}
 

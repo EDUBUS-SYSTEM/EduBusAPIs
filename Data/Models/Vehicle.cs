@@ -15,4 +15,5 @@ public partial class Vehicle : BaseDomain
 
     public virtual Admin Admin { get; set; } = null!;
     public virtual ICollection<DriverVehicle> DriverVehicles { get; set; } = new List<DriverVehicle>();
+    public virtual ICollection<SupervisorVehicle> SupervisorVehicles { get; set; } = new List<SupervisorVehicle>();
 }
