@@ -61,6 +61,7 @@ namespace Services.Implementations
                 Admin => Roles.Admin,
                 Driver => Roles.Driver,
                 Parent => Roles.Parent,
+                Supervisor => Roles.Supervisor,
                 _ => Roles.Unknown
             };
 
@@ -96,6 +97,7 @@ namespace Services.Implementations
                 Admin => Roles.Admin,
                 Driver => Roles.Driver,
                 Parent => Roles.Parent,
+                Supervisor => Roles.Supervisor,
                 _ => Roles.Unknown
             };
 

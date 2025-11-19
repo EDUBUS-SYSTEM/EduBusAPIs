@@ -20,7 +20,7 @@ namespace Services.Implementations
             _mapper = mapper;
         }
 
-        public async Task<UserListResponse> GetUsersAsync(string? status, string? search, int page, int perPage, string? sortBy, string? sortOrder)
+        public async Task<UserListResponse> GetUsersAsync(string? status, string? search, int page, int perPage, string? sortBy, string? sortOrder, string? role)
         {
             // Build query
             var query = _repository.GetQueryable().Where(u => !u.IsDeleted);
@@ -53,6 +53,21 @@ namespace Services.Implementations
 					query = query.Where(u => !u.IsDeleted && (!u.LockedUntil.HasValue || u.LockedUntil.Value <= DateTime.UtcNow));
 				}
 			}
+
+            // Apply role filter based on derived user type
+            if (!string.IsNullOrWhiteSpace(role))
+            {
+                var normalizedRole = role.Trim().ToLowerInvariant();
+
+                query = normalizedRole switch
+                {
+                    var r when r == "admin" => query.OfType<Admin>(),
+                    var r when r == "driver" => query.OfType<Driver>(),
+                    var r when r == "parent" => query.OfType<Parent>(),
+                    var r when r == "supervisor" => query.OfType<Supervisor>(),
+                    _ => query
+                };
+            }
 
 			// Get total count before pagination
 			var totalCount = await query.CountAsync();

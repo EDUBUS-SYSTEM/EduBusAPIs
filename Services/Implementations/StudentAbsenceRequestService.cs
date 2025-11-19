@@ -265,7 +265,7 @@ namespace Services.Implementations
             {
                 Data = _mapper.Map<List<StudentAbsenceRequestListItemDto>>(entities),
                 Pagination = new PaginationInfo
-                {
+        {
                     CurrentPage = page,
                     PerPage = perPage,
                     TotalItems = totalCount,

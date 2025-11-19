@@ -90,7 +90,7 @@ namespace Data.Repos.MongoDB
             if (endDate.HasValue)
             {
                 filters.Add(filterBuilder.Lte(x => x.EndDate, endDate.Value));
-            }
+        }
 
             if (status.HasValue)
             {
@@ -141,12 +141,12 @@ namespace Data.Repos.MongoDB
             }
 
             if (status.HasValue)
-            {
+        {
                 filters.Add(filterBuilder.Eq(x => x.Status, status.Value));
-            }
+        }
 
             if (!string.IsNullOrWhiteSpace(studentName))
-            {
+        {
                 var escaped = Regex.Escape(studentName.Trim());
                 var regex = new BsonRegularExpression(escaped, "i");
                 filters.Add(filterBuilder.Regex(x => x.StudentName, regex));
