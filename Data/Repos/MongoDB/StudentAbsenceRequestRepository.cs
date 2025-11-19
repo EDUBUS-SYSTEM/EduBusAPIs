@@ -1,11 +1,11 @@
 ﻿using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace Data.Repos.MongoDB
@@ -17,18 +17,157 @@ namespace Data.Repos.MongoDB
         {
         }
 
-        public Task<IEnumerable<StudentAbsenceRequest>> GetByStudentAsync(Guid studentId)
+        public async Task<(IEnumerable<StudentAbsenceRequest> Items, int TotalCount)> GetByStudentAsync(
+            Guid studentId,
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
         {
-            var filter = Builders<StudentAbsenceRequest>.Filter.Eq(x => x.StudentId, studentId);
-            var sort = Builders<StudentAbsenceRequest>.Sort.Descending(x => x.CreatedAt);
-            return FindByFilterAsync(filter, sort);
+            var filterBuilder = Builders<StudentAbsenceRequest>.Filter;
+            var filters = new List<FilterDefinition<StudentAbsenceRequest>>
+            {
+                filterBuilder.Eq(x => x.StudentId, studentId),
+                filterBuilder.Eq(x => x.IsDeleted, false)
+            };
+
+            if (startDate.HasValue)
+            {
+                filters.Add(filterBuilder.Gte(x => x.StartDate, startDate.Value));
+            }
+
+            if (endDate.HasValue)
+            {
+                filters.Add(filterBuilder.Lte(x => x.EndDate, endDate.Value));
+            }
+
+            if (status.HasValue)
+            {
+                filters.Add(filterBuilder.Eq(x => x.Status, status.Value));
+            }
+
+            var filter = filterBuilder.And(filters);
+            var sortDefinition = sort == CreateAtSortOption.Oldest
+                ? Builders<StudentAbsenceRequest>.Sort.Ascending(x => x.CreatedAt)
+                : Builders<StudentAbsenceRequest>.Sort.Descending(x => x.CreatedAt);
+
+            var skip = Math.Max(0, (page - 1) * perPage);
+
+            var totalCount = (int)await _collection.CountDocumentsAsync(filter);
+            var items = await _collection
+                .Find(filter)
+                .Sort(sortDefinition)
+                .Skip(skip)
+                .Limit(perPage)
+                .ToListAsync();
+
+            return (items, totalCount);
         }
 
-        public Task<IEnumerable<StudentAbsenceRequest>> GetByParentAsync(Guid parentId)
+        public async Task<(IEnumerable<StudentAbsenceRequest> Items, int TotalCount)> GetByParentAsync(
+            Guid parentId,
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
         {
-            var filter = Builders<StudentAbsenceRequest>.Filter.Eq(x => x.ParentId, parentId);
-            var sort = Builders<StudentAbsenceRequest>.Sort.Descending(x => x.CreatedAt);
-            return FindByFilterAsync(filter, sort);
+            var filterBuilder = Builders<StudentAbsenceRequest>.Filter;
+            var filters = new List<FilterDefinition<StudentAbsenceRequest>>
+            {
+                filterBuilder.Eq(x => x.ParentId, parentId),
+                filterBuilder.Eq(x => x.IsDeleted, false)
+            };
+
+            if (startDate.HasValue)
+            {
+                filters.Add(filterBuilder.Gte(x => x.StartDate, startDate.Value));
+            }
+
+            if (endDate.HasValue)
+            {
+                filters.Add(filterBuilder.Lte(x => x.EndDate, endDate.Value));
+        }
+
+            if (status.HasValue)
+            {
+                filters.Add(filterBuilder.Eq(x => x.Status, status.Value));
+            }
+
+            var filter = filterBuilder.And(filters);
+            var sortDefinition = sort == CreateAtSortOption.Oldest
+                ? Builders<StudentAbsenceRequest>.Sort.Ascending(x => x.CreatedAt)
+                : Builders<StudentAbsenceRequest>.Sort.Descending(x => x.CreatedAt);
+
+            var skip = Math.Max(0, (page - 1) * perPage);
+
+            var totalCount = (int)await _collection.CountDocumentsAsync(filter);
+            var items = await _collection
+                .Find(filter)
+                .Sort(sortDefinition)
+                .Skip(skip)
+                .Limit(perPage)
+                .ToListAsync();
+
+            return (items, totalCount);
+        }
+
+        public async Task<(IEnumerable<StudentAbsenceRequest> Items, int TotalCount)> GetAllAsync(
+            DateTime? startDate,
+            DateTime? endDate,
+            AbsenceRequestStatus? status,
+            string? studentName,
+            CreateAtSortOption sort,
+            int page,
+            int perPage)
+        {
+            var filterBuilder = Builders<StudentAbsenceRequest>.Filter;
+            var filters = new List<FilterDefinition<StudentAbsenceRequest>>
+            {
+                filterBuilder.Eq(x => x.IsDeleted, false)
+            };
+
+            if (startDate.HasValue)
+            {
+                filters.Add(filterBuilder.Gte(x => x.StartDate, startDate.Value));
+            }
+
+            if (endDate.HasValue)
+            {
+                filters.Add(filterBuilder.Lte(x => x.EndDate, endDate.Value));
+            }
+
+            if (status.HasValue)
+        {
+                filters.Add(filterBuilder.Eq(x => x.Status, status.Value));
+        }
+
+            if (!string.IsNullOrWhiteSpace(studentName))
+        {
+                var escaped = Regex.Escape(studentName.Trim());
+                var regex = new BsonRegularExpression(escaped, "i");
+                filters.Add(filterBuilder.Regex(x => x.StudentName, regex));
+            }
+
+            var filter = filterBuilder.And(filters);
+            var sortDefinition = sort == CreateAtSortOption.Oldest
+                ? Builders<StudentAbsenceRequest>.Sort.Ascending(x => x.CreatedAt)
+                : Builders<StudentAbsenceRequest>.Sort.Descending(x => x.CreatedAt);
+
+            var skip = Math.Max(0, (page - 1) * perPage);
+
+            var totalCount = (int)await _collection.CountDocumentsAsync(filter);
+            var items = await _collection
+                .Find(filter)
+                .Sort(sortDefinition)
+                .Skip(skip)
+                .Limit(perPage)
+                .ToListAsync();
+
+            return (items, totalCount);
         }
 
         public async Task<StudentAbsenceRequest?> GetPendingOverlapAsync(
