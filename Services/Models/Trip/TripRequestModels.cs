@@ -48,5 +48,23 @@ namespace Services.Models.Trip
         public double? Accuracy { get; set; }
         public bool IsMoving { get; set; }
     }
+
+	public class ArrangeStopRequest
+	{
+		public Guid PickupPointId { get; set; }
+		public int NewSequenceOrder { get; set; }
+	}
+
+	public class UpdateStopSequenceItem
+	{
+		public Guid PickupPointId { get; set; }
+		public int SequenceOrder { get; set; }
+	}
+
+	public class UpdateMultipleStopsSequenceRequest
+	{
+		public List<UpdateStopSequenceItem> Stops { get; set; } = new List<UpdateStopSequenceItem>();
+	}
+
 }
 

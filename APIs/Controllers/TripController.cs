@@ -509,6 +509,108 @@ namespace APIs.Controllers
 			}
 		}
 
+		[HttpPut("{tripId}/stops/arrange")]
+		[Authorize(Roles = $"{Roles.Driver}")]
+		public async Task<ActionResult<object>> ArrangeStopSequence(Guid tripId, [FromBody] ArrangeStopRequest request)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var success = await _tripService.ArrangeStopSequenceAsync(
+					tripId,
+					driverId.Value,
+					request.PickupPointId,
+					request.NewSequenceOrder);
+
+				if (!success)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				return Ok(new
+				{
+					tripId = tripId,
+					pickupPointId = request.PickupPointId,
+					newSequenceOrder = request.NewSequenceOrder,
+					message = "Stop sequence updated successfully",
+					updatedAt = DateTime.UtcNow
+				});
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error arranging stop sequence: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPut("{tripId}/stops/arrange-multiple")]
+		[Authorize(Roles = $"{Roles.Driver}")]
+		public async Task<ActionResult<object>> UpdateMultipleStopsSequence(Guid tripId, [FromBody] UpdateMultipleStopsSequenceRequest request)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				if (request.Stops == null || !request.Stops.Any())
+				{
+					return BadRequest(new { message = "Stops list cannot be empty" });
+				}
+
+				// Convert request to tuple list
+				var stopSequences = request.Stops
+					.Select(s => (s.PickupPointId, s.SequenceOrder))
+					.ToList();
+
+				var success = await _tripService.UpdateMultipleStopsSequenceAsync(
+					tripId,
+					driverId.Value,
+					stopSequences);
+
+				if (!success)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				return Ok(new
+				{
+					tripId = tripId,
+					updatedStopsCount = request.Stops.Count,
+					message = "Multiple stops sequence updated successfully",
+					updatedAt = DateTime.UtcNow
+				});
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating multiple stops sequence: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
 		#region Driver Trip 
 
 		[HttpGet("by-date")]
