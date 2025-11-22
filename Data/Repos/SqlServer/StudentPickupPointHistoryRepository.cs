@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.SqlServer
 {
-    public class StudentPickupPointHistoryRepository : SqlRepository<StudentPickupPointHistory>, IStudentPickupPointHistoryRepository
+    public class StudentPickupPointRepository : SqlRepository<StudentPickupPoint>, IStudentPickupPointRepository
     {
-        public StudentPickupPointHistoryRepository(EduBusSqlContext ctx) : base(ctx) { }
+        public StudentPickupPointRepository(EduBusSqlContext ctx) : base(ctx) { }
     }
 }

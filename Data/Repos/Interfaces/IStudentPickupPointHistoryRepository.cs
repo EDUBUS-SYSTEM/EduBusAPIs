@@ -7,5 +7,5 @@ using System.Threading.Tasks;
 
 namespace Data.Repos.Interfaces
 {
-    public interface IStudentPickupPointHistoryRepository : ISqlRepository<StudentPickupPointHistory> { }
+    public interface IStudentPickupPointRepository : ISqlRepository<StudentPickupPoint> { }
 }

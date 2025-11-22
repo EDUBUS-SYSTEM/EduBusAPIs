@@ -165,7 +165,7 @@ builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
 builder.Services.AddScoped<IDriverLeaveRepository, DriverLeaveRepository>();
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
-builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
+builder.Services.AddScoped<IStudentPickupPointRepository, StudentPickupPointRepository>();
 builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Payment Repositories
@@ -181,6 +181,7 @@ builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>
 builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
+builder.Services.AddScoped<IMongoRepository<PickupPointResetLog>, PickupPointResetLogRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 builder.Services.AddScoped<IStudentAbsenceRequestRepository, StudentAbsenceRequestRepository>();

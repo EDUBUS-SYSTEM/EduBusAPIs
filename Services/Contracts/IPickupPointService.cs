@@ -11,5 +11,7 @@ namespace Services.Contracts
 	{
 		Task<PickupPointsResponse> GetUnassignedPickupPointsAsync();
 		Task<AdminCreatePickupPointResponse> AdminCreatePickupPointAsync(AdminCreatePickupPointRequest request, Guid adminId);
+		Task<ResetPickupPointBySemesterResponse> ResetPickupPointBySemesterAsync(ResetPickupPointBySemesterRequest request, Guid adminId);
+		Task<GetPickupPointsBySemesterResponse> GetPickupPointsBySemesterAsync(GetPickupPointsBySemesterRequest request);
 	}
 }

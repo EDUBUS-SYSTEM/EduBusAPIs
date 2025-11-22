@@ -62,7 +62,7 @@ namespace Data.Contexts.SqlServer
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
             => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev_Test;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
+                "Server=localhost,49898;Database=edubus_dev_Test1;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
                 sql => sql.UseNetTopologySuite()
             );
 
@@ -371,11 +371,13 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne(d => d.Student).WithMany(p => p.StudentGradeEnrollments).HasForeignKey(d => d.StudentId);
             });
 
-            modelBuilder.Entity<StudentPickupPointHistory>(entity =>
+            modelBuilder.Entity<StudentPickupPoint>(entity =>
             {
-                entity.HasIndex(e => e.PickupPointId, "IX_StudentPickupPointHistory_PickupPointId");
-                entity.HasIndex(e => e.StudentId, "IX_StudentPickupPointHistory_StudentId");
-                entity.HasIndex(e => e.AssignedAt, "IX_StudentPickupPointHistory_AssignedAt");
+                entity.ToTable("StudentPickupPoint");
+                
+                entity.HasIndex(e => e.PickupPointId, "IX_StudentPickupPoint_PickupPointId");
+                entity.HasIndex(e => e.StudentId, "IX_StudentPickupPoint_StudentId");
+                entity.HasIndex(e => e.AssignedAt, "IX_StudentPickupPoint_AssignedAt");
 
                 entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
                 entity.Property(e => e.AssignedAt).HasPrecision(3);
@@ -383,6 +385,12 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.ChangeReason).HasMaxLength(500);
                 entity.Property(e => e.ChangedBy).HasMaxLength(100);
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+                
+                entity.Property(e => e.SemesterName).HasMaxLength(200);
+                entity.Property(e => e.SemesterCode).HasMaxLength(50);
+                entity.Property(e => e.AcademicYear).HasMaxLength(50);
+                entity.Property(e => e.SemesterStartDate).HasPrecision(3);
+                entity.Property(e => e.SemesterEndDate).HasPrecision(3);
 
                 entity.HasOne(d => d.PickupPoint).WithMany(p => p.StudentPickupPointHistory)
                     .HasForeignKey(d => d.PickupPointId)

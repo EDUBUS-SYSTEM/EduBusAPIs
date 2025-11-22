@@ -25,6 +25,7 @@ namespace Services.Models.PickupPoint
         
         // Semester information
         public string SemesterName { get; set; } = string.Empty;
+        public string SemesterCode { get; set; } = string.Empty;
         public string AcademicYear { get; set; } = string.Empty;
         public DateTime SemesterStartDate { get; set; }
         public DateTime SemesterEndDate { get; set; }

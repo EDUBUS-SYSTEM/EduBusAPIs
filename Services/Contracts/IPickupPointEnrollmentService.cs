@@ -18,10 +18,5 @@ namespace Services.Contracts
         /// Get all pickup points with their assigned student status
         /// </summary>
         Task<List<PickupPointWithStudentStatusDto>> GetPickupPointsWithStudentStatusAsync();
-        
-        /// <summary>
-        /// Assign pickup point to students after successful payment
-        /// </summary>
-        Task AssignPickupPointAfterPaymentAsync(Guid transactionId);
     }
 }
