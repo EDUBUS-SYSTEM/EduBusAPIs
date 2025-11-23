@@ -434,5 +434,45 @@ namespace Services.Implementations
 				TotalStudents = totalStudents
 			};
 		}
+
+		/// <summary>
+		/// Get all available semesters from StudentPickupPoint table
+		/// Returns distinct semesters that have pickup point assignments
+		/// </summary>
+		public async Task<GetAvailableSemestersResponse> GetAvailableSemestersAsync()
+		{
+			// Get all non-deleted StudentPickupPoint records
+			var allRecords = await _studentPickupPointRepository.FindByConditionAsync(spp => !spp.IsDeleted);
+
+			// Group by semester criteria to get distinct semesters
+			var semesterGroups = allRecords
+				.GroupBy(spp => new
+				{
+					spp.SemesterCode,
+					spp.AcademicYear,
+					SemesterStartDate = spp.SemesterStartDate.Date,
+					SemesterEndDate = spp.SemesterEndDate.Date,
+					spp.SemesterName
+				})
+				.Select(g => new AvailableSemesterDto
+				{
+					SemesterCode = g.Key.SemesterCode,
+					AcademicYear = g.Key.AcademicYear,
+					SemesterStartDate = g.Key.SemesterStartDate,
+					SemesterEndDate = g.Key.SemesterEndDate,
+					SemesterName = g.Key.SemesterName,
+					StudentCount = g.Select(spp => spp.StudentId).Distinct().Count()
+				})
+				.OrderByDescending(s => s.AcademicYear)
+				.ThenByDescending(s => s.SemesterCode)
+				.ThenByDescending(s => s.SemesterStartDate)
+				.ToList();
+
+			return new GetAvailableSemestersResponse
+			{
+				Semesters = semesterGroups,
+				TotalCount = semesterGroups.Count
+			};
+		}
 	}
 }

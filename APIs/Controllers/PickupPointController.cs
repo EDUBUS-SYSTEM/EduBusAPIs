@@ -379,6 +379,28 @@ namespace APIs.Controllers
 			}
 		}
 
+		/// <summary>
+		/// Get all available semesters from StudentPickupPoint table
+		/// Returns distinct semesters that have pickup point assignments
+		/// Used for populating semester dropdown in reset form
+		/// </summary>
+		[HttpGet("admin/available-semesters")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(GetAvailableSemestersResponse), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> GetAvailableSemesters()
+		{
+			try
+			{
+				var result = await _pickupPointService.GetAvailableSemestersAsync();
+				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
 		// ===================
 		// Helpers
 		// ===================

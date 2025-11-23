@@ -705,9 +705,9 @@ namespace Services.Implementations
 
             foreach (var (pickupPoint, assignedStudentCount) in pickupPointsWithCount)
             {
-                // Get assigned students for this pickup point (only Active students)
-                var assignedStudents = await _studentRepo.GetQueryable()
-                    .Where(s => !s.IsDeleted && s.CurrentPickupPointId == pickupPoint.Id && s.Status == StudentStatus.Active)
+                // Get ALL assigned students for this pickup point (all statuses)
+                var allAssignedStudents = await _studentRepo.GetQueryable()
+                    .Where(s => !s.IsDeleted && s.CurrentPickupPointId == pickupPoint.Id)
                     .Select(s => new StudentInfo
                     {
                         Id = s.Id,
@@ -717,6 +717,12 @@ namespace Services.Implementations
                         PickupPointAssignedAt = s.PickupPointAssignedAt
                     })
                     .ToListAsync();
+
+                // Calculate status breakdown
+                var totalStudents = allAssignedStudents.Count;
+                var activeStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Active);
+                var pendingStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Pending);
+                var inactiveStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Inactive);
 
                 result.Add(new PickupPointWithStudentStatusDto
                 {
@@ -729,11 +735,88 @@ namespace Services.Implementations
                     UpdatedAt = pickupPoint.UpdatedAt,
                     IsDeleted = pickupPoint.IsDeleted,
                     AssignedStudentCount = assignedStudentCount,
-                    AssignedStudents = assignedStudents
+                    AssignedStudents = allAssignedStudents,
+                    TotalStudents = totalStudents,
+                    ActiveStudents = activeStudents,
+                    PendingStudents = pendingStudents,
+                    InactiveStudents = inactiveStudents
                 });
             }
 
             return result;
+        }
+
+        public async Task AssignPickupPointAfterPaymentAsync(Guid transactionId)
+        {
+            // Get the transaction
+            var transaction = await _transactionRepo.FindAsync(transactionId);
+            if (transaction == null)
+            {
+                throw new KeyNotFoundException($"Transaction with ID {transactionId} not found.");
+            }
+
+            // Check if transaction has a pickup point request ID
+            if (string.IsNullOrEmpty(transaction.PickupPointRequestId))
+            {
+                // No pickup point request associated with this transaction, skip assignment
+                return;
+            }
+
+            // Get the pickup point request from MongoDB
+            var pickupPointRequestId = Guid.Parse(transaction.PickupPointRequestId);
+            var pickupPointRequest = await _requestRepo.FindAsync(pickupPointRequestId);
+            if (pickupPointRequest == null)
+            {
+                throw new KeyNotFoundException($"Pickup point request with ID {pickupPointRequestId} not found.");
+            }
+
+            // Check if pickup point was created (should exist after approval)
+            if (!pickupPointRequest.PickupPointId.HasValue)
+            {
+                throw new InvalidOperationException($"Pickup point has not been created for request {pickupPointRequestId}.");
+            }
+
+            var pickupPointId = pickupPointRequest.PickupPointId.Value;
+
+            // Get students from transport fee items
+            var transportFeeItems = await _transportFeeItemRepo.FindByConditionAsync(tfi => tfi.TransactionId == transactionId);
+            var studentIds = transportFeeItems.Select(tfi => tfi.StudentId).Distinct().ToList();
+
+            if (!studentIds.Any())
+            {
+                // No students associated with this transaction, skip assignment
+                return;
+            }
+
+            // Assign pickup point to each student
+            var now = DateTime.UtcNow;
+            foreach (var studentId in studentIds)
+            {
+                var student = await _studentRepo.FindAsync(studentId);
+                if (student == null || student.IsDeleted) continue;
+
+                // Update student's current pickup point
+                student.CurrentPickupPointId = pickupPointId;
+                student.PickupPointAssignedAt = now;
+                await _studentRepo.UpdateAsync(student);
+
+                // Create StudentPickupPoint history record
+                await _historyRepo.AddAsync(new StudentPickupPoint
+                {
+                    StudentId = studentId,
+                    PickupPointId = pickupPointId,
+                    AssignedAt = now,
+                    ChangeReason = "Assigned after successful payment",
+                    ChangedBy = $"Transaction:{transactionId}",
+                    // Semester information from pickup point request
+                    SemesterName = pickupPointRequest.SemesterName,
+                    SemesterCode = pickupPointRequest.SemesterCode,
+                    AcademicYear = pickupPointRequest.AcademicYear,
+                    SemesterStartDate = pickupPointRequest.SemesterStartDate,
+                    SemesterEndDate = pickupPointRequest.SemesterEndDate,
+                    TotalSchoolDays = pickupPointRequest.TotalSchoolDays
+                });
+            }
         }
     }
 }
