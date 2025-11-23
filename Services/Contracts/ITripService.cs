@@ -64,7 +64,7 @@ namespace Services.Contracts
 		Task<Trip.VehicleLocation?> GetTripCurrentLocationAsync(Guid tripId, string parentEmail);
         Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId);
         Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId);
-		Task<bool> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder);
-		Task<bool> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences);
+		Task<Trip?> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder);
+		Task<Trip?> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences);
 	}
 }

@@ -521,22 +521,34 @@ namespace APIs.Controllers
 					return Unauthorized(new { message = "User ID not found in token" });
 				}
 
-				var success = await _tripService.ArrangeStopSequenceAsync(
+				var trip = await _tripService.ArrangeStopSequenceAsync(
 					tripId,
 					driverId.Value,
 					request.PickupPointId,
 					request.NewSequenceOrder);
 
-				if (!success)
+				if (trip == null)
 				{
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
+				// Return sorted pickup points
+				var sortedStops = trip.Stops
+					.OrderBy(s => s.SequenceOrder)
+					.Select(s => new
+					{
+						pickupPointId = s.PickupPointId,
+						sequenceOrder = s.SequenceOrder,
+						address = s.Location?.Address,
+						arrivedAt = s.ArrivedAt,
+						departedAt = s.DepartedAt
+					})
+					.ToList();
+
 				return Ok(new
 				{
 					tripId = tripId,
-					pickupPointId = request.PickupPointId,
-					newSequenceOrder = request.NewSequenceOrder,
+					stops = sortedStops,
 					message = "Stop sequence updated successfully",
 					updatedAt = DateTime.UtcNow
 				});
@@ -578,20 +590,33 @@ namespace APIs.Controllers
 					.Select(s => (s.PickupPointId, s.SequenceOrder))
 					.ToList();
 
-				var success = await _tripService.UpdateMultipleStopsSequenceAsync(
+				var trip = await _tripService.UpdateMultipleStopsSequenceAsync(
 					tripId,
 					driverId.Value,
 					stopSequences);
 
-				if (!success)
+				if (trip == null)
 				{
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
+				// Return sorted pickup points
+				var sortedStops = trip.Stops
+					.OrderBy(s => s.SequenceOrder)
+					.Select(s => new
+					{
+						pickupPointId = s.PickupPointId,
+						sequenceOrder = s.SequenceOrder,
+						address = s.Location?.Address,
+						arrivedAt = s.ArrivedAt,
+						departedAt = s.DepartedAt
+					})
+					.ToList();
+
 				return Ok(new
 				{
 					tripId = tripId,
-					updatedStopsCount = request.Stops.Count,
+					stops = sortedStops,
 					message = "Multiple stops sequence updated successfully",
 					updatedAt = DateTime.UtcNow
 				});

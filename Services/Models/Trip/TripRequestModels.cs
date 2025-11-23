@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Services.Models.Trip
 {
     public class UpdateTripStatusRequest
@@ -51,13 +53,17 @@ namespace Services.Models.Trip
 
 	public class ArrangeStopRequest
 	{
+        [Required]
 		public Guid PickupPointId { get; set; }
+        [Required]
 		public int NewSequenceOrder { get; set; }
 	}
 
 	public class UpdateStopSequenceItem
 	{
+        [Required]
 		public Guid PickupPointId { get; set; }
+        [Required]
 		public int SequenceOrder { get; set; }
 	}
 

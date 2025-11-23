@@ -2558,7 +2558,7 @@ namespace Services.Implementations
                 driverId, stopId, tripId, distance);
         }
 
-		public async Task<bool> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder)
+		public async Task<Trip?> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder)
 		{
 			try
 			{
@@ -2568,14 +2568,14 @@ namespace Services.Implementations
 				if (trip == null || trip.IsDeleted)
 				{
 					_logger.LogWarning("Trip {TripId} not found", tripId);
-					return false;
+					return null;
 				}
 
 				// Verify driver owns this trip
 				if (trip.Driver?.Id != driverId)
 				{
 					_logger.LogWarning("Driver {DriverId} does not have access to trip {TripId}", driverId, tripId);
-					return false;
+					return null;
 				}
 
 				// Verify trip is in progress
@@ -2588,7 +2588,7 @@ namespace Services.Implementations
 				if (trip.Stops == null || !trip.Stops.Any())
 				{
 					_logger.LogWarning("Trip {TripId} has no stops", tripId);
-					return false;
+					return null;
 				}
 
 				// STEP 1: Normalize sequence orders to 0-based index
@@ -2640,7 +2640,7 @@ namespace Services.Implementations
 				if (currentSequence == newSequenceOrder)
 				{
 					_logger.LogInformation("Stop {PickupPointId} is already at sequence {Sequence}", pickupPointId, newSequenceOrder);
-					return true;
+					return trip;
 				}
 
 				// Reorder stops
@@ -2670,7 +2670,7 @@ namespace Services.Implementations
 				_logger.LogInformation("Driver {DriverId} rearranged stop {PickupPointId} from sequence {OldSequence} to {NewSequence} in trip {TripId}",
 					driverId, pickupPointId, currentSequence, newSequenceOrder, tripId);
 
-				return true;
+				return trip;
 			}
 			catch (Exception ex)
 			{
@@ -2679,7 +2679,7 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<bool> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences)
+		public async Task<Trip?> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences)
 		{
 			try
 			{
@@ -2689,14 +2689,14 @@ namespace Services.Implementations
 				if (trip == null || trip.IsDeleted)
 				{
 					_logger.LogWarning("Trip {TripId} not found", tripId);
-					return false;
+					return null;
 				}
 
 				// Verify driver owns this trip
 				if (trip.Driver?.Id != driverId)
 				{
 					_logger.LogWarning("Driver {DriverId} does not have access to trip {TripId}", driverId, tripId);
-					return false;
+					return null;
 				}
 
 				// Verify trip is in progress
@@ -2709,7 +2709,7 @@ namespace Services.Implementations
 				if (trip.Stops == null || !trip.Stops.Any())
 				{
 					_logger.LogWarning("Trip {TripId} has no stops", tripId);
-					return false;
+					return null;
 				}
 
 				if (stopSequences == null || !stopSequences.Any())
@@ -2828,7 +2828,7 @@ namespace Services.Implementations
 				_logger.LogInformation("Driver {DriverId} updated sequence for {Count} stops in trip {TripId}",
 					driverId, stopSequences.Count, tripId);
 
-				return true;
+				return trip;
 			}
 			catch (Exception ex)
 			{
