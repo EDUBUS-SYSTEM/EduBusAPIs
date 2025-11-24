@@ -63,6 +63,28 @@ namespace APIs.Controllers
 			}
 		}
 
+		[HttpGet("registration/eligibility")]
+		[Authorize(Roles = Roles.Parent)]
+		[ProducesResponseType(typeof(ParentRegistrationEligibilityDto), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> GetRegistrationEligibility()
+		{
+			var parentId = ResolveParentIdFromClaims();
+			if (parentId is null)
+			{
+				return Unauthorized(Problem(title: "Unauthorized",
+									  detail: "Parent ID not found in claims.",
+									  statusCode: StatusCodes.Status401Unauthorized));
+			}
+
+			var parentEmail = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value
+				?? User.FindFirst("email")?.Value
+				?? User.FindFirst("Email")?.Value;
+
+			var result = await _svc.GetRegistrationEligibilityAsync(parentId.Value, parentEmail);
+			return Ok(result);
+		}
+
 
 
 		/// <summary>
@@ -411,6 +433,12 @@ namespace APIs.Controllers
 						  ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
 			return Guid.TryParse(adminIdStr, out var id) ? id : null;
+		}
+
+		private Guid? ResolveParentIdFromClaims()
+		{
+			var parentIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+			return Guid.TryParse(parentIdStr, out var id) ? id : null;
 		}
 	}
 }
