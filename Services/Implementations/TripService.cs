@@ -2557,7 +2557,287 @@ namespace Services.Implementations
                 "Driver {DriverId} confirmed arrival at stop {StopId} for trip {TripId}. Vehicle distance: {Distance} km",
                 driverId, stopId, tripId, distance);
         }
-        private async Task<List<Guid>> GetPickupPointIdsForStudentsAsync(List<Guid> studentIds)
+
+		public async Task<Trip?> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder)
+		{
+			try
+			{
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var trip = await tripRepo.FindAsync(tripId);
+
+				if (trip == null || trip.IsDeleted)
+				{
+					_logger.LogWarning("Trip {TripId} not found", tripId);
+					return null;
+				}
+
+				// Verify driver owns this trip
+				if (trip.Driver?.Id != driverId)
+				{
+					_logger.LogWarning("Driver {DriverId} does not have access to trip {TripId}", driverId, tripId);
+					return null;
+				}
+
+				// Verify trip is in progress
+				if (trip.Status != TripStatus.InProgress)
+				{
+					_logger.LogWarning("Cannot arrange stops for trip {TripId} with status {Status}", tripId, trip.Status);
+					throw new InvalidOperationException($"Cannot arrange stops. Trip must be in progress (current status: {trip.Status})");
+				}
+
+				if (trip.Stops == null || !trip.Stops.Any())
+				{
+					_logger.LogWarning("Trip {TripId} has no stops", tripId);
+					return null;
+				}
+
+				// STEP 1: Normalize sequence orders to 0-based index
+				var orderedStops = trip.Stops.OrderBy(s => s.SequenceOrder).ToList();
+				for (int i = 0; i < orderedStops.Count; i++)
+				{
+					orderedStops[i].SequenceOrder = i;
+				}
+
+				// Find the stop to move
+				var stopToMove = trip.Stops.FirstOrDefault(s => s.PickupPointId == pickupPointId);
+				if (stopToMove == null)
+				{
+					_logger.LogWarning("Stop with PickupPointId {PickupPointId} not found in trip {TripId}", pickupPointId, tripId);
+					throw new ArgumentException("Stop not found in this trip");
+				}
+
+				// Validate the stop hasn't been passed yet (ArrivedAt is null)
+				if (stopToMove.ArrivedAt.HasValue)
+				{
+					_logger.LogWarning("Cannot move stop {PickupPointId} that has already been passed (arrived at {ArrivedAt})",
+						pickupPointId, stopToMove.ArrivedAt);
+					throw new InvalidOperationException("Cannot rearrange a stop that has already been passed");
+				}
+
+				// Validate new sequence order is within valid range (0-based)
+				if (newSequenceOrder < 0 || newSequenceOrder >= trip.Stops.Count)
+				{
+					throw new ArgumentException($"New sequence order must be between 0 and {trip.Stops.Count - 1}");
+				}
+
+				// Get all passed stops (those with ArrivedAt set)
+				var passedStops = trip.Stops.Where(s => s.ArrivedAt.HasValue).OrderBy(s => s.SequenceOrder).ToList();
+
+				// Find the highest sequence order among passed stops
+				var maxPassedSequence = passedStops.Any() ? passedStops.Max(s => s.SequenceOrder) : -1;
+
+				// Validate that new position doesn't break the order of passed stops
+				if (newSequenceOrder <= maxPassedSequence)
+				{
+					_logger.LogWarning("Cannot move stop to sequence {NewSequence} because stops up to sequence {MaxPassed} have already been passed",
+						newSequenceOrder, maxPassedSequence);
+					throw new InvalidOperationException($"Cannot move stop to position {newSequenceOrder}. Stops up to position {maxPassedSequence} have already been passed");
+				}
+
+				var currentSequence = stopToMove.SequenceOrder;
+
+				// If no change needed
+				if (currentSequence == newSequenceOrder)
+				{
+					_logger.LogInformation("Stop {PickupPointId} is already at sequence {Sequence}", pickupPointId, newSequenceOrder);
+					return trip;
+				}
+
+				// Reorder stops
+				if (currentSequence < newSequenceOrder)
+				{
+					// Moving down: shift stops between current and new position up
+					foreach (var stop in trip.Stops.Where(s => s.SequenceOrder > currentSequence && s.SequenceOrder <= newSequenceOrder))
+					{
+						stop.SequenceOrder--;
+					}
+				}
+				else
+				{
+					// Moving up: shift stops between new and current position down
+					foreach (var stop in trip.Stops.Where(s => s.SequenceOrder >= newSequenceOrder && s.SequenceOrder < currentSequence))
+					{
+						stop.SequenceOrder++;
+					}
+				}
+
+				// Update the moved stop's sequence
+				stopToMove.SequenceOrder = newSequenceOrder;
+
+				// Save changes
+				await tripRepo.UpdateAsync(trip);
+
+				_logger.LogInformation("Driver {DriverId} rearranged stop {PickupPointId} from sequence {OldSequence} to {NewSequence} in trip {TripId}",
+					driverId, pickupPointId, currentSequence, newSequenceOrder, tripId);
+
+				return trip;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error arranging stop sequence for trip {TripId}", tripId);
+				throw;
+			}
+		}
+
+		public async Task<Trip?> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences)
+		{
+			try
+			{
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var trip = await tripRepo.FindAsync(tripId);
+
+				if (trip == null || trip.IsDeleted)
+				{
+					_logger.LogWarning("Trip {TripId} not found", tripId);
+					return null;
+				}
+
+				// Verify driver owns this trip
+				if (trip.Driver?.Id != driverId)
+				{
+					_logger.LogWarning("Driver {DriverId} does not have access to trip {TripId}", driverId, tripId);
+					return null;
+				}
+
+				// Verify trip is in progress
+				if (trip.Status != TripStatus.InProgress)
+				{
+					_logger.LogWarning("Cannot arrange stops for trip {TripId} with status {Status}", tripId, trip.Status);
+					throw new InvalidOperationException($"Cannot arrange stops. Trip must be in progress (current status: {trip.Status})");
+				}
+
+				if (trip.Stops == null || !trip.Stops.Any())
+				{
+					_logger.LogWarning("Trip {TripId} has no stops", tripId);
+					return null;
+				}
+
+				if (stopSequences == null || !stopSequences.Any())
+				{
+					throw new ArgumentException("Stop sequences list cannot be empty");
+				}
+
+				// STEP 1: Normalize sequence orders to 0-based index
+				var orderedStops = trip.Stops.OrderBy(s => s.SequenceOrder).ToList();
+				for (int i = 0; i < orderedStops.Count; i++)
+				{
+					orderedStops[i].SequenceOrder = i;
+				}
+
+				// Validate all pickup points exist in the trip
+				var tripPickupPointIds = trip.Stops.Select(s => s.PickupPointId).ToHashSet();
+				var requestPickupPointIds = stopSequences.Select(s => s.PickupPointId).ToHashSet();
+
+				var missingPickupPoints = requestPickupPointIds.Except(tripPickupPointIds).ToList();
+				if (missingPickupPoints.Any())
+				{
+					throw new ArgumentException($"The following pickup points are not in this trip: {string.Join(", ", missingPickupPoints)}");
+				}
+
+				// Validate all stops in the request haven't been passed yet
+				var stopsToUpdate = trip.Stops.Where(s => requestPickupPointIds.Contains(s.PickupPointId)).ToList();
+				var passedStopsInRequest = stopsToUpdate.Where(s => s.ArrivedAt.HasValue).ToList();
+
+				if (passedStopsInRequest.Any())
+				{
+					var passedStopIds = string.Join(", ", passedStopsInRequest.Select(s => s.PickupPointId));
+					_logger.LogWarning("Cannot update sequence for passed stops: {PassedStops}", passedStopIds);
+					throw new InvalidOperationException($"Cannot rearrange stops that have already been passed: {passedStopIds}");
+				}
+
+				// Get all passed stops (those with ArrivedAt set)
+				var passedStops = trip.Stops.Where(s => s.ArrivedAt.HasValue).OrderBy(s => s.SequenceOrder).ToList();
+				var maxPassedSequence = passedStops.Any() ? passedStops.Max(s => s.SequenceOrder) : -1;
+
+				// Validate sequence orders are valid and don't conflict with passed stops
+				var newSequenceOrders = stopSequences.Select(s => s.SequenceOrder).ToList();
+
+				// Check for duplicate sequence orders in the request
+				if (newSequenceOrders.Count != newSequenceOrders.Distinct().Count())
+				{
+					throw new ArgumentException("Duplicate sequence orders found in the request");
+				}
+
+				// Check if any new sequence order is in the passed range
+				var invalidSequences = newSequenceOrders.Where(seq => seq <= maxPassedSequence).ToList();
+				if (invalidSequences.Any())
+				{
+					_logger.LogWarning("Cannot assign sequences {InvalidSequences} because stops up to sequence {MaxPassed} have already been passed",
+						string.Join(", ", invalidSequences), maxPassedSequence);
+					throw new InvalidOperationException($"Cannot assign sequence orders {string.Join(", ", invalidSequences)}. Stops up to position {maxPassedSequence} have already been passed");
+				}
+
+				// Check if sequence orders are within valid range (0-based)
+				var minSequence = newSequenceOrders.Min();
+				var maxSequence = newSequenceOrders.Max();
+
+				if (minSequence < 0 || maxSequence >= trip.Stops.Count)
+				{
+					throw new ArgumentException($"Sequence orders must be between 0 and {trip.Stops.Count - 1}");
+				}
+
+				// Create a mapping of PickupPointId to new sequence order
+				var sequenceMap = stopSequences.ToDictionary(s => s.PickupPointId, s => s.SequenceOrder);
+
+				// Build a list of all stops with their new or existing sequence orders
+				var allStopsWithNewSequence = trip.Stops.Select(stop => new
+				{
+					Stop = stop,
+					NewSequence = sequenceMap.ContainsKey(stop.PickupPointId) ? sequenceMap[stop.PickupPointId] : stop.SequenceOrder,
+					IsUpdated = sequenceMap.ContainsKey(stop.PickupPointId)
+				}).ToList();
+
+				// Sort by new sequence to detect conflicts
+				var sortedStops = allStopsWithNewSequence.OrderBy(s => s.NewSequence).ToList();
+
+				// Reassign sequence orders to ensure no gaps or duplicates
+				// Strategy: Keep passed stops in their positions, then arrange unpassed stops
+				var finalSequence = 0;
+				var stopSequenceAssignments = new Dictionary<Guid, int>();
+
+				// First, preserve passed stops' positions
+				foreach (var passedStop in passedStops)
+				{
+					stopSequenceAssignments[passedStop.PickupPointId] = passedStop.SequenceOrder;
+					finalSequence = Math.Max(finalSequence, passedStop.SequenceOrder + 1);
+				}
+
+				// Then, assign new sequences to unpassed stops based on the request
+				var unpassedStopsOrdered = sortedStops
+					.Where(s => !s.Stop.ArrivedAt.HasValue)
+					.OrderBy(s => s.NewSequence)
+					.ToList();
+
+				foreach (var stopInfo in unpassedStopsOrdered)
+				{
+					stopSequenceAssignments[stopInfo.Stop.PickupPointId] = finalSequence++;
+				}
+
+				// Apply the new sequence orders
+				foreach (var stop in trip.Stops)
+				{
+					if (stopSequenceAssignments.ContainsKey(stop.PickupPointId))
+					{
+						stop.SequenceOrder = stopSequenceAssignments[stop.PickupPointId];
+					}
+				}
+
+				// Save changes
+				await tripRepo.UpdateAsync(trip);
+
+				_logger.LogInformation("Driver {DriverId} updated sequence for {Count} stops in trip {TripId}",
+					driverId, stopSequences.Count, tripId);
+
+				return trip;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating multiple stops sequence for trip {TripId}", tripId);
+				throw;
+			}
+		}
+
+		private async Task<List<Guid>> GetPickupPointIdsForStudentsAsync(List<Guid> studentIds)
 		{
 			try
 			{
