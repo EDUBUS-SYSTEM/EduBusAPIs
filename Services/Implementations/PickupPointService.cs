@@ -15,6 +15,7 @@ namespace Services.Implementations
 		private readonly IMongoRepository<Route> _routeRepository;
 		private readonly IStudentPickupPointRepository _studentPickupPointRepository;
 		private readonly IMongoRepository<PickupPointResetLog> _resetLogRepository;
+		private readonly IStudentService _studentService;
 		private readonly IMapper _mapper;
 
 		public PickupPointService(
@@ -23,6 +24,7 @@ namespace Services.Implementations
 			IMongoRepository<Route> routeRepository,
 			IStudentPickupPointRepository studentPickupPointRepository,
 			IMongoRepository<PickupPointResetLog> resetLogRepository,
+			IStudentService studentService,
 			IMapper mapper)
 		{
 			_pickupPointRepository = pickupPointRepository;
@@ -30,6 +32,7 @@ namespace Services.Implementations
 			_routeRepository = routeRepository;
 			_studentPickupPointRepository = studentPickupPointRepository;
 			_resetLogRepository = resetLogRepository;
+			_studentService = studentService;
 			_mapper = mapper;
 		}
 
@@ -264,6 +267,55 @@ namespace Services.Implementations
 				}
 			}
 
+			// Activate students with new pickup point assignments
+			var activatedCount = 0;
+			var activationFailedCount = 0;
+			foreach (var studentId in updatedStudentIds)
+			{
+				try
+				{
+					await _studentService.ActivateStudentAsync(studentId);
+					activatedCount++;
+				}
+				catch (Exception ex)
+				{
+					activationFailedCount++;
+					System.Diagnostics.Debug.WriteLine($"Failed to activate student {studentId}: {ex.Message}");
+				}
+			}
+
+			// Deactivate students with existing pickup points but no new assignment for this semester
+			var deactivatedCount = 0;
+			var deactivationFailedCount = 0;
+			try
+			{
+				var allStudentsWithPickupPoint = await _studentRepository.FindByConditionAsync(s =>
+					s.CurrentPickupPointId.HasValue && !s.IsDeleted);
+
+				var studentsToDeactivate = allStudentsWithPickupPoint
+					.Where(s => !updatedStudentIds.Contains(s.Id))
+					.ToList();
+
+				foreach (var student in studentsToDeactivate)
+				{
+					try
+					{
+						var reason = $"No pickup point assignment for semester {request.SemesterCode} {request.AcademicYear}";
+						await _studentService.DeactivateStudentAsync(student.Id, reason);
+						deactivatedCount++;
+					}
+					catch (Exception ex)
+					{
+						deactivationFailedCount++;
+						System.Diagnostics.Debug.WriteLine($"Failed to deactivate student {student.Id}: {ex.Message}");
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Error finding students to deactivate: {ex.Message}");
+			}
+
 			var response = new ResetPickupPointBySemesterResponse
 			{
 				SemesterCode = request.SemesterCode,
@@ -277,7 +329,9 @@ namespace Services.Implementations
 				FailedStudentIds = failedStudentIds,
 				Message = $"Reset pickup points for semester {request.SemesterCode} {request.AcademicYear}. " +
 						  $"Updated {updatedStudentIds.Count} student(s), " +
-						  $"Failed {failedStudentIds.Count} student(s)."
+						  $"Failed {failedStudentIds.Count} student(s). " +
+						  $"Activated {activatedCount} student(s), " +
+						  $"Deactivated {deactivatedCount} student(s)."
 			};
 
 			// Log the reset operation to MongoDB
