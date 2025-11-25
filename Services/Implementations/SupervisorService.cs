@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using AutoMapper;
 using ClosedXML.Excel;
 using Data.Models;
@@ -57,6 +60,23 @@ namespace Services.Implementations
 
             var response = _mapper.Map<CreateUserResponse>(createdSupervisor);
             response.Password = rawPassword;
+
+            var mailContent = CreateWelcomeEmailTemplate(
+                createdSupervisor.FirstName,
+                createdSupervisor.LastName,
+                createdSupervisor.Email,
+                rawPassword);
+
+            try
+            {
+                await SendWelcomeEmailAsync(createdSupervisor.Email, mailContent.subject, mailContent.body);
+            }
+            catch (Exception emailEx)
+            {
+                _logger.LogError(emailEx,
+                    "Failed to send welcome email to supervisor {Email}. Account created successfully.",
+                    createdSupervisor.Email);
+            }
 
             return response;
         }
@@ -174,6 +194,8 @@ namespace Services.Implementations
 
             result.TotalProcessed = rows.Count();
 
+            var emailTasks = new List<(string email, string subject, string body, int rowNumber, string firstName, string lastName)>();
+
             foreach (var (supervisorDto, rowNumber) in validSupervisorDtos)
             {
                 try
@@ -228,6 +250,14 @@ namespace Services.Implementations
                     successResult.RowNumber = rowNumber;
                     successResult.Password = rawPassword;
                     result.SuccessfulUsers.Add(successResult);
+
+                    var mailContent = CreateWelcomeEmailTemplate(
+                        createdSupervisor.FirstName,
+                        createdSupervisor.LastName,
+                        createdSupervisor.Email,
+                        rawPassword);
+
+                    emailTasks.Add((createdSupervisor.Email, mailContent.subject, mailContent.body, rowNumber, createdSupervisor.FirstName, createdSupervisor.LastName));
                 }
                 catch (Exception ex)
                 {
@@ -241,6 +271,43 @@ namespace Services.Implementations
                         ErrorMessage = $"Error while creating supervisor: {ex.Message}"
                     });
                 }
+            }
+
+            if (emailTasks.Count > 0)
+            {
+                _logger.LogInformation("Preparing to send {Count} welcome emails for imported supervisors", emailTasks.Count);
+
+                var successCount = 0;
+                var failureCount = 0;
+
+                var pendingTasks = emailTasks.Select(async task =>
+                {
+                    try
+                    {
+                        await SendWelcomeEmailAsync(task.email, task.subject, task.body);
+                        Interlocked.Increment(ref successCount);
+                        _logger.LogInformation("Successfully sent supervisor welcome email to {Email} (Row {RowNumber})", task.email, task.rowNumber);
+                    }
+                    catch (Exception emailEx)
+                    {
+                        Interlocked.Increment(ref failureCount);
+                        _logger.LogError(emailEx,
+                            "Failed to send supervisor welcome email to {Email} (Row {RowNumber}). Account created successfully.",
+                            task.email,
+                            task.rowNumber);
+                    }
+                }).ToList();
+
+                await Task.WhenAll(pendingTasks);
+                _logger.LogInformation(
+                    "Completed supervisor welcome email sending. Success: {SuccessCount}, Failed: {FailureCount} out of {TotalCount}",
+                    successCount,
+                    failureCount,
+                    emailTasks.Count);
+            }
+            else
+            {
+                _logger.LogWarning("No supervisor welcome emails to send. Successful supervisors: {Count}", result.SuccessfulUsers.Count);
             }
 
             return result;
@@ -351,6 +418,44 @@ namespace Services.Implementations
                 return (true, 3, null);
 
             return (false, 0, $"Invalid gender value '{rawValue}'. Allowed values: 1 (Male), 2 (Female), 3 (Other) or their text equivalents.");
+        }
+
+        private async Task SendWelcomeEmailAsync(string email, string subject, string body)
+        {
+            await _emailService.SendEmailAsync(email, subject, body);
+        }
+
+        private (string subject, string body) CreateWelcomeEmailTemplate(string firstName, string lastName, string email, string password)
+        {
+            var subject = "🎉 EduBus Supervisor Account Created Successfully";
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+</head>
+<body style=""margin:0;padding:0;font-family:Arial,sans-serif;background-color:#f5f5f5;"">
+    <div style=""max-width:600px;margin:0 auto;background-color:#ffffff;padding:24px;border-radius:8px;"">
+        <h2 style=""color:#1565C0;margin-top:0;"">Xin chào {firstName} {lastName},</h2>
+        <p>Bạn đã được cấp tài khoản <strong>Supervisor</strong> trên hệ thống <strong>EduBus</strong>.</p>
+        <div style=""background-color:#E3F2FD;padding:16px;border-left:4px solid #1565C0;margin:24px 0;border-radius:6px;"">
+            <p style=""margin:8px 0;""><strong>Email đăng nhập:</strong> {email}</p>
+            <p style=""margin:8px 0;""><strong>Mật khẩu tạm thời:</strong> <code style=""background:#f5f5f5;padding:4px 8px;border-radius:4px;"">{password}</code></p>
+            <p style=""color:#D84315;font-size:14px;margin-top:16px;"">Vui lòng đổi mật khẩu sau lần đăng nhập đầu tiên để đảm bảo bảo mật.</p>
+        </div>
+        <p>Bạn có thể đăng nhập để quản lý chuyến xe, giám sát học sinh và cập nhật thông tin vận hành.</p>
+        <hr style=""border:none;border-top:1px solid #e0e0e0;margin:32px 0;"">
+        <h3 style=""color:#1565C0;margin-top:0;"">English</h3>
+        <p>Hello {firstName} {lastName},</p>
+        <p>Your <strong>Supervisor</strong> account on <strong>EduBus</strong> has been created.</p>
+        <p>Please log in using the credentials above and change your password after the first login.</p>
+        <p style=""margin-top:32px;"">Best regards,<br/><strong>EduBus Team</strong></p>
+    </div>
+</body>
+</html>";
+
+            return (subject, body);
         }
     }
 }
