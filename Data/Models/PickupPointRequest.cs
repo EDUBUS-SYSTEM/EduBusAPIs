@@ -1,4 +1,6 @@
 using Data.Models;
+using MongoDB.Bson.Serialization.Attributes;
+using MongoDB.Bson;
 
 public class PickupPointRequestDocument : BaseMongoDocument
 {
@@ -21,11 +23,14 @@ public class PickupPointRequestDocument : BaseMongoDocument
     public Guid? PickupPointId { get; set; }  // ID of created pickup point
 
     // Pricing information (snapshot at submission time)
+    [BsonRepresentation(BsonType.Decimal128)]
     public decimal UnitPricePerKm { get; set; }
+    [BsonRepresentation(BsonType.Decimal128)]
     public decimal TotalFee { get; set; }
     
     // Semester information (snapshot at submission time)
     public string SemesterName { get; set; } = "";
+    public string SemesterCode { get; set; } = "";
     public string AcademicYear { get; set; } = "";
     public DateTime SemesterStartDate { get; set; }
     public DateTime SemesterEndDate { get; set; }

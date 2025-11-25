@@ -303,6 +303,104 @@ namespace APIs.Controllers
 			}
 		}
 
+		/// <summary>
+		/// Reset pickup points by semester
+		/// Admin selects semester (e.g., S1 2025-2026) with start and end dates
+		/// System finds all StudentPickupPoint records matching the semester criteria
+		/// and assigns PickupPointId to CurrentPickupPointId in Student table
+		/// </summary>
+		[HttpPost("admin/reset-by-semester")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(ResetPickupPointBySemesterResponse), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> ResetPickupPointBySemester([FromBody] ResetPickupPointBySemesterRequest request)
+		{
+			if (!ModelState.IsValid)
+				return ValidationProblem(ModelState);
+
+			var adminId = ResolveAdminIdFromClaims();
+			if (adminId is null || adminId == Guid.Empty)
+			{
+				return Unauthorized(Problem(title: "Unauthorized",
+									  detail: "Admin ID not found in claims.",
+									  statusCode: StatusCodes.Status401Unauthorized));
+			}
+
+			try
+			{
+				var result = await _pickupPointService.ResetPickupPointBySemesterAsync(request, adminId.Value);
+				return Ok(result);
+			}
+			catch (ArgumentNullException ex)
+			{
+				return BadRequest(Problem(title: "Invalid request", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(Problem(title: "Invalid date range", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
+		/// <summary>
+		/// Get all pickup points with their assigned students by semester
+		/// Returns pickup points from StudentPickupPoint table filtered by semester criteria
+		/// Used for displaying pickup points before reset operation
+		/// </summary>
+		[HttpPost("admin/get-by-semester")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(GetPickupPointsBySemesterResponse), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> GetPickupPointsBySemester([FromBody] GetPickupPointsBySemesterRequest request)
+		{
+			if (!ModelState.IsValid)
+				return ValidationProblem(ModelState);
+
+			try
+			{
+				var result = await _pickupPointService.GetPickupPointsBySemesterAsync(request);
+				return Ok(result);
+			}
+			catch (ArgumentNullException ex)
+			{
+				return BadRequest(Problem(title: "Invalid request", detail: ex.Message,
+									  statusCode: StatusCodes.Status400BadRequest));
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
+		/// <summary>
+		/// Get all available semesters from StudentPickupPoint table
+		/// Returns distinct semesters that have pickup point assignments
+		/// Used for populating semester dropdown in reset form
+		/// </summary>
+		[HttpGet("admin/available-semesters")]
+		[Authorize(Roles = Roles.Admin)]
+		[ProducesResponseType(typeof(GetAvailableSemestersResponse), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> GetAvailableSemesters()
+		{
+			try
+			{
+				var result = await _pickupPointService.GetAvailableSemestersAsync();
+				return Ok(result);
+			}
+			catch (Exception ex)
+			{
+				return StatusCode(500, new { message = "Internal server error", details = ex.Message });
+			}
+		}
+
 		// ===================
 		// Helpers
 		// ===================

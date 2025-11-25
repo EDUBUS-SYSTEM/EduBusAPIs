@@ -15,6 +15,12 @@ namespace Services.Models.PickupPoint
         public bool IsDeleted { get; set; }
         public int AssignedStudentCount { get; set; }
         public List<StudentInfo> AssignedStudents { get; set; } = new();
+        
+        // Status breakdown fields for frontend
+        public int TotalStudents { get; set; }
+        public int ActiveStudents { get; set; }
+        public int PendingStudents { get; set; }
+        public int InactiveStudents { get; set; }
     }
 
     public class StudentInfo

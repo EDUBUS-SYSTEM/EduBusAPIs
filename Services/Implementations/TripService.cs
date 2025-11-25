@@ -20,7 +20,7 @@ namespace Services.Implementations
 		private readonly ILogger<TripService> _logger;
 		private readonly IStudentRepository _studentRepository;
 		private readonly IPickupPointRepository _pickupPointRepository;
-		private readonly IStudentPickupPointHistoryRepository _studentPickupPointHistoryRepository;
+		private readonly IStudentPickupPointRepository _studentPickupPointRepository;
 		private readonly IVehicleRepository _vehicleRepository;
 		private readonly IMongoDatabase _mongoDatabase; 
 		private readonly IVietMapService _vietMapService;
@@ -33,7 +33,7 @@ namespace Services.Implementations
             IMongoDatabase mongoDatabase,
             IStudentRepository studentRepository,
 			IPickupPointRepository pickupPointRepository,
-			IStudentPickupPointHistoryRepository studentPickupPointHistoryRepository,
+			IStudentPickupPointRepository studentPickupPointRepository,
 			IVehicleRepository vehicleRepository,
 			IVietMapService vietMapService,
 			INotificationService notificationService,
@@ -43,7 +43,7 @@ namespace Services.Implementations
 			_logger = logger;
 			_studentRepository = studentRepository;
 			_pickupPointRepository = pickupPointRepository;
-			_studentPickupPointHistoryRepository = studentPickupPointHistoryRepository;
+			_studentPickupPointRepository = studentPickupPointRepository;
 			_vehicleRepository = vehicleRepository;
 			_vietMapService = vietMapService;
 			_notificationService = notificationService;
@@ -2855,7 +2855,7 @@ namespace Services.Implementations
 							pickupPointIds.Add(student.CurrentPickupPointId.Value);
 						}
 
-						var allHistory = await _studentPickupPointHistoryRepository.FindByConditionAsync(
+						var allHistory = await _studentPickupPointRepository.FindByConditionAsync(
 							h => h.StudentId == studentId && 
 							h.AssignedAt <= now && 
 							(h.RemovedAt == null || h.RemovedAt > now) &&
