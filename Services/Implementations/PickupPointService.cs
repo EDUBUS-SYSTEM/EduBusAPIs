@@ -16,6 +16,7 @@ namespace Services.Implementations
 		private readonly IStudentPickupPointRepository _studentPickupPointRepository;
 		private readonly IMongoRepository<PickupPointResetLog> _resetLogRepository;
 		private readonly IStudentService _studentService;
+		private readonly IUserAccountRepository _userAccountRepository;
 		private readonly IMapper _mapper;
 
 		public PickupPointService(
@@ -25,6 +26,7 @@ namespace Services.Implementations
 			IStudentPickupPointRepository studentPickupPointRepository,
 			IMongoRepository<PickupPointResetLog> resetLogRepository,
 			IStudentService studentService,
+			IUserAccountRepository userAccountRepository,
 			IMapper mapper)
 		{
 			_pickupPointRepository = pickupPointRepository;
@@ -33,6 +35,7 @@ namespace Services.Implementations
 			_studentPickupPointRepository = studentPickupPointRepository;
 			_resetLogRepository = resetLogRepository;
 			_studentService = studentService;
+			_userAccountRepository = userAccountRepository;
 			_mapper = mapper;
 		}
 
@@ -334,12 +337,15 @@ namespace Services.Implementations
 						  $"Deactivated {deactivatedCount} student(s)."
 			};
 
+			var adminName = await ResolveAdminNameAsync(adminId);
+
 			// Log the reset operation to MongoDB
 			try
 			{
 				var resetLog = new PickupPointResetLog
 				{
 					AdminId = adminId,
+					AdminName = adminName,
 					SemesterCode = request.SemesterCode,
 					AcademicYear = request.AcademicYear,
 					SemesterName = request.SemesterName,
@@ -370,6 +376,29 @@ namespace Services.Implementations
 			}
 
 			return response;
+		}
+
+		private async Task<string?> ResolveAdminNameAsync(Guid adminId)
+		{
+			try
+			{
+				var adminAccount = await _userAccountRepository.FindAsync(adminId);
+				if (adminAccount == null)
+					return null;
+
+				var fullName = $"{adminAccount.FirstName} {adminAccount.LastName}".Trim();
+				if (!string.IsNullOrWhiteSpace(fullName))
+				{
+					return fullName;
+				}
+
+				return adminAccount.Email;
+			}
+			catch (Exception ex)
+			{
+				System.Diagnostics.Debug.WriteLine($"Failed to resolve admin name for {adminId}: {ex.Message}");
+				return null;
+			}
 		}
 
 		/// <summary>
