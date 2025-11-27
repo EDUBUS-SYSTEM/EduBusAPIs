@@ -1,4 +1,5 @@
 ﻿using Constants;
+using Data.Models.Enums;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Services.Models.Trip
@@ -34,6 +35,7 @@ namespace Services.Models.Trip
 		public string StartTime { get; set; } = string.Empty;
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 	}
 
 	public class VehicleSnapshotDto
@@ -112,6 +114,7 @@ namespace Services.Models.Trip
 	{
 		public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
 		public string PlateVehicle { get; set; } = string.Empty;

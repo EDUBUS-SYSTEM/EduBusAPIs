@@ -180,6 +180,8 @@ namespace Services.MapperProfiles
             CreateMap<VehicleSnapshotDto, Trip.VehicleSnapshot>();
             CreateMap<Trip.DriverSnapshot, DriverSnapshotDto>();
             CreateMap<DriverSnapshotDto, Trip.DriverSnapshot>();
+            CreateMap<Trip.SupervisorSnapshot, SupervisorSnapshotDto>();
+            CreateMap<SupervisorSnapshotDto, Trip.SupervisorSnapshot>();
             CreateMap<TripStopDto, TripStop>();
 
             // Driver Schedule mappings

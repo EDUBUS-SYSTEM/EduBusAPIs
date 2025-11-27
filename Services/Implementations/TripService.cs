@@ -620,7 +620,8 @@ namespace Services.Implementations
 									Name = schedule.Name,
 									StartTime = schedule.StartTime,
 									EndTime = schedule.EndTime,
-									RRule = schedule.RRule
+									RRule = schedule.RRule,
+									TripType = schedule.TripType
 								},
 								Stops = new List<TripStop>()
 							};
@@ -764,6 +765,7 @@ namespace Services.Implementations
 				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
 					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
 
+				trip.ScheduleSnapshot.TripType = schedule.TripType;
 				ValidateTripTimesAgainstSchedule(trip, schedule);
 			}
 
@@ -805,6 +807,7 @@ namespace Services.Implementations
 				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
 					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
 
+				trip.ScheduleSnapshot.TripType = schedule.TripType;
 				ValidateTripTimesAgainstSchedule(trip, schedule);
 			}
 
