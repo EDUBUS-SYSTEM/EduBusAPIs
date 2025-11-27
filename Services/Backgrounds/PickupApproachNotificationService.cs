@@ -1,4 +1,7 @@
 ﻿
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -7,10 +10,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using Services.Contracts;
-using Services.Implementations;
 using Services.Models.Notification;
 using Services.Models.VietMap;
-using Data.Models.Enums;
+
 namespace Services.Backgrounds
 {
     public class PickupApproachNotificationService : BackgroundService
@@ -141,18 +143,38 @@ namespace Services.Backgrounds
                 return;
             }
 
-            // Check if notification already sent for this stop
-            var notificationKey = $"pickup_approach_{trip.Id}_{nextPendingStop.SequenceOrder}";
+            // Base notification key per trip and pickup point (sequence order may change)
+            var notificationKeyPrefix = $"pickup_approach_{trip.Id}_{nextPendingStop.PickupPointId}";
 
             // Get all parents who have children at this pickup point
-            var parents = await tripService.GetParentsForPickupPointAsync(trip.Id, nextPendingStop.PickupPointId);
+            var parentAssignments = await tripService.GetParentStudentAssignmentsForPickupPointAsync(
+                trip.Id, nextPendingStop.PickupPointId);
 
-            if (!parents.Any())
+            if (!parentAssignments.Any())
             {
                 _logger.LogDebug("No parents found for trip {TripId}, stop {StopOrder}",
                     trip.Id, nextPendingStop.SequenceOrder);
                 return;
-            }          
+            }
+
+            var parentGroups = parentAssignments
+                .GroupBy(a => a.ParentId)
+                .Select(g => new
+                {
+                    ParentId = g.Key,
+                    StudentNames = g.Select(a => a.StudentName)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                })
+                .ToList();
+
+            if (!parentGroups.Any())
+            {
+                _logger.LogDebug("No parent groups with students found for trip {TripId}, stop {StopOrder}",
+                    trip.Id, nextPendingStop.SequenceOrder);
+                return;
+            }
 
             // Only call VietMap API for the next stop
             var routeResult = await vietMapService.GetRouteAsync(
@@ -181,20 +203,30 @@ namespace Services.Backgrounds
                 return;
             }
 
-            var notificationTasks = parents.Select(async parentId =>
+            var notificationTasks = parentGroups.Select(async parentGroup =>
             {
+                var notificationKey = $"{notificationKeyPrefix}_{parentGroup.ParentId}";
+
                 var existingNotification = await notificationService.GetNotificationByMetadataAsync(
-                    parentId, "Trip", notificationKey);
+                    parentGroup.ParentId, "Trip", notificationKey);
 
                 if (existingNotification != null)
                 {
-                    _logger.LogDebug("Notification already sent to parent {ParentId}...", parentId, trip.Id, nextPendingStop.SequenceOrder);
+                    _logger.LogDebug("Notification already sent to parent {ParentId}...", parentGroup.ParentId, trip.Id, nextPendingStop.SequenceOrder);
                     return;
                 }
 
+                var studentList = string.Join(", ", parentGroup.StudentNames);
+                if (string.IsNullOrWhiteSpace(studentList))
+                {
+                    studentList = "Student";
+                }
+
+                var message = $"{studentList} Please get ready!";
+
                 await SendApproachNotificationToParentAsync(
                     trip, nextPendingStop, routeResult,
-                    notificationService, parentId, notificationKey);
+                    notificationService, parentGroup.ParentId, notificationKey, message, parentGroup.StudentNames);
             });
 
             await Task.WhenAll(notificationTasks);
@@ -206,12 +238,16 @@ namespace Services.Backgrounds
             RouteResult routeResult,
             INotificationService notificationService,
             Guid parentId,
-            string notificationKey)
+            string notificationKey,
+            string message,
+            IReadOnlyCollection<string> studentNames)
         {
             try
             {
                 var minutes = (int)Math.Ceiling(routeResult.DurationMinutes);
-                var message = "Please get ready!";
+                var studentArray = studentNames?.Any() == true
+                    ? studentNames.ToArray()
+                    : Array.Empty<string>();
 
                 var notificationDto = new CreateNotificationDto
                 {
@@ -228,7 +264,8 @@ namespace Services.Backgrounds
                         { "stopSequenceOrder", stop.SequenceOrder },
                         { "pickupPointId", stop.PickupPointId.ToString() },
                         { "estimatedMinutes", minutes },
-                        { "notificationKey", notificationKey }
+                        { "notificationKey", notificationKey },
+                        { "students", studentArray }
                     }
                 };
 

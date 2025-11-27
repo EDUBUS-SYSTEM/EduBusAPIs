@@ -2429,46 +2429,60 @@ namespace Services.Implementations
 		}
         public async Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId)
         {
+            var assignments = await GetParentStudentAssignmentsForPickupPointAsync(tripId, pickupPointId);
+            return assignments
+                .Select(a => a.ParentId)
+                .Distinct();
+        }
+
+        public async Task<IEnumerable<ParentStudentAssignment>> GetParentStudentAssignmentsForPickupPointAsync(Guid tripId, Guid pickupPointId)
+        {
             try
             {
                 var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
                 var trip = await tripRepo.FindAsync(tripId);
 
                 if (trip == null || trip.IsDeleted || trip.Stops == null)
-                    return Enumerable.Empty<Guid>();
+                    return Enumerable.Empty<ParentStudentAssignment>();
 
-                // Find the stop with this pickup point
                 var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == pickupPointId);
                 if (stop == null || stop.Attendance == null || !stop.Attendance.Any())
-                    return Enumerable.Empty<Guid>();
+                    return Enumerable.Empty<ParentStudentAssignment>();
 
-                // Get student IDs from attendance
-                var studentIds = stop.Attendance
-                    .Where(a => a.StudentId != Guid.Empty)
-                    .Select(a => a.StudentId)
-                    .Distinct()
-                    .ToList();
+                var assignments = new List<ParentStudentAssignment>();
 
-                if (!studentIds.Any())
-                    return Enumerable.Empty<Guid>();
-
-                // Get students and their parent IDs
-                var parentIds = new HashSet<Guid>();
-                foreach (var studentId in studentIds)
+                foreach (var attendance in stop.Attendance)
                 {
-                    var student = await _studentRepository.FindAsync(studentId);
-                    if (student != null && !student.IsDeleted && student.ParentId.HasValue)
+                    if (attendance == null || attendance.StudentId == Guid.Empty)
+                        continue;
+
+                    var student = await _studentRepository.FindAsync(attendance.StudentId);
+                    if (student == null || student.IsDeleted || !student.ParentId.HasValue)
+                        continue;
+
+                    var studentName = !string.IsNullOrWhiteSpace(attendance.StudentName)
+                        ? attendance.StudentName
+                        : $"{student.LastName + student.FirstName}" ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(studentName))
                     {
-                        parentIds.Add(student.ParentId.Value);
+                        studentName = "Student";
                     }
+
+                    assignments.Add(new ParentStudentAssignment
+                    {
+                        ParentId = student.ParentId.Value,
+                        StudentId = attendance.StudentId,
+                        StudentName = studentName
+                    });
                 }
 
-                return parentIds;
+                return assignments;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting parents for pickup point {PickupPointId} in trip {TripId}", pickupPointId, tripId);
-                return Enumerable.Empty<Guid>();
+                _logger.LogError(ex, "Error getting parent-student assignments for pickup point {PickupPointId} in trip {TripId}", pickupPointId, tripId);
+                return Enumerable.Empty<ParentStudentAssignment>();
             }
         }
         public async Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId)
@@ -2520,6 +2534,20 @@ namespace Services.Implementations
             // Update arrival time
             stop.ArrivedAt = DateTime.UtcNow;
             await tripRepo.UpdateAsync(trip);
+
+            // Broadcast realtime update to parents tracking this trip via TripHub
+            try
+            {
+                if (_tripHubService != null)
+                {   
+                    await _tripHubService.BroadcastStopArrivalAsync(tripId, stopId, stop.ArrivedAt.Value);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error broadcasting stop arrival via SignalR for trip {TripId}, stop {StopId}", tripId, stopId);
+            }
+
 
             // Get parents for this pickup point
             var parentIds = await GetParentsForPickupPointAsync(tripId, stopId);
