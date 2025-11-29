@@ -1,4 +1,4 @@
-﻿using Constants;
+using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -272,7 +272,7 @@ namespace Services.Implementations
 		// Populate attendance for all stops with active students
 		await PopulateAttendanceForTripStopsAsync(trip);
 
-		trip.Status = TripStatus.Scheduled;
+		trip.Status = TripConstants.TripStatus.Scheduled;
 
 		// Populate snapshots if VehicleId or DriverVehicleId are provided
 		await PopulateTripSnapshotsAsync(trip);
@@ -298,7 +298,7 @@ namespace Services.Implementations
 
 			if (existingTrip.Status != trip.Status)
 			{
-				if (!TripStatusTransitions.IsValidTransition(existingTrip.Status, trip.Status))
+				if (!TripConstants.TripStatusTransitions.IsValidTransition(existingTrip.Status, trip.Status))
 					throw new InvalidOperationException($"Invalid status transition from {existingTrip.Status} to {trip.Status}");
 			}
 
@@ -610,7 +610,7 @@ namespace Services.Implementations
 								ServiceDate = date,
 								PlannedStartAt = utcStart,
 								PlannedEndAt = utcEnd,
-								Status = TripStatus.Scheduled,
+								Status = TripConstants.TripStatus.Scheduled,
 								VehicleId = route.VehicleId,
 								DriverVehicleId = driverVehicleId,
 								Driver = driverSnapshot,
@@ -845,7 +845,7 @@ namespace Services.Implementations
 			if (scheduleEnd <= scheduleStart)
 				scheduleEnd = scheduleEnd.AddDays(1);
 
-			// Validate trip times are within reasonable range of schedule times (±30 minutes)
+			// Validate trip times are within reasonable range of schedule times (�30 minutes)
 			var startDiff = Math.Abs((trip.PlannedStartAt - scheduleStart).TotalMinutes);
 			var endDiff = Math.Abs((trip.PlannedEndAt - scheduleEnd).TotalMinutes);
 
@@ -990,7 +990,7 @@ namespace Services.Implementations
 							StudentId = student.Id,
 							StudentName = $"{student.FirstName} {student.LastName}".Trim(),
 							BoardedAt = null, // Not boarded yet
-							State = Constants.AttendanceStates.Pending // Initial state is Pending
+							State = TripConstants.AttendanceStates.Pending // Initial state is Pending
 						}).ToList();
 
 						_logger.LogDebug("Populated {Count} attendance records for stop {SequenceOrder} (pickup point {PickupPointId})", 
@@ -1071,7 +1071,7 @@ namespace Services.Implementations
 					return false;
 
 				// Validate status transition
-				if (!TripStatusTransitions.IsValidTransition(trip.Status, newStatus))
+				if (!TripConstants.TripStatusTransitions.IsValidTransition(trip.Status, newStatus))
 					throw new InvalidOperationException($"Invalid status transition from {trip.Status} to {newStatus}");
 
 				// Update status
@@ -1079,11 +1079,11 @@ namespace Services.Implementations
 				trip.UpdatedAt = DateTime.UtcNow;
 
 				// Set actual times based on status
-				if (newStatus == TripStatus.InProgress && !trip.StartTime.HasValue)
+				if (newStatus == TripConstants.TripStatus.InProgress && !trip.StartTime.HasValue)
 				{
 					trip.StartTime = DateTime.UtcNow;
 				}
-				else if (newStatus == TripStatus.Completed && !trip.EndTime.HasValue)
+				else if (newStatus == TripConstants.TripStatus.Completed && !trip.EndTime.HasValue)
 				{
 					trip.EndTime = DateTime.UtcNow;
 				}
@@ -1112,7 +1112,6 @@ namespace Services.Implementations
 
 				Guid? actualStopId = stopId;
 
-				// ✅ If stopId is not provided, derive it from student's CurrentPickupPointId
 				if (!actualStopId.HasValue || actualStopId.Value == Guid.Empty)
 				{
 					var student = await _studentRepository.FindAsync(studentId);
@@ -1156,7 +1155,7 @@ namespace Services.Implementations
 						StudentId = studentId,
 						StudentName = studentName,
 						State = state,
-						BoardedAt = state == AttendanceStates.Present ? DateTime.UtcNow : null
+						BoardedAt = state == TripConstants.AttendanceStates.Present ? DateTime.UtcNow : null
 					};
 					stop.Attendance.Add(attendance);
 				}
@@ -1164,7 +1163,7 @@ namespace Services.Implementations
 				{
 					// Update state and boarded time
 					attendance.State = state;
-					attendance.BoardedAt = state == AttendanceStates.Present ? DateTime.UtcNow : null;
+					attendance.BoardedAt = state == TripConstants.AttendanceStates.Present ? DateTime.UtcNow : null;
 
 					// Populate student name if missing (for backward compatibility)
 					if (string.IsNullOrEmpty(attendance.StudentName))
@@ -1177,11 +1176,11 @@ namespace Services.Implementations
 					}
 				}
 
-				// ✅ Update stop arrival/departure times based on attendance
+				// ? Update stop arrival/departure times based on attendance
 				var now = DateTime.UtcNow;
 
 				// Set ArrivedAt when first student is marked Present (vehicle arrived at stop)
-				if (state == AttendanceStates.Present && !stop.ArrivedAt.HasValue)
+				if (state == TripConstants.AttendanceStates.Present && !stop.ArrivedAt.HasValue)
 				{
 					stop.ArrivedAt = now;
 					_logger.LogDebug("Set ArrivedAt for stop {StopId} in trip {TripId}", actualStopId.Value, tripId);
@@ -1189,10 +1188,10 @@ namespace Services.Implementations
 
 				// Set DepartedAt when all students are accounted for (no pending students)
 				var allAccountedFor = stop.Attendance.All(a =>
-					a.State == AttendanceStates.Present ||
-					a.State == AttendanceStates.Absent ||
-					a.State == AttendanceStates.Excused ||
-					a.State == AttendanceStates.Late);
+					a.State == TripConstants.AttendanceStates.Present ||
+					a.State == TripConstants.AttendanceStates.Absent ||
+					a.State == TripConstants.AttendanceStates.Excused ||
+					a.State == TripConstants.AttendanceStates.Late);
 
 				if (allAccountedFor && stop.ArrivedAt.HasValue && !stop.DepartedAt.HasValue)
 				{
@@ -1211,12 +1210,12 @@ namespace Services.Implementations
 						var attendanceSummary = new
 						{
 							total = stop.Attendance.Count,
-							present = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Present),
-							absent = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Absent),
-							pending = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Pending),
-							late = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Late),
-							excused = stop.Attendance.Count(a => a.State == Constants.AttendanceStates.Excused),
-							// ✅ Include stop progress times in the same broadcast
+							present = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Present),
+							absent = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Absent),
+							pending = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Pending),
+							late = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Late),
+							excused = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Excused),
+							// ? Include stop progress times in the same broadcast
 							arrivedAt = stop.ArrivedAt,
 							departedAt = stop.DepartedAt
 						};
@@ -1249,11 +1248,11 @@ namespace Services.Implementations
 
 			var validStates = new[]
 			{
-				AttendanceStates.Present,
-				AttendanceStates.Absent,
-				AttendanceStates.Late,
-				AttendanceStates.Excused,
-				AttendanceStates.Pending
+				TripConstants.AttendanceStates.Present,
+				TripConstants.AttendanceStates.Absent,
+				TripConstants.AttendanceStates.Late,
+				TripConstants.AttendanceStates.Excused,
+				TripConstants.AttendanceStates.Pending
 			};
 
 			if (!validStates.Contains(state))
@@ -1276,9 +1275,9 @@ namespace Services.Implementations
 				foreach (var trip in trips)
 				{
 					// Only deactivate scheduled trips
-					if (trip.Status == TripStatus.Scheduled)
+					if (trip.Status == TripConstants.TripStatus.Scheduled)
 					{
-						trip.Status = TripStatus.Cancelled;
+						trip.Status =TripConstants.TripStatus.Cancelled;
 						trip.UpdatedAt = DateTime.UtcNow;
 						await repository.UpdateAsync(trip);
 						updateCount++;
@@ -1418,10 +1417,10 @@ namespace Services.Implementations
 					StartDate = startDate,
 					EndDate = endDate,
 					TotalTrips = tripList.Count,
-					ScheduledTrips = tripList.Count(t => t.Status == TripStatus.Scheduled),
-					InProgressTrips = tripList.Count(t => t.Status == TripStatus.InProgress),
-					CompletedTrips = tripList.Count(t => t.Status == TripStatus.Completed),
-					CancelledTrips = tripList.Count(t => t.Status == TripStatus.Cancelled),
+					ScheduledTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.Scheduled),
+					InProgressTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.InProgress),
+					CompletedTrips = tripList.Count(t => t.Status ==TripConstants.TripStatus.Completed),
+					CancelledTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.Cancelled),
 					TotalWorkingHours = CalculateTotalWorkingHours(tripList),
 					TripsByDate = tripList.GroupBy(t => t.ServiceDate.Date)
 						.ToDictionary(g => g.Key, g => g.Count())
@@ -1439,7 +1438,7 @@ namespace Services.Implementations
 		private static double CalculateTotalWorkingHours(IEnumerable<Trip> trips)
 		{
 			var totalMinutes = trips
-				.Where(t => t.Status == TripStatus.Completed && t.StartTime.HasValue && t.EndTime.HasValue)
+				.Where(t => t.Status == TripConstants.TripStatus.Completed && t.StartTime.HasValue && t.EndTime.HasValue)
 				.Sum(t => (t.EndTime!.Value - t.StartTime!.Value).TotalMinutes);
 			
 			return Math.Round(totalMinutes / 60.0, 2);
@@ -1810,14 +1809,14 @@ namespace Services.Implementations
 					return false;
 
 				// Check if trip can be started
-				if (trip.Status != Constants.TripStatus.Scheduled)
+				if (trip.Status != TripConstants.TripStatus.Scheduled)
 				{
 					_logger.LogWarning("Cannot start trip {TripId} with status {Status}", tripId, trip.Status);
 					return false;
 				}
 
 				// Update trip status and start time
-				trip.Status = Constants.TripStatus.InProgress;
+				trip.Status = TripConstants.TripStatus.InProgress;
 				trip.StartTime = DateTime.UtcNow;
 
 				await tripRepo.UpdateAsync(trip);
@@ -1864,14 +1863,14 @@ namespace Services.Implementations
 					return false;
 
 				// Check if trip can be ended
-				if (trip.Status != Constants.TripStatus.InProgress)
+				if (trip.Status != TripConstants.TripStatus.InProgress)
 				{
 					_logger.LogWarning("Cannot end trip {TripId} with status {Status}", tripId, trip.Status);
 					return false;
 				}
 
 				// Update trip status and end time
-				trip.Status = Constants.TripStatus.Completed;
+				trip.Status = TripConstants.TripStatus.Completed;
 				trip.EndTime = DateTime.UtcNow;
 
 				await tripRepo.UpdateAsync(trip);
@@ -2579,7 +2578,7 @@ namespace Services.Implementations
 				}
 
 				// Verify trip is in progress
-				if (trip.Status != TripStatus.InProgress)
+				if (trip.Status != TripConstants.TripStatus.InProgress)
 				{
 					_logger.LogWarning("Cannot arrange stops for trip {TripId} with status {Status}", tripId, trip.Status);
 					throw new InvalidOperationException($"Cannot arrange stops. Trip must be in progress (current status: {trip.Status})");
@@ -2700,7 +2699,7 @@ namespace Services.Implementations
 				}
 
 				// Verify trip is in progress
-				if (trip.Status != TripStatus.InProgress)
+				if (trip.Status != Constants.TripConstants.TripStatus.InProgress)
 				{
 					_logger.LogWarning("Cannot arrange stops for trip {TripId} with status {Status}", tripId, trip.Status);
 					throw new InvalidOperationException($"Cannot arrange stops. Trip must be in progress (current status: {trip.Status})");
