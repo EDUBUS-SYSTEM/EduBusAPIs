@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MongoDB.Bson;
@@ -217,6 +218,19 @@ builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 //Route Services
 builder.Services.AddScoped<IRouteService, RouteService>();
 builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
+builder.Services.AddScoped<OrToolsVrpEngine>();
+builder.Services.AddHttpClient<VietMapVrpEngine>();
+builder.Services.AddScoped<IVrpEngine>(sp =>
+{
+	var settings = sp.GetRequiredService<IOptions<VRPSettings>>().Value;
+	var engineName = (settings.Engine ?? "OrTools").ToLowerInvariant();
+
+	return engineName switch
+	{
+		"vietmap" => sp.GetRequiredService<VietMapVrpEngine>(),
+		_ => sp.GetRequiredService<OrToolsVrpEngine>(),
+	};
+});
 builder.Services.AddScoped<IPickupPointService, PickupPointService>();
 builder.Services.AddScoped<ISchoolService, SchoolService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();

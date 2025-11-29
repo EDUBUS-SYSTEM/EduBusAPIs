@@ -11,5 +11,6 @@ namespace Services.Models.Route
         public int MaxRouteDurationSeconds { get; set; } = 5400; // 1.5 hours max route duration
         public double SchoolLatitude { get; set; } 
         public double SchoolLongitude { get; set; }
-    }
+		public string Engine { get; set; } = "OrTools";
+	}
 }
