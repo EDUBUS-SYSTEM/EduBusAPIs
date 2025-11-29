@@ -379,8 +379,8 @@ namespace Services.Implementations
 			}
 		}
 
-		private static void ValidateSchedule(Schedule s)
-		{
+        private static void ValidateSchedule(Schedule s)
+        {
 			// time format HH:mm or HH:mm:ss
 			if (!TryParseHms(s.StartTime, out var sh, out var sm, out var ss))
 				throw new ArgumentException("StartTime must be HH:mm or HH:mm:ss");
@@ -394,6 +394,9 @@ namespace Services.Implementations
 			// timezone
 			if (!IsValidTimezone(s.Timezone))
 				throw new ArgumentException($"Invalid timezone: {s.Timezone}");
+
+            if (s.TripType == TripType.Unknown)
+                throw new ArgumentException("TripType must be specified for the schedule.");
 
 			var currentDate = DateTime.UtcNow.Date;
 			if (s.EffectiveFrom.Date < currentDate)

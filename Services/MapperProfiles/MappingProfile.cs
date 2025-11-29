@@ -167,6 +167,8 @@ namespace Services.MapperProfiles
                 .ForMember(dest => dest.TimeOverrides, opt => opt.Ignore());
 
             // Trip mappings
+            CreateMap<Trip.VehicleLocation, TripLocationDto>();
+            CreateMap<TripLocationDto, Trip.VehicleLocation>();
             CreateMap<Trip, TripDto>()
                 .ForMember(dest => dest.Stops, opt => opt.Ignore()); // Stops are mapped manually in controller
             CreateMap<CreateTripDto, Trip>()
@@ -179,6 +181,8 @@ namespace Services.MapperProfiles
             CreateMap<VehicleSnapshotDto, Trip.VehicleSnapshot>();
             CreateMap<Trip.DriverSnapshot, DriverSnapshotDto>();
             CreateMap<DriverSnapshotDto, Trip.DriverSnapshot>();
+            CreateMap<Trip.SupervisorSnapshot, SupervisorSnapshotDto>();
+            CreateMap<SupervisorSnapshotDto, Trip.SupervisorSnapshot>();
             CreateMap<TripStopDto, TripStop>();
 
             // Driver Schedule mappings

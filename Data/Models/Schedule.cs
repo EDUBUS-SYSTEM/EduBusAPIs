@@ -1,3 +1,4 @@
+using Data.Models.Enums;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -37,6 +38,10 @@ namespace Data.Models
 
         [BsonElement("scheduleType")]
         public string ScheduleType { get; set; } = string.Empty;
+
+        [BsonElement("tripType")]
+        [BsonRepresentation(BsonType.String)]
+        public TripType TripType { get; set; } = TripType.Unknown;
 
         [BsonElement("isActive")]
         public bool IsActive { get; set; } = true;

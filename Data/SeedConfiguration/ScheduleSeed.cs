@@ -1,5 +1,6 @@
 using Data.Contexts.MongoDB;
 using Data.Models;
+using Data.Models.Enums;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 
@@ -50,6 +51,7 @@ namespace Data.SeedConfiguration
                     EffectiveTo = new DateTime(2025, 12, 31, 23, 59, 59, DateTimeKind.Utc),
                     Exceptions = new List<DateTime> { new DateTime(2025, 10, 20, 0, 0, 0, DateTimeKind.Utc) },
                     ScheduleType = "school_day",
+                    TripType = TripType.Departure,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 },
@@ -66,6 +68,7 @@ namespace Data.SeedConfiguration
                     EffectiveTo = new DateTime(2026, 6, 30, 23, 59, 59, DateTimeKind.Utc),
                     Exceptions = new List<DateTime>(),
                     ScheduleType = "exam_day",
+                    TripType = TripType.Return,
                     IsActive = true,
                     CreatedAt = DateTime.UtcNow
                 }

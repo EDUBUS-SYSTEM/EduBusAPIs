@@ -10,5 +10,6 @@ namespace Services.Contracts
 	{
 		Task BroadcastTripStatusChangedAsync(Guid tripId, string status, DateTime? startTime, DateTime? endTime);
 		Task BroadcastAttendanceUpdatedAsync(Guid tripId, Guid stopId, object attendanceSummary);
+		Task BroadcastStopArrivalAsync(Guid tripId, Guid stopId, DateTime arrivedAt);
 	}
 }

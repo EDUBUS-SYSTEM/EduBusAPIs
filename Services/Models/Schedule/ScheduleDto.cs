@@ -1,4 +1,5 @@
 ﻿using Data.Models;
+using Data.Models.Enums;
 
 namespace Services.Models.Schedule
 {
@@ -16,6 +17,7 @@ namespace Services.Models.Schedule
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
 		public string ScheduleType { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 		public bool IsActive { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
@@ -34,6 +36,7 @@ namespace Services.Models.Schedule
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
 		public string ScheduleType { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 		public bool IsActive { get; set; } = true;
 	}
 
@@ -51,6 +54,7 @@ namespace Services.Models.Schedule
 		public DateTime? EffectiveTo { get; set; }
 		public List<DateTime> Exceptions { get; set; } = new List<DateTime>();
 		public string ScheduleType { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 		public bool IsActive { get; set; }
 		public List<ScheduleTimeOverride> TimeOverrides { get; set; } = new List<ScheduleTimeOverride>();
 		public DateTime? UpdatedAt { get; set; }
