@@ -29,4 +29,5 @@ public partial class Student : BaseDomain
     public virtual ICollection<StudentPickupPointHistory> PickupPointHistory { get; set; } = new List<StudentPickupPointHistory>();
 
     public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
+    public virtual FaceEmbedding? FaceEmbedding { get; set; }
 }

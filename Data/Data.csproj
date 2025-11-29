@@ -27,4 +27,8 @@
     <ProjectReference Include="..\Constants\Constants.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Constants\Constants.csproj" />
+  </ItemGroup>
+
 </Project>
