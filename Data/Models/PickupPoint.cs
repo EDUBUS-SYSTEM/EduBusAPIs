@@ -14,5 +14,5 @@ public partial class PickupPoint : BaseDomain
     public virtual ICollection<Student> Students { get; set; } = new List<Student>();
 
     // History of all student assignments to this pickup point
-    public virtual ICollection<StudentPickupPointHistory> StudentPickupPointHistory { get; set; } = new List<StudentPickupPointHistory>();
+    public virtual ICollection<StudentPickupPoint> StudentPickupPointHistory { get; set; } = new List<StudentPickupPoint>();
 }

@@ -1,4 +1,9 @@
-﻿using MailKit.Security;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -179,6 +184,148 @@ public class EmailService : IEmailService, IHostedService, IDisposable
     }
 
     private sealed record EmailSettings
+    {
+        public string SmtpServer { get; init; } = "";
+        public int SmtpPort { get; init; } = 587;
+        public string SenderEmail { get; init; } = "";
+        public string SenderName { get; init; } = "EduBus";
+        public string Username { get; init; } = "";
+        public string Password { get; init; } = "";
+        public bool EnableSsl { get; init; } = true;
+    }
+
+    private sealed record EmailTask
+    {
+        public required string To { get; init; }
+        public required string Subject { get; init; }
+        public required string Body { get; init; }
+        public DateTime QueuedAt { get; init; }
+    }
+}
+
+/// <summary>
+/// Lightweight fire-and-forget email sender for new flows that do not need the background queue.
+/// Register this separately (e.g. as ISimpleEmailService) without touching the legacy EmailService.
+/// </summary>
+public interface ISimpleEmailService
+{
+    void QueueEmail(string to, string subject, string body);
+    Task SendEmailAsync(string to, string subject, string body);
+}
+
+public class SimpleEmailService : ISimpleEmailService
+{
+    private readonly SimpleEmailSettings _settings;
+    private readonly ILogger<SimpleEmailService> _logger;
+    private readonly CancellationTokenSource _cts = new();
+
+    public SimpleEmailService(IConfiguration cfg, ILogger<SimpleEmailService> logger)
+    {
+        _logger = logger;
+        _settings = new SimpleEmailSettings
+        {
+            SmtpServer = cfg["EmailSettings:SmtpServer"] ?? "",
+            SmtpPort = int.TryParse(cfg["EmailSettings:SmtpPort"], out var p) ? p : 587,
+            SenderEmail = cfg["EmailSettings:SenderEmail"] ?? "",
+            SenderName = cfg["EmailSettings:SenderName"] ?? "EduBus",
+            Username = cfg["EmailSettings:Username"] ?? "",
+            Password = cfg["EmailSettings:Password"] ?? "",
+            EnableSsl = bool.TryParse(cfg["EmailSettings:EnableSsl"], out var ssl) && ssl
+        };
+
+        ValidateSettings(_settings);
+    }
+
+    public void QueueEmail(string to, string subject, string body)
+    {
+        if (!MailboxAddress.TryParse(to, out _))
+            throw new ArgumentException("Invalid recipient email address.", nameof(to));
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendEmailAsyncInternal(to, subject, body, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Background email send failed to {To} with subject {Subject}", to, subject);
+            }
+        }, CancellationToken.None);
+    }
+
+    public Task SendEmailAsync(string to, string subject, string body)
+    {
+        return SendEmailAsyncInternal(to, subject, body, _cts.Token);
+    }
+
+    private async Task SendEmailAsyncInternal(string to, string subject, string body, CancellationToken token)
+    {
+        MailKit.Net.Smtp.SmtpClient? smtp = null;
+        try
+        {
+            var msg = new MimeMessage();
+            msg.From.Add(new MailboxAddress(_settings.SenderName, _settings.SenderEmail));
+            msg.To.Add(MailboxAddress.Parse(to));
+            msg.Subject = subject;
+            msg.Body = new TextPart(TextFormat.Html) { Text = body };
+
+            smtp = new MailKit.Net.Smtp.SmtpClient();
+            var socketOpt = _settings.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.Auto;
+            await smtp.ConnectAsync(_settings.SmtpServer, _settings.SmtpPort, socketOpt, token);
+            await smtp.AuthenticateAsync(_settings.Username, _settings.Password, token);
+            await smtp.SendAsync(msg, token);
+            _logger.LogInformation("Email sent to {To} - {Subject}", to, subject);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Email send to {To} cancelled", to);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send email to {To} - {Subject}", to, subject);
+            throw new InvalidOperationException($"Failed to send email to {to}", ex);
+        }
+        finally
+        {
+            if (smtp is { IsConnected: true })
+            {
+                try
+                {
+                    await smtp.DisconnectAsync(true, token);
+                }
+                catch (Exception disconnectEx)
+                {
+                    _logger.LogWarning(disconnectEx, "SMTP disconnect issue (non-critical)");
+                }
+            }
+
+            smtp?.Dispose();
+        }
+    }
+
+    private void ValidateSettings(SimpleEmailSettings settings)
+    {
+        var missingFields = new List<string>();
+        if (string.IsNullOrWhiteSpace(settings.SmtpServer))
+            missingFields.Add("SmtpServer");
+        if (string.IsNullOrWhiteSpace(settings.SenderEmail))
+            missingFields.Add("SenderEmail");
+        if (string.IsNullOrWhiteSpace(settings.Username))
+            missingFields.Add("Username");
+        if (string.IsNullOrWhiteSpace(settings.Password))
+            missingFields.Add("Password");
+
+        if (missingFields.Any())
+        {
+            var errorMsg = $"Email settings missing: {string.Join(", ", missingFields)}";
+            _logger.LogError("SimpleEmailService configuration error: {Message}", errorMsg);
+            throw new InvalidOperationException(errorMsg);
+        }
+    }
+
+    private sealed record SimpleEmailSettings
     {
         public string SmtpServer { get; init; } = "";
         public int SmtpPort { get; init; } = 587;

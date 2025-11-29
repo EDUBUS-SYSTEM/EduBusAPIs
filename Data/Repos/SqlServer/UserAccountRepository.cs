@@ -104,6 +104,16 @@ namespace Data.Repos.SqlServer
                 .ToListAsync();
         }
 
+        public async Task<IEnumerable<Parent>> GetActiveParentUsersAsync()
+        {
+            var now = DateTime.UtcNow;
+            return await _table
+                .OfType<Parent>()
+                .Where(p => !p.IsDeleted && 
+                           (p.LockedUntil == null || p.LockedUntil > now))
+                .ToListAsync();
+        }
+
         public async Task<int> ResetAllPasswordsAsync(byte[] hashedPassword)
         {
             return await _table

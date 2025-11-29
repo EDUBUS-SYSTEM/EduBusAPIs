@@ -588,10 +588,7 @@ public class PaymentService : IPaymentService
             }
         }
 
-        // Assign pickup point after successful payment
-        await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transactionId);
-
-        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated and pickup point assigned after payment");
+        await LogPaymentEventAsync(transactionId, TransactionStatus.Paid, source, "Students activated after payment");
     }
     public async Task<UnpaidFeesResponse> GetUnpaidFeesAsync(Guid parentId)
     {

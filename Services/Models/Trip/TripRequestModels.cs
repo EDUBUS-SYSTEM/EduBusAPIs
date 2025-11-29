@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Services.Models.Trip
 {
     public class UpdateTripStatusRequest
@@ -48,5 +50,27 @@ namespace Services.Models.Trip
         public double? Accuracy { get; set; }
         public bool IsMoving { get; set; }
     }
+
+	public class ArrangeStopRequest
+	{
+        [Required]
+		public Guid PickupPointId { get; set; }
+        [Required]
+		public int NewSequenceOrder { get; set; }
+	}
+
+	public class UpdateStopSequenceItem
+	{
+        [Required]
+		public Guid PickupPointId { get; set; }
+        [Required]
+		public int SequenceOrder { get; set; }
+	}
+
+	public class UpdateMultipleStopsSequenceRequest
+	{
+		public List<UpdateStopSequenceItem> Stops { get; set; } = new List<UpdateStopSequenceItem>();
+	}
+
 }
 

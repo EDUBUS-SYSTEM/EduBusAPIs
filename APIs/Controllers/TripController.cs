@@ -509,6 +509,133 @@ namespace APIs.Controllers
 			}
 		}
 
+		[HttpPut("{tripId}/stops/arrange")]
+		[Authorize(Roles = $"{Roles.Driver}")]
+		public async Task<ActionResult<object>> ArrangeStopSequence(Guid tripId, [FromBody] ArrangeStopRequest request)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				var trip = await _tripService.ArrangeStopSequenceAsync(
+					tripId,
+					driverId.Value,
+					request.PickupPointId,
+					request.NewSequenceOrder);
+
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				// Return sorted pickup points
+				var sortedStops = trip.Stops
+					.OrderBy(s => s.SequenceOrder)
+					.Select(s => new
+					{
+						pickupPointId = s.PickupPointId,
+						sequenceOrder = s.SequenceOrder,
+						address = s.Location?.Address,
+						arrivedAt = s.ArrivedAt,
+						departedAt = s.DepartedAt
+					})
+					.ToList();
+
+				return Ok(new
+				{
+					tripId = tripId,
+					stops = sortedStops,
+					message = "Stop sequence updated successfully",
+					updatedAt = DateTime.UtcNow
+				});
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error arranging stop sequence: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
+		[HttpPut("{tripId}/stops/arrange-multiple")]
+		[Authorize(Roles = $"{Roles.Driver}")]
+		public async Task<ActionResult<object>> UpdateMultipleStopsSequence(Guid tripId, [FromBody] UpdateMultipleStopsSequenceRequest request)
+		{
+			try
+			{
+				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+				if (!driverId.HasValue)
+				{
+					return Unauthorized(new { message = "User ID not found in token" });
+				}
+
+				if (request.Stops == null || !request.Stops.Any())
+				{
+					return BadRequest(new { message = "Stops list cannot be empty" });
+				}
+
+				// Convert request to tuple list
+				var stopSequences = request.Stops
+					.Select(s => (s.PickupPointId, s.SequenceOrder))
+					.ToList();
+
+				var trip = await _tripService.UpdateMultipleStopsSequenceAsync(
+					tripId,
+					driverId.Value,
+					stopSequences);
+
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
+				}
+
+				// Return sorted pickup points
+				var sortedStops = trip.Stops
+					.OrderBy(s => s.SequenceOrder)
+					.Select(s => new
+					{
+						pickupPointId = s.PickupPointId,
+						sequenceOrder = s.SequenceOrder,
+						address = s.Location?.Address,
+						arrivedAt = s.ArrivedAt,
+						departedAt = s.DepartedAt
+					})
+					.ToList();
+
+				return Ok(new
+				{
+					tripId = tripId,
+					stops = sortedStops,
+					message = "Multiple stops sequence updated successfully",
+					updatedAt = DateTime.UtcNow
+				});
+			}
+			catch (ArgumentException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (InvalidOperationException ex)
+			{
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error updating multiple stops sequence: {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
 		#region Driver Trip 
 
 		[HttpGet("by-date")]

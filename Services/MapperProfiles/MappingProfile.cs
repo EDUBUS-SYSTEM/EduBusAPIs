@@ -20,6 +20,7 @@ using Services.Models.Trip;
 using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
+using Services.Models.EnrollmentSemesterSettings;
 using Utils;
 
 namespace Services.MapperProfiles
@@ -247,6 +248,11 @@ namespace Services.MapperProfiles
 
             CreateMap<StudentAbsenceRequest, StudentAbsenceRequestResponseDto>();
             CreateMap<StudentAbsenceRequest, StudentAbsenceRequestListItemDto>();
+
+            // EnrollmentSemesterSettings mappings
+            CreateMap<EnrollmentSemesterSettings, EnrollmentSemesterSettingsDto>();
+            CreateMap<EnrollmentSemesterSettingsCreateDto, EnrollmentSemesterSettings>();
+            CreateMap<EnrollmentSemesterSettingsUpdateDto, EnrollmentSemesterSettings>();
         }
             private static string GetUserRole(UserAccount user)
             {

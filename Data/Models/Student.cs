@@ -26,7 +26,7 @@ public partial class Student : BaseDomain
 
     public virtual PickupPoint? CurrentPickupPoint { get; set; }
 
-    public virtual ICollection<StudentPickupPointHistory> PickupPointHistory { get; set; } = new List<StudentPickupPointHistory>();
+    public virtual ICollection<StudentPickupPoint> PickupPointHistory { get; set; } = new List<StudentPickupPoint>();
 
     public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
     public virtual FaceEmbedding? FaceEmbedding { get; set; }
