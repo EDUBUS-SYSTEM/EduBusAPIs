@@ -20,7 +20,7 @@ namespace Services.Backgrounds
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<PickupApproachNotificationService> _logger;
         private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1); // Check every 1 minute
-        private const int APPROACH_THRESHOLD_MINUTES = 5; // Notify when 5 minutes away
+        private const int APPROACH_THRESHOLD_METERS = 2000; // Notify when 1.5km away
 
         public PickupApproachNotificationService(
             IServiceScopeFactory scopeFactory,
@@ -131,29 +131,60 @@ namespace Services.Backgrounds
                 return;
             }
 
-            // Find the next pending stop (not arrived yet), sorted by sequence order
-            var nextPendingStop = trip.Stops
+            // Find all pending stops (not arrived yet), sorted by sequence order
+            var pendingStops = trip.Stops
                 //.Where(s => s.ArrivedAt == null)
                 .OrderBy(s => s.SequenceOrder)
-                .FirstOrDefault();
+                .ToList();
 
-            if (nextPendingStop == null)
+            if (!pendingStops.Any())
             {
                 _logger.LogDebug("Trip {TripId} has no pending stops", trip.Id);
                 return;
             }
 
+            _logger.LogDebug("Trip {TripId} has {Count} pending stops to check", trip.Id, pendingStops.Count);
+
+            // Process each pending stop
+            foreach (var pendingStop in pendingStops)
+            {
+                try
+                {
+                    await ProcessPendingStopAsync(
+                        trip, 
+                        pendingStop, 
+                        vietMapService, 
+                        notificationService, 
+                        tripService);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing stop {StopOrder} for trip {TripId}", 
+                        pendingStop.SequenceOrder, trip.Id);
+                }
+            }
+        }
+
+        private async Task ProcessPendingStopAsync(
+            Trip trip,
+            TripStop pendingStop,
+            IVietMapService vietMapService,
+            INotificationService notificationService,
+            ITripService tripService)
+        {
             // Base notification key per trip and pickup point (sequence order may change)
-            var notificationKeyPrefix = $"pickup_approach_{trip.Id}_{nextPendingStop.PickupPointId}";
+            // Include TripType to differentiate between Departure and Return trips
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var notificationKeyPrefix = $"pickup_approach_{tripType}_{trip.Id}_{pendingStop.PickupPointId}";
 
             // Get all parents who have children at this pickup point
             var parentAssignments = await tripService.GetParentStudentAssignmentsForPickupPointAsync(
-                trip.Id, nextPendingStop.PickupPointId);
+                trip.Id, pendingStop.PickupPointId);
 
             if (!parentAssignments.Any())
             {
                 _logger.LogDebug("No parents found for trip {TripId}, stop {StopOrder}",
-                    trip.Id, nextPendingStop.SequenceOrder);
+                    trip.Id, pendingStop.SequenceOrder);
                 return;
             }
 
@@ -172,34 +203,37 @@ namespace Services.Backgrounds
             if (!parentGroups.Any())
             {
                 _logger.LogDebug("No parent groups with students found for trip {TripId}, stop {StopOrder}",
-                    trip.Id, nextPendingStop.SequenceOrder);
+                    trip.Id, pendingStop.SequenceOrder);
                 return;
             }
 
-            // Only call VietMap API for the next stop
+            // Call VietMap API to calculate route to this stop
             var routeResult = await vietMapService.GetRouteAsync(
                 trip.CurrentLocation.Latitude,
                 trip.CurrentLocation.Longitude,
-                nextPendingStop.Location.Latitude,
-                nextPendingStop.Location.Longitude,
+                pendingStop.Location.Latitude,
+                pendingStop.Location.Longitude,
                 "car"
             );
 
             if (routeResult == null)
             {
                 _logger.LogWarning("Failed to calculate route for trip {TripId}, stop {StopOrder}",
-                    trip.Id, nextPendingStop.SequenceOrder);
+                    trip.Id, pendingStop.SequenceOrder);
                 return;
             }
 
-            _logger.LogDebug("Trip {TripId}, Stop {SequenceOrder}: {Minutes} minutes away",
-                trip.Id, nextPendingStop.SequenceOrder, routeResult.DurationMinutes);
+            // Convert distance from km to meters
+            var distanceMeters = routeResult.Distance * 1000;
 
-            // Check if within threshold
-            if (routeResult.DurationMinutes > APPROACH_THRESHOLD_MINUTES)
+            _logger.LogDebug("Trip {TripId}, Stop {SequenceOrder}: {Meters}m away ({Minutes} minutes)",
+                trip.Id, pendingStop.SequenceOrder, distanceMeters, routeResult.DurationMinutes);
+
+            // Check if within threshold (based on distance)
+            if (distanceMeters > APPROACH_THRESHOLD_METERS)
             {
-                _logger.LogDebug("Stop {StopOrder} for trip {TripId} is {Minutes} minutes away, not within threshold",
-                    nextPendingStop.SequenceOrder, trip.Id, routeResult.DurationMinutes);
+                _logger.LogDebug("Stop {StopOrder} for trip {TripId} is {Meters}m away, not within threshold",
+                    pendingStop.SequenceOrder, trip.Id, distanceMeters);
                 return;
             }
 
@@ -212,7 +246,8 @@ namespace Services.Backgrounds
 
                 if (existingNotification != null)
                 {
-                    _logger.LogDebug("Notification already sent to parent {ParentId}...", parentGroup.ParentId, trip.Id, nextPendingStop.SequenceOrder);
+                    _logger.LogDebug("Notification already sent to parent {ParentId} for trip {TripId}, stop {StopOrder}", 
+                        parentGroup.ParentId, trip.Id, pendingStop.SequenceOrder);
                     return;
                 }
 
@@ -222,11 +257,9 @@ namespace Services.Backgrounds
                     studentList = "Student";
                 }
 
-                var message = $"{studentList} Please get ready!";
-
                 await SendApproachNotificationToParentAsync(
-                    trip, nextPendingStop, routeResult,
-                    notificationService, parentGroup.ParentId, notificationKey, message, parentGroup.StudentNames);
+                    trip, pendingStop, routeResult,
+                    notificationService, parentGroup.ParentId, notificationKey, studentList, parentGroup.StudentNames);
             });
 
             await Task.WhenAll(notificationTasks);
@@ -239,20 +272,42 @@ namespace Services.Backgrounds
             INotificationService notificationService,
             Guid parentId,
             string notificationKey,
-            string message,
+            string studentList,
             IReadOnlyCollection<string> studentNames)
         {
             try
             {
                 var minutes = (int)Math.Ceiling(routeResult.DurationMinutes);
+                var distanceMeters = (int)Math.Round(routeResult.Distance * 1000); // Convert km to meters
                 var studentArray = studentNames?.Any() == true
                     ? studentNames.ToArray()
                     : Array.Empty<string>();
 
+                // Customize notification based on TripType
+                var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+                string title;
+                string message;
+
+                switch (tripType)
+                {
+                    case TripType.Departure:
+                        title = "The bus is approaching the pickup point";
+                        message = $"{studentList} Please get ready for school!";
+                        break;
+                    case TripType.Return:
+                        title = "The bus is approaching the drop-off point";
+                        message = $"{studentList} Please get ready, the bus is almost home!";
+                        break;
+                    default:
+                        title = "The bus is approaching";
+                        message = $"{studentList} Please get ready!";
+                        break;
+                }
+
                 var notificationDto = new CreateNotificationDto
                 {
                     UserId = parentId,
-                    Title = "The bus is approaching the pickup point",
+                    Title = title,
                     Message = message,
                     NotificationType = NotificationType.TripInfo,
                     RecipientType = RecipientType.Parent,
@@ -264,14 +319,16 @@ namespace Services.Backgrounds
                         { "stopSequenceOrder", stop.SequenceOrder },
                         { "pickupPointId", stop.PickupPointId.ToString() },
                         { "estimatedMinutes", minutes },
+                        { "distanceMeters", distanceMeters },
                         { "notificationKey", notificationKey },
-                        { "students", studentArray }
+                        { "students", studentArray },
+                        { "tripType", tripType.ToString() }
                     }
                 };
 
                 await notificationService.CreateNotificationAsync(notificationDto);
-                _logger.LogInformation("Sent approach notification to parent {ParentId} for trip {TripId}, stop {StopOrder}",
-                    parentId, trip.Id, stop.SequenceOrder);
+                _logger.LogInformation("Sent approach notification to parent {ParentId} for trip {TripId}, stop {StopOrder} ({Meters}m away)",
+                    parentId, trip.Id, stop.SequenceOrder, distanceMeters);
             }
             catch (Exception ex)
             {

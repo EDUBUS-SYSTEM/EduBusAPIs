@@ -2552,17 +2552,68 @@ namespace Services.Implementations
             }
 
 
-            // Get parents for this pickup point
-            var parentIds = await GetParentsForPickupPointAsync(tripId, stopId);
-
-            // Create notification for each parent
-            foreach (var parentId in parentIds)
+            // Get parent-student assignments for this pickup point
+            var parentAssignments = await GetParentStudentAssignmentsForPickupPointAsync(tripId, stopId);
+            
+            if (!parentAssignments.Any())
             {
+                _logger.LogDebug("No parents found for trip {TripId}, stop {StopId}", tripId, stopId);
+                return;
+            }
+
+            // Group by parent to get student names for each parent
+            var parentGroups = parentAssignments
+                .GroupBy(a => a.ParentId)
+                .Select(g => new
+                {
+                    ParentId = g.Key,
+                    StudentNames = g.Select(a => a.StudentName)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                })
+                .ToList();
+
+            // Determine trip type for customized notifications
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+
+            // Create notification for each parent with their children's names
+            foreach (var parentGroup in parentGroups)
+            {
+                var studentList = string.Join(", ", parentGroup.StudentNames);
+                if (string.IsNullOrWhiteSpace(studentList))
+                {
+                    studentList = "Your child";
+                }
+
+                string notificationTitle;
+                string notificationMessage;
+
+                switch (tripType)
+                {
+                    case TripType.Departure:
+                        notificationTitle = "Driver Arrived at Pickup Point";
+                        notificationMessage = $"The driver has arrived to pick up {studentList}.";
+                        break;
+                    case TripType.Return:
+                        notificationTitle = "Driver Arrived at Drop-off Point";
+                        notificationMessage = $"The driver has arrived to drop off {studentList}.";
+                        break;
+                    default:
+                        notificationTitle = "Driver Arrived";
+                        notificationMessage = $"The driver has arrived at the stop for {studentList}.";
+                        break;
+                }
+
+                var studentArray = parentGroup.StudentNames?.Any() == true
+                    ? parentGroup.StudentNames.ToArray()
+                    : Array.Empty<string>();
+
                 var notificationDto = new CreateNotificationDto
                 {
-                    UserId = parentId,
-                    Title = "Driver Arrived at Pickup Point",
-                    Message = "The driver has arrived at the pickup point for your child.",
+                    UserId = parentGroup.ParentId,
+                    Title = notificationTitle,
+                    Message = notificationMessage,
                     NotificationType = NotificationType.TripInfo,
                     RecipientType = RecipientType.Parent,
                     Priority = 2,
@@ -2576,7 +2627,9 @@ namespace Services.Implementations
                         { "stopId", stopId.ToString() },
                         { "stopName", stop.Location?.Address ?? "Unknown Stop" },
                         { "driverName", trip.Driver?.FullName ?? "Driver" },
-                        { "arrivedAt", stop.ArrivedAt?.ToString("O") ?? DateTime.UtcNow.ToString("O") }
+                        { "arrivedAt", stop.ArrivedAt?.ToString("O") ?? DateTime.UtcNow.ToString("O") },
+                        { "tripType", tripType.ToString() },
+                        { "students", studentArray }
                     }
                 };
 
