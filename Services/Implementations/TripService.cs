@@ -9,6 +9,7 @@ using Services.Contracts;
 using Services.Models.Notification;
 using Services.Models.Trip;
 using Utils;
+using Route = Data.Models.Route;
 
 namespace Services.Implementations
 {
@@ -845,7 +846,7 @@ namespace Services.Implementations
 			if (scheduleEnd <= scheduleStart)
 				scheduleEnd = scheduleEnd.AddDays(1);
 
-			// Validate trip times are within reasonable range of schedule times (±30 minutes)
+			// Validate trip times are within reasonable range of schedule times (ï¿½30 minutes)
 			var startDiff = Math.Abs((trip.PlannedStartAt - scheduleStart).TotalMinutes);
 			var endDiff = Math.Abs((trip.PlannedEndAt - scheduleEnd).TotalMinutes);
 
@@ -2898,6 +2899,242 @@ namespace Services.Implementations
 				.ToList();
 
 			trip.Stops = filteredStops;
+		}
+
+		public async Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId)
+		{
+			// 1. Get trip from MongoDB
+			var tripRepository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+			var trip = await tripRepository.FindAsync(tripId);
+			if (trip == null)
+				throw new KeyNotFoundException("Trip not found");
+
+			// 2. Get route info from MongoDB
+			var routeRepository = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+			var route = await routeRepository.FindAsync(trip.RouteId);
+			if (route == null || route.IsDeleted)
+				throw new KeyNotFoundException("Route not found");
+
+			// 3. Get student repository and pickup point repository
+			var pickupPointRepository = _databaseFactory.GetRepositoryByType<IPickupPointRepository>(DatabaseType.SqlServer);
+
+			// 4. Build response
+			var response = new StudentsForAttendanceResponse
+			{
+				TripId = trip.Id,
+				RouteName = route.RouteName,
+				ServiceDate = trip.ServiceDate,
+				Stops = new List<StopWithStudents>()
+			};
+
+			// 5. For each stop, get students
+			foreach (var stop in trip.Stops.OrderBy(s => s.SequenceOrder))
+			{
+				// Get pickup point info
+				var pickupPoint = await pickupPointRepository.FindAsync(stop.PickupPointId);
+				
+				// Get students assigned to this pickup point
+				var students = await _studentRepository.GetStudentsByPickupPointAsync(stop.PickupPointId);
+
+				var stopWithStudents = new StopWithStudents
+				{
+					StopId = stop.SequenceOrder, // Use sequence as stop identifier
+					PickupPointId = stop.PickupPointId,
+					PickupPointName = pickupPoint?.Description ?? "Unknown",
+					SequenceOrder = stop.SequenceOrder,
+					PlannedAt = stop.PlannedAt,
+					ArrivedAt = stop.ArrivedAt,
+					Students = students.Select(s =>
+					{
+						var attendanceRecord = stop.Attendance.FirstOrDefault(a => a.StudentId == s.Id);
+
+						return new StudentForAttendance
+						{
+							StudentId = s.Id,
+							StudentName = $"{s.FirstName} {s.LastName}".Trim(),
+							PhotoUrl = null,
+							CurrentStatus = GetAttendanceStatus(stop.Attendance, s.Id),
+							IsBoarded = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.BoardStatus),
+							IsAlighted = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.AlightStatus),
+							BoardedAt = attendanceRecord?.BoardedAt,
+							AlightedAt = attendanceRecord?.AlightedAt
+						};
+					}).ToList()
+				};
+
+				response.Stops.Add(stopWithStudents);
+			}
+
+			return response;
+		}
+
+		public async Task<(bool Success, string Message, Guid StudentId, DateTime Timestamp)> SubmitManualAttendanceAsync(Guid tripId, ManualAttendanceRequest request)
+		{
+			if (string.IsNullOrEmpty(request.BoardStatus) && string.IsNullOrEmpty(request.AlightStatus))
+			{
+				throw new ArgumentException("Either BoardStatus or AlightStatus must be provided");
+			}
+
+			var tripRepository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+			var trip = await tripRepository.FindAsync(tripId);
+			if (trip == null)
+				throw new KeyNotFoundException("Trip not found");
+
+			// Find stop by sequence order (using StopId as sequence)
+			var stop = trip.Stops.FirstOrDefault(s => s.SequenceOrder == request.StopId);
+			if (stop == null)
+				throw new KeyNotFoundException("Stop not found");
+
+			// Get student info
+			var student = await _studentRepository.FindAsync(request.StudentId);
+			if (student == null)
+				throw new KeyNotFoundException("Student not found");
+
+			var timestamp = request.Timestamp ?? DateTime.UtcNow;
+			var studentName = $"{student.FirstName} {student.LastName}".Trim();
+
+			var existingAttendance = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId);
+
+			if (existingAttendance != null)
+			{
+				existingAttendance.StudentName = studentName;
+				existingAttendance.RecognitionMethod = TripConstants.FaceRecognitionConstants.RecognitionMethods.Manual;
+
+				if (!string.IsNullOrEmpty(request.BoardStatus))
+				{
+					existingAttendance.BoardStatus = request.BoardStatus;
+					existingAttendance.BoardedAt = timestamp;
+				}
+
+				if (!string.IsNullOrEmpty(request.AlightStatus))
+				{
+					existingAttendance.AlightStatus = request.AlightStatus;
+					existingAttendance.AlightedAt = timestamp;
+				}
+
+				if (existingAttendance.AlightStatus == TripConstants.AttendanceStates.Present)
+				{
+					existingAttendance.State = TripConstants.AttendanceStates.Alighted;
+				}
+				else if (existingAttendance.BoardStatus == TripConstants.AttendanceStates.Present)
+				{
+					existingAttendance.State = TripConstants.AttendanceStates.Boarded;
+				}
+				else if (existingAttendance.BoardStatus == TripConstants.AttendanceStates.Absent || 
+				         existingAttendance.AlightStatus == TripConstants.AttendanceStates.Absent)
+				{
+					existingAttendance.State = TripConstants.AttendanceStates.Absent;
+				}
+				else
+				{
+					existingAttendance.State = TripConstants.AttendanceStates.Pending;
+				}
+			}
+			else
+			{
+				var newAttendance = new Attendance
+				{
+					StudentId = request.StudentId,
+					StudentName = studentName,
+					RecognitionMethod = TripConstants.FaceRecognitionConstants.RecognitionMethods.Manual,
+					FaceRecognitionData = null
+				};
+
+				if (!string.IsNullOrEmpty(request.BoardStatus))
+				{
+					newAttendance.BoardStatus = request.BoardStatus;
+					newAttendance.BoardedAt = timestamp;
+				}
+
+				if (!string.IsNullOrEmpty(request.AlightStatus))
+				{
+					newAttendance.AlightStatus = request.AlightStatus;
+					newAttendance.AlightedAt = timestamp;
+				}
+
+				if (newAttendance.AlightStatus == TripConstants.AttendanceStates.Present)
+				{
+					newAttendance.State = TripConstants.AttendanceStates.Alighted;
+				}
+				else if (newAttendance.BoardStatus == TripConstants.AttendanceStates.Present)
+				{
+					newAttendance.State = TripConstants.AttendanceStates.Boarded;
+				}
+				else if (newAttendance.BoardStatus == TripConstants.AttendanceStates.Absent || 
+				         newAttendance.AlightStatus == TripConstants.AttendanceStates.Absent)
+				{
+					newAttendance.State = TripConstants.AttendanceStates.Absent;
+				}
+				else
+				{
+					newAttendance.State = TripConstants.AttendanceStates.Pending;
+				}
+
+				stop.Attendance.Add(newAttendance);
+			}
+
+			// Save to MongoDB
+			await tripRepository.UpdateAsync(trip);
+
+			// Send SignalR notification
+			if (_tripHubService != null)
+			{
+				try
+				{
+					var attendanceSummary = new
+					{
+						total = stop.Attendance.Count,
+						boarded = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Boarded),
+						alighted = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Alighted),
+						present = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Present),
+						absent = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Absent),
+						pending = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Pending),
+						late = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Late),
+						excused = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Excused),
+						arrivedAt = stop.ArrivedAt,
+						departedAt = stop.DepartedAt,
+						studentId = request.StudentId,
+						studentName = studentName,
+						timestamp = timestamp
+					};
+
+					await _tripHubService.BroadcastAttendanceUpdatedAsync(
+						tripId: tripId,
+						stopId: stop.PickupPointId, // Use PickupPointId for SignalR
+						attendanceSummary: attendanceSummary);
+				}
+				catch (Exception ex)
+				{
+					_logger.LogWarning(ex, "Failed to send SignalR notification for attendance update");
+					// Don't fail the request if SignalR fails
+				}
+			}
+
+			return (true, "Attendance updated successfully", request.StudentId, timestamp);
+		}
+
+		private string GetAttendanceStatus(List<Attendance> attendance, Guid studentId)
+		{
+			var record = attendance.FirstOrDefault(a => a.StudentId == studentId);
+			
+			if (record == null)
+				return "NotYetBoarded";
+			
+			if (!string.IsNullOrEmpty(record.AlightStatus))
+			{
+				if (record.AlightStatus == TripConstants.AttendanceStates.Present)
+					return "Alighted";
+				return "Absent";
+			}
+			
+			if (!string.IsNullOrEmpty(record.BoardStatus))
+			{
+				if (record.BoardStatus == TripConstants.AttendanceStates.Present)
+					return "Boarded";
+				return "Absent";
+			}
+			
+			return "NotYetBoarded";
 		}
 
 	}

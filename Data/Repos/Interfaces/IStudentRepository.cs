@@ -11,5 +11,6 @@ namespace Data.Repos.Interfaces
     {
         Task<List<Student>> GetStudentsByParentEmailAsync(string email);
         Task<List<Student>> GetActiveStudentsByPickupPointIdAsync(Guid pickupPointId);
+        Task<List<Student>> GetStudentsByPickupPointAsync(Guid pickupPointId);
     }
 }

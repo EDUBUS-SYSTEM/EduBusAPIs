@@ -29,5 +29,15 @@ namespace Data.Repos.SqlServer
                 !s.IsDeleted)
                 .ToListAsync();
         }
+
+        public async Task<List<Student>> GetStudentsByPickupPointAsync(Guid pickupPointId)
+        {
+            return await _table
+                .Include(s => s.Images)
+                .Where(s => s.CurrentPickupPointId == pickupPointId && !s.IsDeleted)
+                .OrderBy(s => s.FirstName)
+                .ThenBy(s => s.LastName)
+                .ToListAsync();
+        }
     }
 }

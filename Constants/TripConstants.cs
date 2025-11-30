@@ -59,6 +59,8 @@ namespace Constants
             public const string Late = "Late";
             public const string Excused = "Excused";
             public const string Pending = "Pending";
+            public const string Boarded = "Boarded";
+            public const string Alighted = "Alighted";
         }
 
         public static class FaceRecognitionConstants
