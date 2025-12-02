@@ -35,10 +35,46 @@ namespace Data.Models
         [BsonElement("studentName")]
         public string StudentName { get; set; } = string.Empty;
 
+        [BsonElement("boardStatus")]
+        public string? BoardStatus { get; set; }
+
         [BsonElement("boardedAt")]
         public DateTime? BoardedAt { get; set; }
 
+        [BsonElement("alightStatus")]
+        public string? AlightStatus { get; set; }
+
+        [BsonElement("alightedAt")]
+        public DateTime? AlightedAt { get; set; }
+
         [BsonElement("state")]
-        public string State { get; set; } = string.Empty;
+        public string State { get; set; } = null!;
+
+        [BsonElement("recognitionMethod")]
+        public string? RecognitionMethod { get; set; }
+
+        [BsonElement("faceRecognitionData")]
+        public FaceRecognitionData? FaceRecognitionData { get; set; }
+    }
+
+    public class FaceRecognitionData
+    {
+        [BsonElement("similarity")]
+        public double Similarity { get; set; }
+
+        [BsonElement("livenessScore")]
+        public double LivenessScore { get; set; }
+
+        [BsonElement("framesConfirmed")]
+        public int FramesConfirmed { get; set; }
+
+        [BsonElement("deviceId")]
+        public string DeviceId { get; set; } = null!;
+
+        [BsonElement("modelVersion")]
+        public string ModelVersion { get; set; } = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1;
+
+        [BsonElement("recognizedAt")]
+        public DateTime RecognizedAt { get; set; } = DateTime.UtcNow;
     }
 }

@@ -7,6 +7,7 @@ namespace Services.Contracts
         Task<ParentRegistrationResponseDto> RegisterParentAsync(ParentRegistrationRequestDto dto);
         Task<VerifyOtpWithStudentsResponseDto> VerifyOtpWithStudentsAsync(string email, string otp);
         Task<List<StudentBriefDto>> GetStudentsByEmailAsync(string email);
+        Task<ParentRegistrationEligibilityDto> GetRegistrationEligibilityAsync(Guid parentId, string? parentEmail);
 
         Task<SubmitPickupPointRequestResponseDto> SubmitPickupPointRequestAsync(SubmitPickupPointRequestDto dto);
 

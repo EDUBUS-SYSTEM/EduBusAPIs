@@ -71,6 +71,9 @@ namespace Services.Models.Trip
         public string StudentName { get; set; } = string.Empty;
         public string ClassName { get; set; } = string.Empty;
         public DateTime? BoardedAt { get; set; }
+        public DateTime? AlightedAt { get; set; }
         public string State { get; set; } = string.Empty;
+        public string? BoardStatus { get; set; }
+        public string? AlightStatus { get; set; }
     }
 }

@@ -18,7 +18,7 @@ namespace Services.Implementations
     {
         private readonly IStudentRepository _studentRepo;
         private readonly IPickupPointRepository _pickupPointRepo;
-        private readonly IStudentPickupPointHistoryRepository _historyRepo;
+        private readonly IStudentPickupPointRepository _historyRepo;
         private readonly IPickupPointRequestRepository _requestRepo;
         private readonly IParentRegistrationRepository _parentRegistrationRepo;
         private readonly IEmailService _email;
@@ -28,6 +28,7 @@ namespace Services.Implementations
         private readonly ITransactionService _transactionService;
         private readonly ITransactionRepository _transactionRepo;
         private readonly ITransportFeeItemRepository _transportFeeItemRepo;
+        private readonly IEnrollmentSemesterSettingsService _enrollmentSettingsService;
 
         private const string Purpose = "PickupPointRequest";
         private const decimal MaxEstimatedPrice = 50_000_000m; // sanity cap
@@ -35,7 +36,7 @@ namespace Services.Implementations
         public PickupPointEnrollmentService(
             IStudentRepository studentRepo,
             IPickupPointRepository pickupPointRepo,
-            IStudentPickupPointHistoryRepository historyRepo,
+            IStudentPickupPointRepository historyRepo,
             IPickupPointRequestRepository requestRepo,
             IParentRegistrationRepository parentRegistrationRepo,
             IEmailService email,
@@ -44,7 +45,8 @@ namespace Services.Implementations
             IParentService parentService,
             ITransactionService transactionService,
             ITransactionRepository transactionRepo,
-            ITransportFeeItemRepository transportFeeItemRepo)
+            ITransportFeeItemRepository transportFeeItemRepo,
+            IEnrollmentSemesterSettingsService enrollmentSemesterSettingsService)
         {
             _studentRepo = studentRepo;
             _pickupPointRepo = pickupPointRepo;
@@ -58,6 +60,7 @@ namespace Services.Implementations
             _transactionService = transactionService;
             _transactionRepo = transactionRepo;
             _transportFeeItemRepo = transportFeeItemRepo;
+            _enrollmentSettingsService = enrollmentSemesterSettingsService;
         }
 
         public async Task<ParentRegistrationResponseDto> RegisterParentAsync(ParentRegistrationRequestDto dto)
@@ -220,10 +223,178 @@ namespace Services.Implementations
         }
         public async Task<List<StudentBriefDto>> GetStudentsByEmailAsync(string email)
         {
-            var students = await _studentRepo.GetStudentsByParentEmailAsync(email);
+            var students = (await _studentRepo.GetStudentsByParentEmailAsync(email))?.ToList() ?? new List<Student>();
+
+            var pickupPointLookup = await BuildPickupPointLookupAsync(
+                students
+                    .Where(s => s.CurrentPickupPointId.HasValue)
+                    .Select(s => s.CurrentPickupPointId!.Value));
+
             return students
-                .Select(s => new StudentBriefDto { Id = s.Id, FirstName = s.FirstName, LastName = s.LastName })
+                .Select(s => CreateStudentBriefDto(
+                    s.Id,
+                    s.FirstName,
+                    s.LastName,
+                    s.CurrentPickupPointId,
+                    s.PickupPointAssignedAt,
+                    pickupPointLookup))
                 .ToList();
+        }
+
+        public async Task<ParentRegistrationEligibilityDto> GetRegistrationEligibilityAsync(Guid parentId, string? parentEmail)
+        {
+            if (parentId == Guid.Empty)
+                throw new ArgumentException("Parent ID is required", nameof(parentId));
+
+            var students = await _studentRepo.GetQueryable()
+                .Where(s => s.ParentId == parentId && !s.IsDeleted)
+                .Select(s => new
+                {
+                    s.Id,
+                    s.FirstName,
+                    s.LastName,
+                    s.ParentEmail,
+                    s.CurrentPickupPointId,
+                    s.PickupPointAssignedAt
+                })
+                .ToListAsync();
+
+            var response = new ParentRegistrationEligibilityDto
+            {
+                EligibleStudents = new List<StudentBriefDto>(),
+                BlockedStudents = new List<StudentRegistrationBlockDto>()
+            };
+
+            if (!students.Any())
+            {
+                response.Message = "No students found for this parent account.";
+                return response;
+            }
+
+            var resolvedEmail = !string.IsNullOrWhiteSpace(parentEmail)
+                ? parentEmail
+                : students.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s.ParentEmail))?.ParentEmail;
+
+            var semesterInfo = await _transactionService.GetNextSemesterAsync();
+
+            var currentRegistration = await _enrollmentSettingsService.GetCurrentOpenRegistrationAsync();
+            var isRegistrationWindowOpen = currentRegistration != null &&
+                string.Equals(currentRegistration.SemesterCode, semesterInfo.Code, StringComparison.OrdinalIgnoreCase);
+
+            response.IsRegistrationWindowOpen = isRegistrationWindowOpen;
+            response.Semester = new ParentRegistrationSemesterDto
+            {
+                Code = semesterInfo.Code,
+                Name = semesterInfo.Name,
+                AcademicYear = semesterInfo.AcademicYear,
+                StartDate = semesterInfo.StartDate,
+                EndDate = semesterInfo.EndDate,
+                RegistrationStartDate = currentRegistration?.RegistrationStartDate,
+                RegistrationEndDate = currentRegistration?.RegistrationEndDate
+            };
+
+            if (!isRegistrationWindowOpen && currentRegistration != null)
+            {
+                response.Message = $"Registration window is closed. It opens from {currentRegistration.RegistrationStartDate:dd/MM/yyyy} to {currentRegistration.RegistrationEndDate:dd/MM/yyyy}.";
+            }
+
+            var studentIds = students.Select(s => s.Id).ToList();
+
+            var pickupPointLookup = await BuildPickupPointLookupAsync(
+                students
+                    .Where(s => s.CurrentPickupPointId.HasValue)
+                    .Select(s => s.CurrentPickupPointId!.Value));
+
+            var studentBriefLookup = students.ToDictionary(
+                s => s.Id,
+                s => CreateStudentBriefDto(
+                    s.Id,
+                    s.FirstName,
+                    s.LastName,
+                    s.CurrentPickupPointId,
+                    s.PickupPointAssignedAt,
+                    pickupPointLookup));
+
+            var assignedStudentIds = await _historyRepo.GetQueryable()
+                .Where(h => studentIds.Contains(h.StudentId)
+                    && h.SemesterCode == semesterInfo.Code
+                    && h.RemovedAt == null)
+                .Select(h => h.StudentId)
+                .Distinct()
+                .ToListAsync();
+
+            var activeRequests = await _requestRepo.GetActiveRequestsByStudentIdsAsync(
+                studentIds,
+                semesterInfo.Code,
+                "Pending",
+                "Approved");
+
+            if (!string.IsNullOrWhiteSpace(resolvedEmail))
+            {
+                activeRequests = activeRequests
+                    .Where(r => string.Equals(r.ParentEmail, resolvedEmail, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var blockedStudents = new Dictionary<Guid, StudentRegistrationBlockDto>();
+
+            void BlockStudent(Guid studentId, string status, string reason)
+            {
+                if (blockedStudents.ContainsKey(studentId))
+                    return;
+
+                if (!studentBriefLookup.TryGetValue(studentId, out var studentBrief))
+                    return;
+
+                blockedStudents[studentId] = new StudentRegistrationBlockDto
+                {
+                    Id = studentBrief.Id,
+                    FirstName = studentBrief.FirstName,
+                    LastName = studentBrief.LastName,
+                    CurrentPickupPoint = studentBrief.CurrentPickupPoint,
+                    Status = status,
+                    Reason = reason
+                };
+            }
+
+            foreach (var studentId in assignedStudentIds)
+            {
+                BlockStudent(studentId, "assigned", $"Already assigned to a pickup point for {semesterInfo.Name}.");
+            }
+
+            foreach (var request in activeRequests)
+            {
+                var reason = request.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase)
+                    ? "Registration request is pending approval."
+                    : "Registration request has been approved.";
+
+                var status = request.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase)
+                    ? "pending_request"
+                    : "approved_request";
+
+                foreach (var sid in request.StudentIds.Where(studentIds.Contains))
+                {
+                    BlockStudent(sid, status, reason);
+                }
+            }
+
+            response.BlockedStudents = blockedStudents.Values.ToList();
+
+            response.EligibleStudents = studentBriefLookup
+                .Where(kvp => !blockedStudents.ContainsKey(kvp.Key))
+                .Select(kvp => kvp.Value)
+                .ToList();
+
+            if (!response.HasEligibleStudents)
+            {
+                response.Message = $"All students have already been registered for {semesterInfo.Name}.";
+            }
+            else if (response.BlockedStudents.Any() && string.IsNullOrWhiteSpace(response.Message))
+            {
+                response.Message = $"{response.BlockedStudents.Count} student(s) are already registered for {semesterInfo.Name}.";
+            }
+
+            return response;
         }
 
 
@@ -271,8 +442,8 @@ namespace Services.Implementations
                 Status = "Pending",
                 UnitPricePerKm = feeCalculation.UnitPricePerKm,
                 TotalFee = feeCalculation.TotalFee,
-                // Semester information
                 SemesterName = semesterInfo.Name,
+                SemesterCode = semesterInfo.Code,
                 AcademicYear = semesterInfo.AcademicYear,
                 SemesterStartDate = semesterInfo.StartDate,
                 SemesterEndDate = semesterInfo.EndDate,
@@ -287,9 +458,8 @@ namespace Services.Implementations
                 RequestId = createdDoc.Id,
                 Status = "Pending",
                 Message = "Pickup point request submitted successfully. Please wait for admin approval.",
-                TotalFee = feeCalculation.TotalFee,
+                TotalFee = createdDoc.TotalFee,
                 CreatedAt = createdDoc.CreatedAt,
-                // Additional information
                 SemesterName = semesterInfo.Name,
                 AcademicYear = semesterInfo.AcademicYear,
                 TotalSchoolDays = feeCalculation.TotalSchoolDays,
@@ -319,6 +489,7 @@ namespace Services.Implementations
                     TotalFee = request.TotalFee,
                     // Semester information
                     SemesterName = request.SemesterName,
+                    SemesterCode = request.SemesterCode,
                     AcademicYear = request.AcademicYear,
                     SemesterStartDate = request.SemesterStartDate,
                     SemesterEndDate = request.SemesterEndDate,
@@ -391,18 +562,37 @@ namespace Services.Implementations
             req.PickupPointId = pickupPoint.Id;
             await _requestRepo.UpdateAsync(req);
 
-            // Update student status to Pending (pickup point will be assigned after payment)
+            // Create StudentPickupPoint records for each student with semester information
+            // This replaces the previous logic of assigning pickup point directly to students
+            var now = DateTime.UtcNow;
             foreach (var sid in req.StudentIds)
             {
                 var s = await _studentRepo.FindAsync(sid);
                 if (s == null || s.IsDeleted) continue;
 
-                // Auto-Pending when approved
+                // Update student status to Pending
                 if (s.Status == StudentStatus.Available)
                 {
                     s.Status = StudentStatus.Pending;
                     await _studentRepo.UpdateAsync(s);
                 }
+
+                // Create StudentPickupPoint record with semester information
+                await _historyRepo.AddAsync(new StudentPickupPoint
+                {
+                    StudentId = sid,
+                    PickupPointId = pickupPoint.Id,
+                    AssignedAt = now,
+                    ChangeReason = "Assigned during approval",
+                    ChangedBy = $"Admin:{adminId}",
+                    // Semester information from request
+                    SemesterName = req.SemesterName,
+                    SemesterCode = req.SemesterCode,
+                    AcademicYear = req.AcademicYear,
+                    SemesterStartDate = req.SemesterStartDate,
+                    SemesterEndDate = req.SemesterEndDate,
+                    TotalSchoolDays = req.TotalSchoolDays
+                });
             }
 
             // Create user account for parent if not exists
@@ -530,6 +720,82 @@ namespace Services.Implementations
                     reason?.Trim() ?? "Insufficient conditions",
                     req.AddressText);
             }
+        }
+
+        private async Task<Dictionary<Guid, PickupPointSummary>> BuildPickupPointLookupAsync(IEnumerable<Guid> pickupPointIds)
+        {
+            var ids = pickupPointIds?
+                .Distinct()
+                .ToList();
+
+            if (ids == null || ids.Count == 0)
+            {
+                return new Dictionary<Guid, PickupPointSummary>();
+            }
+
+            var pickupPoints = await _pickupPointRepo.GetQueryable()
+                .Where(pp => ids.Contains(pp.Id) && !pp.IsDeleted)
+                .Select(pp => new
+                {
+                    pp.Id,
+                    pp.Description,
+                    pp.Location,
+                    pp.Geog
+                })
+                .ToListAsync();
+
+            return pickupPoints.ToDictionary(
+                pp => pp.Id,
+                pp => new PickupPointSummary
+                {
+                    Id = pp.Id,
+                    Description = pp.Description,
+                    Location = pp.Location,
+                    Latitude = pp.Geog != null ? pp.Geog.Y : (double?)null,
+                    Longitude = pp.Geog != null ? pp.Geog.X : (double?)null
+                });
+        }
+
+        private StudentBriefDto CreateStudentBriefDto(
+            Guid studentId,
+            string firstName,
+            string lastName,
+            Guid? currentPickupPointId,
+            DateTime? pickupPointAssignedAt,
+            IReadOnlyDictionary<Guid, PickupPointSummary> pickupPointLookup)
+        {
+            StudentCurrentPickupPointDto? currentPickupPoint = null;
+
+            if (currentPickupPointId.HasValue &&
+                pickupPointLookup.TryGetValue(currentPickupPointId.Value, out var summary))
+            {
+                currentPickupPoint = new StudentCurrentPickupPointDto
+                {
+                    PickupPointId = summary.Id,
+                    Description = summary.Description,
+                    Location = summary.Location,
+                    Latitude = summary.Latitude,
+                    Longitude = summary.Longitude,
+                    AssignedAt = pickupPointAssignedAt
+                };
+            }
+
+            return new StudentBriefDto
+            {
+                Id = studentId,
+                FirstName = firstName,
+                LastName = lastName,
+                CurrentPickupPoint = currentPickupPoint
+            };
+        }
+
+        private sealed class PickupPointSummary
+        {
+            public Guid Id { get; init; }
+            public string Description { get; init; } = string.Empty;
+            public string Location { get; init; } = string.Empty;
+            public double? Latitude { get; init; }
+            public double? Longitude { get; init; }
         }
 
         private static string GenerateOtp(int len)
@@ -676,82 +942,7 @@ namespace Services.Implementations
             await _email.SendEmailAsync(email, subject, body);
         }
 
-        /// <summary>
-        /// Assign pickup point to students after successful payment
-        /// </summary>
-        public async Task AssignPickupPointAfterPaymentAsync(Guid transactionId)
-        {
-            try
-            {
-                // Get transaction details
-                var transaction = await _transactionRepo.FindAsync(transactionId);
-                if (transaction == null || string.IsNullOrEmpty(transaction.PickupPointRequestId))
-                    return;
-
-                // Get pickup point request
-                var requestId = Guid.Parse(transaction.PickupPointRequestId);
-                var request = await _requestRepo.FindAsync(requestId);
-                if (request == null || !request.PickupPointId.HasValue)
-                    return;
-
-                // Get transport fee items for this transaction
-                var transportFeeItems = await _transportFeeItemRepo.GetByTransactionIdAsync(transactionId);
-                var studentIds = transportFeeItems.Select(tfi => tfi.StudentId).ToList();
-
-                if (!studentIds.Any())
-                    return;
-
-                // Get the pickup point that was created during approval
-                var pickupPoint = await _pickupPointRepo.FindAsync(request.PickupPointId.Value);
-                if (pickupPoint == null)
-                    return;
-
-                var now = DateTime.UtcNow;
-
-                // Assign pickup point to each student
-                foreach (var studentId in studentIds)
-                {
-                    var student = await _studentRepo.FindAsync(studentId);
-                    if (student == null || student.IsDeleted) continue;
-
-                    // Close previous assignment if exists
-                    if (student.CurrentPickupPointId.HasValue)
-                    {
-                        await _historyRepo.AddAsync(new StudentPickupPointHistory
-                        {
-                            StudentId = student.Id,
-                            PickupPointId = student.CurrentPickupPointId.Value,
-                            AssignedAt = student.PickupPointAssignedAt ?? now.AddMinutes(-1),
-                            RemovedAt = now,
-                            ChangeReason = "Reassigned after payment",
-                            ChangedBy = $"System:Payment:{transactionId}"
-                        });
-                    }
-
-                    // Assign new pickup point
-                    student.CurrentPickupPointId = pickupPoint.Id;
-                    student.PickupPointAssignedAt = now;
-                    await _studentRepo.UpdateAsync(student);
-
-                    // Write assignment history
-                    await _historyRepo.AddAsync(new StudentPickupPointHistory
-                    {
-                        StudentId = student.Id,
-                        PickupPointId = pickupPoint.Id,
-                        AssignedAt = now,
-                        ChangeReason = "Assigned after successful payment",
-                        ChangedBy = $"System:Payment:{transactionId}"
-                    });
-                }
-
-                Console.WriteLine($"Pickup point assigned to {studentIds.Count} students after payment for transaction {transactionId}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error assigning pickup point after payment: {ex.Message}");
-                // Don't throw exception to avoid breaking payment flow
-            }
-        }
+        
 
         public async Task<List<PickupPointWithStudentStatusDto>> GetPickupPointsWithStudentStatusAsync()
         {
@@ -761,9 +952,9 @@ namespace Services.Implementations
 
             foreach (var (pickupPoint, assignedStudentCount) in pickupPointsWithCount)
             {
-                // Get assigned students for this pickup point (only Active students)
-                var assignedStudents = await _studentRepo.GetQueryable()
-                    .Where(s => !s.IsDeleted && s.CurrentPickupPointId == pickupPoint.Id && s.Status == StudentStatus.Active)
+                // Get ALL assigned students for this pickup point (all statuses)
+                var allAssignedStudents = await _studentRepo.GetQueryable()
+                    .Where(s => !s.IsDeleted && s.CurrentPickupPointId == pickupPoint.Id)
                     .Select(s => new StudentInfo
                     {
                         Id = s.Id,
@@ -773,6 +964,12 @@ namespace Services.Implementations
                         PickupPointAssignedAt = s.PickupPointAssignedAt
                     })
                     .ToListAsync();
+
+                // Calculate status breakdown
+                var totalStudents = allAssignedStudents.Count;
+                var activeStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Active);
+                var pendingStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Pending);
+                var inactiveStudents = allAssignedStudents.Count(s => s.Status == StudentStatus.Inactive);
 
                 result.Add(new PickupPointWithStudentStatusDto
                 {
@@ -785,11 +982,88 @@ namespace Services.Implementations
                     UpdatedAt = pickupPoint.UpdatedAt,
                     IsDeleted = pickupPoint.IsDeleted,
                     AssignedStudentCount = assignedStudentCount,
-                    AssignedStudents = assignedStudents
+                    AssignedStudents = allAssignedStudents,
+                    TotalStudents = totalStudents,
+                    ActiveStudents = activeStudents,
+                    PendingStudents = pendingStudents,
+                    InactiveStudents = inactiveStudents
                 });
             }
 
             return result;
+        }
+
+        public async Task AssignPickupPointAfterPaymentAsync(Guid transactionId)
+        {
+            // Get the transaction
+            var transaction = await _transactionRepo.FindAsync(transactionId);
+            if (transaction == null)
+            {
+                throw new KeyNotFoundException($"Transaction with ID {transactionId} not found.");
+            }
+
+            // Check if transaction has a pickup point request ID
+            if (string.IsNullOrEmpty(transaction.PickupPointRequestId))
+            {
+                // No pickup point request associated with this transaction, skip assignment
+                return;
+            }
+
+            // Get the pickup point request from MongoDB
+            var pickupPointRequestId = Guid.Parse(transaction.PickupPointRequestId);
+            var pickupPointRequest = await _requestRepo.FindAsync(pickupPointRequestId);
+            if (pickupPointRequest == null)
+            {
+                throw new KeyNotFoundException($"Pickup point request with ID {pickupPointRequestId} not found.");
+            }
+
+            // Check if pickup point was created (should exist after approval)
+            if (!pickupPointRequest.PickupPointId.HasValue)
+            {
+                throw new InvalidOperationException($"Pickup point has not been created for request {pickupPointRequestId}.");
+            }
+
+            var pickupPointId = pickupPointRequest.PickupPointId.Value;
+
+            // Get students from transport fee items
+            var transportFeeItems = await _transportFeeItemRepo.FindByConditionAsync(tfi => tfi.TransactionId == transactionId);
+            var studentIds = transportFeeItems.Select(tfi => tfi.StudentId).Distinct().ToList();
+
+            if (!studentIds.Any())
+            {
+                // No students associated with this transaction, skip assignment
+                return;
+            }
+
+            // Assign pickup point to each student
+            var now = DateTime.UtcNow;
+            foreach (var studentId in studentIds)
+            {
+                var student = await _studentRepo.FindAsync(studentId);
+                if (student == null || student.IsDeleted) continue;
+
+                // Update student's current pickup point
+                student.CurrentPickupPointId = pickupPointId;
+                student.PickupPointAssignedAt = now;
+                await _studentRepo.UpdateAsync(student);
+
+                // Create StudentPickupPoint history record
+                await _historyRepo.AddAsync(new StudentPickupPoint
+                {
+                    StudentId = studentId,
+                    PickupPointId = pickupPointId,
+                    AssignedAt = now,
+                    ChangeReason = "Assigned after successful payment",
+                    ChangedBy = $"Transaction:{transactionId}",
+                    // Semester information from pickup point request
+                    SemesterName = pickupPointRequest.SemesterName,
+                    SemesterCode = pickupPointRequest.SemesterCode,
+                    AcademicYear = pickupPointRequest.AcademicYear,
+                    SemesterStartDate = pickupPointRequest.SemesterStartDate,
+                    SemesterEndDate = pickupPointRequest.SemesterEndDate,
+                    TotalSchoolDays = pickupPointRequest.TotalSchoolDays
+                });
+            }
         }
     }
 }

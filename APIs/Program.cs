@@ -166,7 +166,7 @@ builder.Services.AddScoped<IStudentGradeRepository, StudentGradeRepository>();
 builder.Services.AddScoped<IDriverLeaveRepository, DriverLeaveRepository>();
 builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepository>();
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
-builder.Services.AddScoped<IStudentPickupPointHistoryRepository, StudentPickupPointHistoryRepository>();
+builder.Services.AddScoped<IStudentPickupPointRepository, StudentPickupPointRepository>();
 builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
 
 // Payment Repositories
@@ -182,8 +182,10 @@ builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>
 builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
+builder.Services.AddScoped<IMongoRepository<PickupPointResetLog>, PickupPointResetLogRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
+builder.Services.AddScoped<IEnrollmentSemesterSettingsRepository, EnrollmentSemesterSettingsRepository>();
 builder.Services.AddScoped<IStudentAbsenceRequestRepository, StudentAbsenceRequestRepository>();
 
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
@@ -200,7 +202,9 @@ builder.Services.AddScoped<ISupervisorService, SupervisorService>();
 builder.Services.AddScoped<IDriverService, DriverService>();
 builder.Services.AddScoped<IDriverLicenseService, DriverLicenseService>();
 builder.Services.AddScoped<IFileService, FileService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddSingleton<EmailService>();
+builder.Services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<EmailService>());
+builder.Services.AddSingleton<ISimpleEmailService, SimpleEmailService>();
 builder.Services.AddScoped<LicensePlateValidator>();
 builder.Services.AddScoped<UserAccountValidationService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -237,6 +241,7 @@ builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
 builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
+builder.Services.AddScoped<IEnrollmentSemesterSettingsService, EnrollmentSemesterSettingsService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
 
@@ -269,6 +274,8 @@ builder.Services.AddHostedService<Services.Backgrounds.AutoReplacementSuggestion
 builder.Services.AddHostedService<Services.Backgrounds.NotificationCleanupService>();
 builder.Services.AddHostedService<Services.Backgrounds.AutoTripGenerationService>();
 builder.Services.AddHostedService<Services.Backgrounds.PickupApproachNotificationService>();
+builder.Services.AddHostedService<Services.Backgrounds.RegistrationNotificationService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailService>());
 
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());

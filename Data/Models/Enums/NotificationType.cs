@@ -13,5 +13,6 @@ namespace Data.Models.Enums
         ScheduleChange = 9,               
         EmergencyNotification = 10,
         TripInfo = 11,
+        EnrollmentRegistration = 12,
     }
 }

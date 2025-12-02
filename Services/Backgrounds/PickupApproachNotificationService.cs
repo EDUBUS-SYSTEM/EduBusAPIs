@@ -1,7 +1,4 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Linq;
+
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -12,7 +9,8 @@ using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Notification;
 using Services.Models.VietMap;
-
+using Data.Models.Enums;
+using Constants;
 namespace Services.Backgrounds
 {
     public class PickupApproachNotificationService : BackgroundService
@@ -85,7 +83,7 @@ namespace Services.Backgrounds
                 var startOfDay = nowInVietnam.Date;
                 var endOfDay = startOfDay.AddDays(1);
                 var filter = Builders<Trip>.Filter.And(
-                    Builders<Trip>.Filter.Eq(t => t.Status, Constants.TripStatus.InProgress),
+                    Builders<Trip>.Filter.Eq(t => t.Status, TripConstants.TripStatus.InProgress),
                     Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
                     Builders<Trip>.Filter.Ne(t => t.CurrentLocation, null),
                     Builders<Trip>.Filter.Gte(t => t.ServiceDate, startOfDay),
