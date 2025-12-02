@@ -72,5 +72,16 @@ namespace Services.Models.Trip
 		public List<UpdateStopSequenceItem> Stops { get; set; } = new List<UpdateStopSequenceItem>();
 	}
 
+	public class ManualAttendanceRequest
+	{
+		[Required]
+		public int StopId { get; set; }
+		[Required]
+		public Guid StudentId { get; set; }
+		public string? BoardStatus { get; set; }
+		public string? AlightStatus { get; set; }
+		public DateTime? Timestamp { get; set; }
+	}
+
 }
 

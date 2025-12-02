@@ -35,8 +35,17 @@ namespace Data.Models
         [BsonElement("studentName")]
         public string StudentName { get; set; } = string.Empty;
 
+        [BsonElement("boardStatus")]
+        public string? BoardStatus { get; set; }
+
         [BsonElement("boardedAt")]
         public DateTime? BoardedAt { get; set; }
+
+        [BsonElement("alightStatus")]
+        public string? AlightStatus { get; set; }
+
+        [BsonElement("alightedAt")]
+        public DateTime? AlightedAt { get; set; }
 
         [BsonElement("state")]
         public string State { get; set; } = null!;

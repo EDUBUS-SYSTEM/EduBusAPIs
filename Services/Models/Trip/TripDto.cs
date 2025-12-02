@@ -1,4 +1,5 @@
 ﻿using Constants;
+using Data.Models.Enums;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Services.Models.Trip
@@ -19,6 +20,7 @@ namespace Services.Models.Trip
 		public Guid? SupervisorVehicleId { get; set; }
 		public VehicleSnapshotDto? Vehicle { get; set; }
 		public DriverSnapshotDto? Driver { get; set; }
+		public TripLocationDto? CurrentLocation { get; set; }
 		public SupervisorSnapshotDto? Supervisor { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
@@ -33,6 +35,7 @@ namespace Services.Models.Trip
 		public string StartTime { get; set; } = string.Empty;
 		public string EndTime { get; set; } = string.Empty;
 		public string RRule { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 	}
 
 	public class VehicleSnapshotDto
@@ -80,7 +83,7 @@ namespace Services.Models.Trip
 		public DateTime ServiceDate { get; set; }
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
-		public string Status { get; set; } = Constants.TripStatus.Scheduled;
+		public string Status { get; set; } = TripConstants.TripStatus.Scheduled;
 		public Guid VehicleId { get; set; }
 		public Guid? DriverVehicleId { get; set; }
 		public VehicleSnapshotDto? Vehicle { get; set; }
@@ -111,6 +114,7 @@ namespace Services.Models.Trip
 	{
 		public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
+		public TripType TripType { get; set; } = TripType.Unknown;
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
 		public string PlateVehicle { get; set; } = string.Empty;
