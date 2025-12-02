@@ -621,7 +621,8 @@ namespace Services.Implementations
 									Name = schedule.Name,
 									StartTime = schedule.StartTime,
 									EndTime = schedule.EndTime,
-									RRule = schedule.RRule
+									RRule = schedule.RRule,
+									TripType = schedule.TripType
 								},
 								Stops = new List<TripStop>()
 							};
@@ -765,6 +766,7 @@ namespace Services.Implementations
 				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
 					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
 
+				trip.ScheduleSnapshot.TripType = schedule.TripType;
 				ValidateTripTimesAgainstSchedule(trip, schedule);
 			}
 
@@ -806,6 +808,7 @@ namespace Services.Implementations
 				if (schedule == null || schedule.IsDeleted || !schedule.IsActive)
 					throw new InvalidOperationException($"Schedule {trip.ScheduleSnapshot.ScheduleId} does not exist or is inactive");
 
+				trip.ScheduleSnapshot.TripType = schedule.TripType;
 				ValidateTripTimesAgainstSchedule(trip, schedule);
 			}
 
@@ -2429,46 +2432,60 @@ namespace Services.Implementations
 		}
         public async Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId)
         {
+            var assignments = await GetParentStudentAssignmentsForPickupPointAsync(tripId, pickupPointId);
+            return assignments
+                .Select(a => a.ParentId)
+                .Distinct();
+        }
+
+        public async Task<IEnumerable<ParentStudentAssignment>> GetParentStudentAssignmentsForPickupPointAsync(Guid tripId, Guid pickupPointId)
+        {
             try
             {
                 var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
                 var trip = await tripRepo.FindAsync(tripId);
 
                 if (trip == null || trip.IsDeleted || trip.Stops == null)
-                    return Enumerable.Empty<Guid>();
+                    return Enumerable.Empty<ParentStudentAssignment>();
 
-                // Find the stop with this pickup point
                 var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == pickupPointId);
                 if (stop == null || stop.Attendance == null || !stop.Attendance.Any())
-                    return Enumerable.Empty<Guid>();
+                    return Enumerable.Empty<ParentStudentAssignment>();
 
-                // Get student IDs from attendance
-                var studentIds = stop.Attendance
-                    .Where(a => a.StudentId != Guid.Empty)
-                    .Select(a => a.StudentId)
-                    .Distinct()
-                    .ToList();
+                var assignments = new List<ParentStudentAssignment>();
 
-                if (!studentIds.Any())
-                    return Enumerable.Empty<Guid>();
-
-                // Get students and their parent IDs
-                var parentIds = new HashSet<Guid>();
-                foreach (var studentId in studentIds)
+                foreach (var attendance in stop.Attendance)
                 {
-                    var student = await _studentRepository.FindAsync(studentId);
-                    if (student != null && !student.IsDeleted && student.ParentId.HasValue)
+                    if (attendance == null || attendance.StudentId == Guid.Empty)
+                        continue;
+
+                    var student = await _studentRepository.FindAsync(attendance.StudentId);
+                    if (student == null || student.IsDeleted || !student.ParentId.HasValue)
+                        continue;
+
+                    var studentName = !string.IsNullOrWhiteSpace(attendance.StudentName)
+                        ? attendance.StudentName
+                        : $"{student.LastName + student.FirstName}" ?? string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(studentName))
                     {
-                        parentIds.Add(student.ParentId.Value);
+                        studentName = "Student";
                     }
+
+                    assignments.Add(new ParentStudentAssignment
+                    {
+                        ParentId = student.ParentId.Value,
+                        StudentId = attendance.StudentId,
+                        StudentName = studentName
+                    });
                 }
 
-                return parentIds;
+                return assignments;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error getting parents for pickup point {PickupPointId} in trip {TripId}", pickupPointId, tripId);
-                return Enumerable.Empty<Guid>();
+                _logger.LogError(ex, "Error getting parent-student assignments for pickup point {PickupPointId} in trip {TripId}", pickupPointId, tripId);
+                return Enumerable.Empty<ParentStudentAssignment>();
             }
         }
         public async Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId)
@@ -2521,17 +2538,82 @@ namespace Services.Implementations
             stop.ArrivedAt = DateTime.UtcNow;
             await tripRepo.UpdateAsync(trip);
 
-            // Get parents for this pickup point
-            var parentIds = await GetParentsForPickupPointAsync(tripId, stopId);
-
-            // Create notification for each parent
-            foreach (var parentId in parentIds)
+            // Broadcast realtime update to parents tracking this trip via TripHub
+            try
             {
+                if (_tripHubService != null)
+                {   
+                    await _tripHubService.BroadcastStopArrivalAsync(tripId, stopId, stop.ArrivedAt.Value);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error broadcasting stop arrival via SignalR for trip {TripId}, stop {StopId}", tripId, stopId);
+            }
+
+
+            // Get parent-student assignments for this pickup point
+            var parentAssignments = await GetParentStudentAssignmentsForPickupPointAsync(tripId, stopId);
+            
+            if (!parentAssignments.Any())
+            {
+                _logger.LogDebug("No parents found for trip {TripId}, stop {StopId}", tripId, stopId);
+                return;
+            }
+
+            // Group by parent to get student names for each parent
+            var parentGroups = parentAssignments
+                .GroupBy(a => a.ParentId)
+                .Select(g => new
+                {
+                    ParentId = g.Key,
+                    StudentNames = g.Select(a => a.StudentName)
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                })
+                .ToList();
+
+            // Determine trip type for customized notifications
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+
+            // Create notification for each parent with their children's names
+            foreach (var parentGroup in parentGroups)
+            {
+                var studentList = string.Join(", ", parentGroup.StudentNames);
+                if (string.IsNullOrWhiteSpace(studentList))
+                {
+                    studentList = "Your child";
+                }
+
+                string notificationTitle;
+                string notificationMessage;
+
+                switch (tripType)
+                {
+                    case TripType.Departure:
+                        notificationTitle = "Driver Arrived at Pickup Point";
+                        notificationMessage = $"The driver has arrived to pick up {studentList}.";
+                        break;
+                    case TripType.Return:
+                        notificationTitle = "Driver Arrived at Drop-off Point";
+                        notificationMessage = $"The driver has arrived to drop off {studentList}.";
+                        break;
+                    default:
+                        notificationTitle = "Driver Arrived";
+                        notificationMessage = $"The driver has arrived at the stop for {studentList}.";
+                        break;
+                }
+
+                var studentArray = parentGroup.StudentNames?.Any() == true
+                    ? parentGroup.StudentNames.ToArray()
+                    : Array.Empty<string>();
+
                 var notificationDto = new CreateNotificationDto
                 {
-                    UserId = parentId,
-                    Title = "Driver Arrived at Pickup Point",
-                    Message = "The driver has arrived at the pickup point for your child.",
+                    UserId = parentGroup.ParentId,
+                    Title = notificationTitle,
+                    Message = notificationMessage,
                     NotificationType = NotificationType.TripInfo,
                     RecipientType = RecipientType.Parent,
                     Priority = 2,
@@ -2545,7 +2627,9 @@ namespace Services.Implementations
                         { "stopId", stopId.ToString() },
                         { "stopName", stop.Location?.Address ?? "Unknown Stop" },
                         { "driverName", trip.Driver?.FullName ?? "Driver" },
-                        { "arrivedAt", stop.ArrivedAt?.ToString("O") ?? DateTime.UtcNow.ToString("O") }
+                        { "arrivedAt", stop.ArrivedAt?.ToString("O") ?? DateTime.UtcNow.ToString("O") },
+                        { "tripType", tripType.ToString() },
+                        { "students", studentArray }
                     }
                 };
 

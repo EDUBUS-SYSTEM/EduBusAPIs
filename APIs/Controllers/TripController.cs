@@ -630,6 +630,7 @@ namespace APIs.Controllers
 				{
 					Id = trip.Id,
 					Name = trip.ScheduleSnapshot?.Name ?? string.Empty,
+					TripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown,
 					PlannedStartAt = trip.PlannedStartAt,
 					PlannedEndAt = trip.PlannedEndAt,
 					PlateVehicle = trip.Vehicle?.MaskedPlate ?? string.Empty,

@@ -59,5 +59,27 @@ namespace APIs.Services
 				_logger.LogError(ex, "Error broadcasting attendance update: TripId={TripId}", tripId);
 			}
 		}
+
+		public async Task BroadcastStopArrivalAsync(Guid tripId, Guid stopId, DateTime arrivedAt)
+		{
+			try
+			{
+				var data = new
+				{
+					tripId = tripId,
+					stopId = stopId,
+                    arrivedAt = arrivedAt
+                };
+
+				// Broadcast to parents tracking this trip
+				await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("StopArrivalConfirmed", data);	
+				
+				_logger.LogInformation("Broadcasted stop arrival: TripId={TripId}, StopId={StopId}", tripId, stopId);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error broadcasting stop arrival: TripId={TripId}, StopId={StopId}", tripId, stopId);
+			}
+		}
 	}
 }
