@@ -58,6 +58,8 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
         public virtual DbSet<School> Schools { get; set; }
 
+        public virtual DbSet<FaceEmbedding> FaceEmbeddings { get; set; }
+
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
@@ -349,6 +351,34 @@ namespace Data.Contexts.SqlServer
                 entity.HasOne(d => d.CurrentPickupPoint).WithMany(p => p.Students)
                     .HasForeignKey(d => d.CurrentPickupPointId)
                     .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<FaceEmbedding>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasIndex(e => e.StudentId, "IX_FaceEmbeddings_StudentId")
+                      .IsUnique();
+
+                entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+                entity.Property(e => e.UpdatedAt)
+                      .HasPrecision(3);
+                entity.Property(e => e.EmbeddingJson)
+                      .IsRequired()
+                      .HasColumnType("nvarchar(max)");
+                entity.Property(e => e.ModelVersion)
+                      .HasMaxLength(50)
+                      .HasDefaultValue(Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1);
+                entity.Property(e => e.IsDeleted).HasDefaultValue(false);
+
+                // One-to-one relationship with Student
+                entity.HasOne(e => e.Student)
+                      .WithOne(s => s.FaceEmbedding)
+                      .HasForeignKey<FaceEmbedding>(e => e.StudentId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
 
             modelBuilder.Entity<StudentGradeEnrollment>(entity =>

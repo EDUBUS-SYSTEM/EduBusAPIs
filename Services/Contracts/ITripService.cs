@@ -66,5 +66,9 @@ namespace Services.Contracts
         Task ConfirmArrivalAtStopAsync(Guid tripId, Guid stopId, Guid driverId);
 		Task<Trip?> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder);
 		Task<Trip?> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences);
+		
+		// Supervisor manual attendance operations
+		Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId);
+		Task<(bool Success, string Message, Guid StudentId, DateTime Timestamp)> SubmitManualAttendanceAsync(Guid tripId, ManualAttendanceRequest request);
 	}
 }

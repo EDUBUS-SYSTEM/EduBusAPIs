@@ -24,7 +24,7 @@ namespace Data.Models
         public DateTime? EndTime { get; set; }
 
         [BsonElement("status")]
-        public string Status { get; set; } = Constants.TripStatus.Scheduled; 
+        public string Status { get; set; } = Constants.TripConstants.TripStatus.Scheduled; 
  
         [BsonElement("scheduleSnapshot")]
         public ScheduleSnapshot ScheduleSnapshot { get; set; } = new ScheduleSnapshot();

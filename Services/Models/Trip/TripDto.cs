@@ -1,4 +1,4 @@
-﻿using Constants;
+using Constants;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Services.Models.Trip
@@ -80,7 +80,7 @@ namespace Services.Models.Trip
 		public DateTime ServiceDate { get; set; }
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
-		public string Status { get; set; } = Constants.TripStatus.Scheduled;
+		public string Status { get; set; } = TripConstants.TripStatus.Scheduled;
 		public Guid VehicleId { get; set; }
 		public Guid? DriverVehicleId { get; set; }
 		public VehicleSnapshotDto? Vehicle { get; set; }

@@ -137,14 +137,18 @@ namespace Services.Implementations
                 {
                     var pickupPoint = await _pickupPointRepository.FindAsync(stop.PickupPointId);
                     var stopName = pickupPoint?.Description ?? "Unknown Stop";
+                    
                     var attendance = stop.Attendance?
                         .Select(a => new SupervisorAttendanceDto
-                            {
+                        {
                             StudentId = a.StudentId,
                             StudentName = a.StudentName,
                             ClassName = string.Empty,
                             BoardedAt = a.BoardedAt,
-                            State = a.State
+                            AlightedAt = a.AlightedAt,
+                            State = a.State,
+                            BoardStatus = a.BoardStatus,
+                            AlightStatus = a.AlightStatus
                         })
                         .ToList() ?? new List<SupervisorAttendanceDto>();
 
