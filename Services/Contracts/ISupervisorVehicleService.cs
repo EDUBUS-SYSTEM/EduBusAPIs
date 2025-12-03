@@ -16,5 +16,8 @@ namespace Services.Contracts
         // Supervisor can view own assignments
         Task<SupervisorAssignmentListResponse> GetSupervisorAssignmentsAsync(Guid supervisorId, bool? isActive, DateTime? startDate, DateTime? endDate, int page, int perPage);
         Task<SupervisorAssignmentDto?> GetSupervisorCurrentVehicleAsync(Guid supervisorId);
+        
+        // Get available supervisors for vehicle assignment
+        Task<IEnumerable<SupervisorInfoDto>> GetAvailableSupervisorsForVehicleAsync(Guid vehicleId, DateTime startTime, DateTime? endTime);
     }
 }

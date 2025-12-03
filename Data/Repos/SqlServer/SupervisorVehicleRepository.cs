@@ -151,5 +151,25 @@ namespace Data.Repos.SqlServer
                 .OrderByDescending(sv => sv.StartTimeUtc)
                 .ToListAsync();
         }
+
+        public async Task<IEnumerable<Supervisor>> GetAvailableSupervisorsForVehicleAsync(Guid vehicleId, DateTime startTime, DateTime? endTime)
+        {
+            // Get all active supervisors
+            var allSupervisors = await _context.Supervisors
+                .Where(s => !s.IsDeleted && s.Status == SupervisorStatus.Active)
+                .ToListAsync();
+
+            // Get supervisors who have conflicting assignments (assigned to ANY vehicle during this period)
+            var busySupervisorIds = await _context.SupervisorVehicles
+                .Where(sv => !sv.IsDeleted &&
+                            sv.StartTimeUtc < (endTime ?? DateTime.MaxValue) &&
+                            (sv.EndTimeUtc == null || sv.EndTimeUtc > startTime))
+                .Select(sv => sv.SupervisorId)
+                .Distinct()
+                .ToListAsync();
+
+            // Return supervisors who are NOT in the busy list
+            return allSupervisors.Where(s => !busySupervisorIds.Contains(s.Id));
+        }
     }
 }
