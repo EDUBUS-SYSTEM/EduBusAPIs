@@ -19,5 +19,8 @@ namespace Data.Repos.Interfaces
         Task<SupervisorVehicle?> GetActiveSupervisorForVehicleAsync(Guid vehicleId);
         
         Task<IEnumerable<SupervisorVehicle>> GetBySupervisorIdAsync(Guid supervisorId);
+        
+        // Get supervisors that are NOT assigned to ANY vehicle during the specified time period
+        Task<IEnumerable<Supervisor>> GetAvailableSupervisorsForVehicleAsync(Guid vehicleId, DateTime startTime, DateTime? endTime);
     }
 }

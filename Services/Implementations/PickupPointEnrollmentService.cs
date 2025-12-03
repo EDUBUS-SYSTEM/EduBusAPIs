@@ -503,7 +503,8 @@ namespace Services.Implementations
                 };
 
                 // Get parent registration information
-                var parentRegistration = await _parentRegistrationRepo.FindByEmailAsync(request.ParentEmail);
+                // First try to find in ParentRegistration (any status, not just Pending)
+                var parentRegistration = await _parentRegistrationRepo.FindByEmailAnyStatusAsync(request.ParentEmail);
                 if (parentRegistration != null)
                 {
                     detail.ParentInfo = new ParentRegistrationInfoDto
@@ -516,6 +517,27 @@ namespace Services.Implementations
                         Gender = parentRegistration.Gender,
                         CreatedAt = parentRegistration.CreatedAt
                     };
+                }
+                else
+                {
+                    // If not found in ParentRegistration, try to find in Parent (UserAccount)
+                    var parent = await _sqlDb.Set<Data.Models.Parent>()
+                        .Where(p => p.Email.ToLower() == request.ParentEmail.ToLower() && !p.IsDeleted)
+                        .FirstOrDefaultAsync();
+                    
+                    if (parent != null)
+                    {
+                        detail.ParentInfo = new ParentRegistrationInfoDto
+                        {
+                            FirstName = parent.FirstName,
+                            LastName = parent.LastName,
+                            PhoneNumber = parent.PhoneNumber ?? string.Empty,
+                            Address = parent.Address ?? string.Empty,
+                            DateOfBirth = parent.DateOfBirth ?? DateTime.MinValue,
+                            Gender = (int)parent.Gender,
+                            CreatedAt = parent.CreatedAt
+                        };
+                    }
                 }
 
                 // Get students information
