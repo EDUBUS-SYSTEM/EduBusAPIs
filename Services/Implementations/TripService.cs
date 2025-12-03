@@ -2384,6 +2384,74 @@ namespace Services.Implementations
 			}
 		}
 
+		public async Task<IEnumerable<Trip>> GetTripsByDateRangeForParentAsync(string parentEmail, DateTime startDate, DateTime endDate)
+		{
+			try
+			{
+				// Validate date range
+				var dateRange = (endDate.Date - startDate.Date).TotalDays;
+				if (dateRange < 0)
+					throw new ArgumentException("End date must be after start date");
+				
+				if (dateRange > 365)
+					throw new ArgumentException("Date range cannot exceed 365 days");
+
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return Enumerable.Empty<Trip>();
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return Enumerable.Empty<Trip>();
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var allTrips = await tripRepo.GetTripsByDateRangeAsync(startDate.Date, endDate.Date);
+				var tripsList = allTrips.ToList();
+
+				var filteredTrips = tripsList.Where(trip => 
+					trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId))
+				).ToList();
+
+				foreach (var trip in filteredTrips)
+				{
+					await PopulateTripSnapshotsAsync(trip);
+					await PopulateStopsWithPickupPointNamesAsync(trip);
+					FilterTripForParent(trip, studentIds, pickupPointIds);
+				}
+
+				foreach (var trip in filteredTrips)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}", trip.Id);
+						}
+					}
+				}
+
+				return filteredTrips;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date range for parent: {ParentEmail}, {StartDate} to {EndDate}", 
+					parentEmail, startDate, endDate);
+				throw;
+			}
+		}
+
 		public async Task<Trip?> GetTripDetailForParentAsync(Guid tripId, string parentEmail)
 		{
 			try
