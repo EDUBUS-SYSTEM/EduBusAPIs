@@ -22,6 +22,15 @@ namespace Data.Repos.MongoDB
             return await _collection.Find(filter).FirstOrDefaultAsync();
         }
 
+        public async Task<ParentRegistrationDocument?> FindByEmailAnyStatusAsync(string email)
+        {
+            var filter = Builders<ParentRegistrationDocument>.Filter.And(
+                Builders<ParentRegistrationDocument>.Filter.Eq(x => x.Email, email),
+                Builders<ParentRegistrationDocument>.Filter.Eq(x => x.IsDeleted, false)
+            );
+            return await _collection.Find(filter).FirstOrDefaultAsync();
+        }
+
         public async Task<List<ParentRegistrationDocument>> GetExpiredRegistrationsAsync()
         {
             var filter = Builders<ParentRegistrationDocument>.Filter.And(

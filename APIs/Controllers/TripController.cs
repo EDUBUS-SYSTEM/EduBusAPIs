@@ -891,6 +891,43 @@ namespace APIs.Controllers
 			}
 		}
 
+		/// <summary>
+		/// Get trips by date range for the authenticated parent (all their children)
+		/// </summary>
+		/// <param name="startDate">Start date of the range (YYYY-MM-DD)</param>
+		/// <param name="endDate">End date of the range (YYYY-MM-DD)</param>
+		/// <returns>List of trips within the date range</returns>
+		[HttpGet("parent/date-range")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByDateRangeForParent(
+			[FromQuery] DateTime startDate,
+			[FromQuery] DateTime endDate)
+		{
+			try
+			{
+				var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+				if (string.IsNullOrEmpty(parentEmail))
+				{
+					return Unauthorized(new { message = "Email not found in token" });
+				}
+
+				var trips = await _tripService.GetTripsByDateRangeForParentAsync(parentEmail, startDate, endDate);
+				var tripDtos = MapTripsToDto(trips).ToList();
+
+				return Ok(tripDtos);
+			}
+			catch (ArgumentException ex)
+			{
+				_logger.LogWarning(ex, "Invalid date range for parent trips");
+				return BadRequest(new { message = ex.Message });
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date range for parent");
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
 		[HttpGet("parent/{tripId}")]
 		[Authorize(Roles = Roles.Parent)]
 		public async Task<ActionResult<TripDto>> GetTripDetailForParent(Guid tripId)
