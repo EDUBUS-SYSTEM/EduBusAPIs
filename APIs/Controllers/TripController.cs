@@ -26,13 +26,20 @@ namespace APIs.Controllers
 		private readonly ILogger<TripController> _logger;
 		private readonly IMapper _mapper;
 		private readonly IDatabaseFactory _databaseFactory;
+		private readonly ISchoolService _schoolService;
 
-        public TripController(ITripService tripService, ILogger<TripController> logger, IMapper mapper, IDatabaseFactory databaseFactory)
+        public TripController(
+			ITripService tripService,
+			ILogger<TripController> logger,
+			IMapper mapper,
+			IDatabaseFactory databaseFactory,
+			ISchoolService schoolService)
 		{
 			_tripService = tripService;
 			_logger = logger;
 			_mapper = mapper;
 			_databaseFactory = databaseFactory;
+			_schoolService = schoolService;
         }
 
 		[HttpGet]
@@ -669,7 +676,21 @@ namespace APIs.Controllers
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
-				return Ok(MapTripToDto(trip));
+				var tripDto = MapTripToDto(trip);
+
+				// Populate school location from School table
+				var school = await _schoolService.GetSchoolAsync();
+				if (school != null && school.Latitude.HasValue && school.Longitude.HasValue)
+				{
+					tripDto!.SchoolLocation = new StopLocationDto
+					{
+						Latitude = school.Latitude.Value,
+						Longitude = school.Longitude.Value,
+						Address = school.DisplayAddress ?? school.FullAddress ?? string.Empty
+					};
+				}
+
+				return Ok(tripDto);
 			}
 			catch (Exception ex)
 			{
@@ -1083,8 +1104,8 @@ namespace APIs.Controllers
 						StudentId = a.StudentId,
 						StudentName = a.StudentName ?? string.Empty,
 						BoardStatus = a.BoardStatus,
-						BoardedAt = a.BoardedAt,
 						AlightStatus = a.AlightStatus,
+						BoardedAt = a.BoardedAt,
 						AlightedAt = a.AlightedAt,
 						State = a.State ?? string.Empty
 					}).ToList() ?? new List<ParentAttendanceDto>()
