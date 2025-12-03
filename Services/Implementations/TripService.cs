@@ -1,4 +1,4 @@
-using Constants;
+﻿using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -3155,49 +3155,171 @@ namespace Services.Implementations
 				}
 
 				stop.Attendance.Add(newAttendance);
+				existingAttendance = newAttendance;
 			}
 
-			// Save to MongoDB
+			// Update stop departure time based on manual attendance
+			var allAccountedFor = stop.Attendance.All(a =>
+				(string.IsNullOrEmpty(a.BoardStatus) ||
+				 a.BoardStatus == TripConstants.AttendanceStates.Present ||
+				 a.BoardStatus == TripConstants.AttendanceStates.Absent) &&
+				(string.IsNullOrEmpty(a.AlightStatus) ||
+				 a.AlightStatus == TripConstants.AttendanceStates.Present ||
+				 a.AlightStatus == TripConstants.AttendanceStates.Absent));
+
+			if (allAccountedFor && stop.ArrivedAt.HasValue && !stop.DepartedAt.HasValue)
+			{
+				stop.DepartedAt = timestamp;
+			}
+
 			await tripRepository.UpdateAsync(trip);
 
-			// Send SignalR notification
-			if (_tripHubService != null)
-			{
-				try
-				{
-					var attendanceSummary = new
+            // Send realtime parents tracking this trip
+            if (_tripHubService != null)
+            {
+                try
+                {
+                    var attendanceUpdate = new
 					{
-						total = stop.Attendance.Count,
-						boarded = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Boarded),
-						alighted = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Alighted),
-						present = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Present),
-						absent = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Absent),
-						pending = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Pending),
-						late = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Late),
-						excused = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Excused),
-						arrivedAt = stop.ArrivedAt,
-						departedAt = stop.DepartedAt,
+						tripId = tripId,
+						stopId = stop.PickupPointId,
 						studentId = request.StudentId,
 						studentName = studentName,
+						boardStatus = request.BoardStatus,
+						alightStatus = request.AlightStatus,
+						boardedAt = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.BoardedAt,
+						alightedAt = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.AlightedAt,
+						state = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.State,
+						arrivedAt = stop.ArrivedAt,
+						departedAt = stop.DepartedAt,
 						timestamp = timestamp
 					};
 
-					await _tripHubService.BroadcastAttendanceUpdatedAsync(
-						tripId: tripId,
-						stopId: stop.PickupPointId, // Use PickupPointId for SignalR
-						attendanceSummary: attendanceSummary);
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Failed to send SignalR notification for attendance update");
-					// Don't fail the request if SignalR fails
-				}
-			}
+                    await _tripHubService.BroadcastAttendanceUpdatedAsync(
+                        tripId: tripId,
+                        stopId: stop.PickupPointId,
+                        attendanceSummary: attendanceUpdate
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send TripHub realtime update for attendance");
+                }
+            }
 
-			return (true, "Attendance updated successfully", request.StudentId, timestamp);
+            // Send notification to parent
+            await SendAttendanceNotificationAsync(student, trip, request, studentName, timestamp);
+
+            return (true, "Attendance updated successfully", request.StudentId, timestamp);
 		}
+        /// <summary>
+        /// Sends attendance notification to parent when supervisor manually updates attendance
+        /// </summary>
+        private async Task SendAttendanceNotificationAsync(
+            Student student,
+            Trip trip,
+            ManualAttendanceRequest request,
+            string studentName,
+            DateTime timestamp)
+        {
+            try
+            {
+                if (!student.ParentId.HasValue)
+                {
+                    _logger.LogWarning("Student {StudentId} has no parent assigned, skipping notification", student.Id);
+                    return;
+                }
 
-		private string GetAttendanceStatus(List<Attendance> attendance, Guid studentId)
+                var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+                var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+                var serviceDate = trip.ServiceDate.ToString("MMMM dd, yyyy");
+                
+                string notificationTitle;
+                string notificationMessage;
+
+                // Determine notification content based on board/alight status
+                if (!string.IsNullOrEmpty(request.BoardStatus))
+                {
+                    if (request.BoardStatus == TripConstants.AttendanceStates.Present)
+                    {
+                        notificationTitle = tripType == TripType.Departure
+                            ? "Student Boarded Bus"
+                            : "Student Picked Up";
+                        notificationMessage = $"{studentName} has boarded the bus ({tripTypeText} - {serviceDate}).";
+                    }
+                    else if (request.BoardStatus == TripConstants.AttendanceStates.Absent)
+                    {
+                        notificationTitle = "Student Absent - Boarding";
+                        notificationMessage = $"{studentName} was marked as absent during boarding ({tripTypeText} - {serviceDate}).";
+                    }
+                    else
+                    {
+                        notificationTitle = "Attendance Updated - Boarding";
+                        notificationMessage = $"{studentName}'s boarding status: {request.BoardStatus} ({tripTypeText} - {serviceDate})";
+                    }
+                }
+                else if (!string.IsNullOrEmpty(request.AlightStatus))
+                {
+                    if (request.AlightStatus == TripConstants.AttendanceStates.Present)
+                    {
+                        notificationTitle = tripType == TripType.Departure
+                            ? "Student Arrived at School"
+                            : "Student Dropped Off";
+                        notificationMessage = $"{studentName} has alighted from the bus ({tripTypeText} - {serviceDate}).";
+                    }
+                    else if (request.AlightStatus == TripConstants.AttendanceStates.Absent)
+                    {
+                        notificationTitle = "Student Absent - Drop-off";
+                        notificationMessage = $"{studentName} was marked as absent during drop-off ({tripTypeText} - {serviceDate}).";
+                    }
+                    else
+                    {
+                        notificationTitle = "Attendance Updated - Drop-off";
+                        notificationMessage = $"{studentName}'s drop-off status: {request.AlightStatus} ({tripTypeText} - {serviceDate})";
+                    }
+                }
+                else
+                {
+                    notificationTitle = "Attendance Updated";
+                    notificationMessage = $"Attendance for {studentName} has been updated ({tripTypeText} - {serviceDate}).";
+                }
+
+                // Create notification
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = student.ParentId.Value,
+                    Title = notificationTitle,
+                    Message = notificationMessage,
+                    NotificationType = NotificationType.TripInfo,
+                    Metadata = new Dictionary<string, object>
+            {
+                { "tripId", trip.Id.ToString() },
+                { "studentId", student.Id.ToString() },
+                { "studentName", studentName },
+                { "boardStatus", request.BoardStatus ?? "" },
+                { "alightStatus", request.AlightStatus ?? "" },
+                { "timestamp", timestamp.ToString("O") }
+            }
+                };
+
+                await _notificationService.CreateNotificationAsync(notificationDto);
+
+                _logger.LogInformation(
+                    "Sent attendance notification to parent {ParentId} for student {StudentId}: Board={BoardStatus}, Alight={AlightStatus}",
+                    student.ParentId.Value,
+                    student.Id,
+                    request.BoardStatus ?? "null",
+                    request.AlightStatus ?? "null"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send notification to parent for student {StudentId}", student.Id);
+                // Don't throw - notification failure shouldn't fail the attendance update
+            }
+        }
+
+        private string GetAttendanceStatus(List<Attendance> attendance, Guid studentId)
 		{
 			var record = attendance.FirstOrDefault(a => a.StudentId == studentId);
 			

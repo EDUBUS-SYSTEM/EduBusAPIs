@@ -52,7 +52,9 @@ namespace APIs.Services
 				};
 
 				await _hubContext.Clients.Group("Admins").SendAsync("AttendanceUpdated", data);
-				_logger.LogInformation("Broadcasted attendance update to admins: TripId={TripId}, StopId={StopId}", tripId, stopId);
+				await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("AttendanceUpdated", data);
+				
+				_logger.LogInformation("Broadcasted attendance update to admins and parents: TripId={TripId}, StopId={StopId}", tripId, stopId);
 			}
 			catch (Exception ex)
 			{
@@ -68,8 +70,8 @@ namespace APIs.Services
 				{
 					tripId = tripId,
 					stopId = stopId,
-                    arrivedAt = arrivedAt
-                };
+					arrivedAt = arrivedAt
+				};
 
 				// Broadcast to parents tracking this trip
 				await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("StopArrivalConfirmed", data);	

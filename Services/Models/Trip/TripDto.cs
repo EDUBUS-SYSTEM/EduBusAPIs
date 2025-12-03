@@ -24,6 +24,9 @@ namespace Services.Models.Trip
 		public SupervisorSnapshotDto? Supervisor { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
+
+		// School location (from School table)
+		public StopLocationDto? SchoolLocation { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
 	}
@@ -154,8 +157,11 @@ namespace Services.Models.Trip
 	{
 		public Guid StudentId { get; set; }
 		public string StudentName { get; set; } = string.Empty;
+		public string? BoardStatus { get; set; }
+		public string? AlightStatus { get; set; }
 		public DateTime? BoardedAt { get; set; }
-		public string State { get; set; } = string.Empty;
+		public DateTime? AlightedAt { get; set; }
+	public string State { get; set; } = string.Empty;
 	}
 
 	public class TripLocationDto
