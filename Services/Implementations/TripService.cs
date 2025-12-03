@@ -1265,6 +1265,42 @@ namespace Services.Implementations
 			}
 		}
 
+		private bool HasIncompleteAttendance(Trip trip, out List<string> stopsWithPendingAttendance)
+		{
+			stopsWithPendingAttendance = new List<string>();
+
+			if (trip?.Stops == null || trip.Stops.Count == 0)
+			{
+				return false;
+			}
+
+			foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty))
+			{
+				if (stop.Attendance == null || stop.Attendance.Count == 0)
+				{
+					continue;
+				}
+
+				var hasPendingAttendance = stop.Attendance.Any(attendance =>
+					string.IsNullOrWhiteSpace(attendance.State) ||
+					attendance.State == TripConstants.AttendanceStates.Pending);
+				var hasInvalidCombination = stop.Attendance.Any(attendance =>
+					attendance.BoardStatus == TripConstants.AttendanceStates.Present &&
+					attendance.AlightStatus == TripConstants.AttendanceStates.Absent);
+
+				if (hasPendingAttendance || hasInvalidCombination)
+				{
+					var stopIdentifier = !string.IsNullOrWhiteSpace(stop.Location?.Address)
+						? stop.Location.Address
+						: $"Stop-{stop.SequenceOrder}";
+
+					stopsWithPendingAttendance.Add(stopIdentifier);
+				}
+			}
+
+			return stopsWithPendingAttendance.Count > 0;
+		}
+
 		public async Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId)
 		{
 			try
@@ -1870,6 +1906,15 @@ namespace Services.Implementations
 				if (trip.Status != TripConstants.TripStatus.InProgress)
 				{
 					_logger.LogWarning("Cannot end trip {TripId} with status {Status}", tripId, trip.Status);
+					return false;
+				}
+
+				if (HasIncompleteAttendance(trip, out var pendingStops))
+				{
+					_logger.LogWarning(
+						"Cannot end trip {TripId}: incomplete attendance recorded at stops: {Stops}",
+						tripId,
+						string.Join(", ", pendingStops));
 					return false;
 				}
 
