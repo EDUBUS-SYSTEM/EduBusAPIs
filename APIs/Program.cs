@@ -17,6 +17,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Services.Contracts;
+using Services.Helpers;
 using Services.Implementations;
 using Services.MapperProfiles;
 using Services.Models.Configuration;
@@ -42,6 +43,7 @@ builder.Services.Configure<LeaveRequestSettings>(
     builder.Configuration.GetSection("LeaveRequestSettings"));
 
 // Add services to the container
+builder.Services.AddMemoryCache();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -205,6 +207,7 @@ builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddSingleton<EmailService>();
 builder.Services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<EmailService>());
 builder.Services.AddSingleton<ISimpleEmailService, SimpleEmailService>();
+builder.Services.AddSingleton<IOtpService, OtpService>();
 builder.Services.AddScoped<LicensePlateValidator>();
 builder.Services.AddScoped<UserAccountValidationService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();

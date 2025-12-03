@@ -4,10 +4,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Services.Contracts;
 using Services.Models.UserAccount;
+using Services.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Constants;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -16,12 +18,21 @@ namespace Services.Implementations
         private readonly IUserAccountRepository _userRepo;
         private readonly IRefreshTokenRepository _refreshRepo;
         private readonly IConfiguration _config;
+        private readonly IOtpService _otpService;
+        private readonly IEmailService _emailService;
 
-        public AuthService(IUserAccountRepository userRepo, IRefreshTokenRepository refreshRepo, IConfiguration config)
+        public AuthService(
+            IUserAccountRepository userRepo,
+            IRefreshTokenRepository refreshRepo,
+            IConfiguration config,
+            IOtpService otpService,
+            IEmailService emailService)
         {
             _userRepo = userRepo;
             _refreshRepo = refreshRepo;
             _config = config;
+            _otpService = otpService;
+            _emailService = emailService;
         }
 
         public async Task<AuthResponse?> LoginAsync(LoginRequest request)
@@ -158,6 +169,92 @@ namespace Services.Implementations
         {
             var hashString = Encoding.UTF8.GetString(hashedBytes);
             return BCrypt.Net.BCrypt.Verify(plainPassword, hashString);
+        }
+
+        public async Task<bool> SendOtpAsync(string email)
+        {
+            var user = await _userRepo.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return false;
+            }
+
+            var otp = _otpService.GenerateOtp();
+            _otpService.StoreOtp(email, otp);
+
+            var subject = "Password Reset OTP";
+            var body = $"Your OTP code is: {otp}. This code will expire in 10 minutes.";
+            
+            // Fire-and-forget: don't await email to improve response time
+            _ = _emailService.SendEmailAsync(email, subject, body);
+
+            return true;
+        }
+
+        public async Task<bool> VerifyOtpAndResetPasswordAsync(string email, string otpCode, string newPassword)
+        {
+            if (!_otpService.VerifyOtp(email, otpCode))
+            {
+                return false;
+            }
+
+            (bool isValid, string? errorMessage) = PasswordValidator.ValidatePassword(newPassword);
+            if (!isValid)
+            {
+                throw new InvalidOperationException(errorMessage ?? "Invalid password");
+            }
+
+            var user = await _userRepo.GetByEmailAsync(email);
+            if (user == null)
+            {
+                return false;
+            }
+
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            var hashedBytes = Encoding.UTF8.GetBytes(hashedPassword);
+            user.HashedPassword = hashedBytes;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _userRepo.UpdateAsync(user);
+            _otpService.ClearOtp(email);
+
+            await _refreshRepo.InvalidateUserTokensAsync(user.Id);
+
+            return true;
+        }
+
+        public async Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
+        {
+            var user = await _userRepo.FindAsync(userId);
+            if (user == null)
+            {
+                throw new InvalidOperationException("User not found");
+            }
+
+            if (!VerifyPassword(currentPassword, user.HashedPassword))
+            {
+                throw new InvalidOperationException("Current password is incorrect");
+            }
+
+            if (PasswordValidator.IsSamePassword(currentPassword, newPassword))
+            {
+                throw new InvalidOperationException("New password must be different from current password");
+            }
+
+            (bool isValid, string? errorMessage) = PasswordValidator.ValidatePassword(newPassword);
+            if (!isValid)
+            {
+                throw new InvalidOperationException(errorMessage ?? "Invalid password");
+            }
+
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            var hashedBytes = Encoding.UTF8.GetBytes(hashedPassword);
+            user.HashedPassword = hashedBytes;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            await _userRepo.UpdateAsync(user);
+
+            await _refreshRepo.InvalidateUserTokensAsync(userId);
         }
 
     }
