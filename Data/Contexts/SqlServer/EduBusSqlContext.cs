@@ -61,12 +61,12 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<FaceEmbedding> FaceEmbeddings { get; set; }
 
 
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev_Test1;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
-                sql => sql.UseNetTopologySuite()
-            );
+//        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+//            => optionsBuilder.UseSqlServer(
+//				"Server=tcp:edubus.database.windows.net,1433;Initial Catalog=EdubusDbV2;Persist Security Info=False;User ID=edubusdb_admin;Password=123456aA@;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
+//                sql => sql.UseNetTopologySuite()
+//            );
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -591,8 +591,8 @@ namespace Data.Contexts.SqlServer
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // Apply Seed Configurations
-            modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
+			// Apply Seed Configurations
+			modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverSeedConfiguration());
             modelBuilder.ApplyConfiguration(new ParentSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverLicenseSeedConfiguration());
