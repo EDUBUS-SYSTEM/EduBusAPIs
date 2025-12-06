@@ -9,6 +9,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Utils;
 
@@ -63,11 +64,27 @@ namespace Services.Implementations
 				_logger.LogInformation("Calling VietMap VRP API with {VehicleCount} vehicles and {JobCount} jobs",
 					requestBody.vehicles.Count, requestBody.jobs.Count);
 
-				var httpResponse = await _httpClient.PostAsJsonAsync(url, requestBody);
-				httpResponse.EnsureSuccessStatusCode();
+				// Log the request payload for debugging
+				var requestJson = JsonSerializer.Serialize(requestBody, new JsonSerializerOptions { WriteIndented = true });
+				_logger.LogInformation("VietMap Request Payload: {RequestPayload}", requestJson);
 
-				var json = await httpResponse.Content.ReadAsStringAsync();
-				using var doc = JsonDocument.Parse(json);
+				var httpResponse = await _httpClient.PostAsJsonAsync(url, requestBody);
+
+				// Read response before checking status
+				var responseContent = await httpResponse.Content.ReadAsStringAsync();
+
+				if (!httpResponse.IsSuccessStatusCode)
+				{
+					_logger.LogError("VietMap API returned {StatusCode}: {ResponseContent}",
+						httpResponse.StatusCode, responseContent);
+					return new RouteSuggestionResponse
+					{
+						Success = false,
+						Message = $"VietMap API error: {httpResponse.StatusCode} - {responseContent}"
+					};
+				}
+
+				using var doc = JsonDocument.Parse(responseContent);
 				var root = doc.RootElement;
 
 				return ConvertFromVietMapResponse(root, data);
@@ -78,7 +95,7 @@ namespace Services.Implementations
 				return new RouteSuggestionResponse
 				{
 					Success = false,
-					Message = "Error calling VietMap VRP API"
+					Message = $"Error calling VietMap VRP API: {ex.Message}"
 				};
 			}
 		}
@@ -99,7 +116,7 @@ namespace Services.Implementations
 					start = new[] { data.SchoolLocation.Longitude, data.SchoolLocation.Latitude },
 					end = new[] { data.SchoolLocation.Longitude, data.SchoolLocation.Latitude },
 					profile = "car", // or "bike" etc.
-					time_window = BuildDefaultTimeWindow(), // can be null
+					time_window = new[] { 0, _vrpSettings.MaxRouteDurationSeconds },
 					capacity = new[] { v.Capacity },
 					speed_factor = 1.0 // default
 				});
@@ -130,7 +147,7 @@ namespace Services.Implementations
 					service = _vrpSettings.ServiceTimeSeconds, // seconds spent at stop
 					priority = 1,
 					time_windows = null, // you can add specific windows if needed
-					skills = new[] { 1 } // simple shared skill so all vehicles can serve
+					delivery = new[] { load }
 				};
 
 				jobs.Add(job);
@@ -147,13 +164,6 @@ namespace Services.Implementations
 				vehicles = vehicles,
 				jobs = jobs
 			};
-		}
-
-		private int[]? BuildDefaultTimeWindow()
-		{
-			// Optional: you can derive a planning horizon here.
-			// For now, return null => no global time window constraints.
-			return null;
 		}
 
 		private RouteSuggestionResponse ConvertFromVietMapResponse(JsonElement root, VRPData data)
@@ -321,7 +331,9 @@ namespace Services.Implementations
 			public string profile { get; set; } = "car";
 			public int[]? time_window { get; set; }
 			public int[] capacity { get; set; } = Array.Empty<int>();
+			[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 			public int[]? skills { get; set; }
+			[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 			public List<VietMapBreak>? breaks { get; set; }
 			public double speed_factor { get; set; } = 1.0;
 		}
@@ -329,7 +341,8 @@ namespace Services.Implementations
 		private class VietMapBreak
 		{
 			public int id { get; set; }
-			public int[][] time_windows { get; set; } = Array.Empty<int[]>();
+			[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+			public int[][] time_windows { get; set; } 
 			public int service { get; set; }
 		}
 
@@ -339,8 +352,11 @@ namespace Services.Implementations
 			public string description { get; set; } = string.Empty;
 			public double[] location { get; set; } = Array.Empty<double>(); // [lon, lat]
 			public int service { get; set; } // seconds
+			public int[] delivery { get; set; } = Array.Empty<int>();
 			public int priority { get; set; } = 1;
+			[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 			public int[][]? time_windows { get; set; }
+			[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 			public int[]? skills { get; set; }
 		}
 

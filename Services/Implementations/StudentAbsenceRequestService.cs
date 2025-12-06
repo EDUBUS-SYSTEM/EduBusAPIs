@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -340,9 +341,9 @@ namespace Services.Implementations
             if (trips == null || trips.Count == 0)
                 throw new InvalidOperationException("Student has no scheduled trips within the requested absence period.");
 
-            await RemoveStudentFromTripsAsync(entity.StudentId, trips);
+			await MarkStudentAbsentInTripsAsync(entity.StudentId, trips);
 
-            entity.Status = AbsenceRequestStatus.Approved;
+			entity.Status = AbsenceRequestStatus.Approved;
             entity.ReviewedBy = adminId;
             entity.ReviewedAt = DateTime.UtcNow;
             entity.Notes = dto.Notes;
@@ -352,40 +353,50 @@ namespace Services.Implementations
             return _mapper.Map<StudentAbsenceRequestResponseDto>(entity);
         }
 
-        private async Task RemoveStudentFromTripsAsync(Guid studentId, IEnumerable<Trip> trips)
-        {
-            if (trips == null)
-                return;
+		private async Task MarkStudentAbsentInTripsAsync(Guid studentId, IEnumerable<Trip> trips)
+		{
+			if (trips == null)
+				return;
 
-            var tripsToUpdate = new List<Trip>();
+			var tripsToUpdate = new List<Trip>();
 
-            foreach (var trip in trips)
-            {
-                if (trip.Stops == null || trip.Stops.Count == 0)
-                    continue;
+			foreach (var trip in trips)
+			{
+				if (trip.Stops == null || trip.Stops.Count == 0)
+					continue;
 
-                var updated = false;
+				var updated = false;
 
-                foreach (var stop in trip.Stops)
-                {
-                    if (stop.Attendance == null || stop.Attendance.Count == 0)
-                        continue;
+				foreach (var stop in trip.Stops)
+				{
+					if (stop.Attendance == null || stop.Attendance.Count == 0)
+						continue;
 
-                    var removedCount = stop.Attendance.RemoveAll(a => a.StudentId == studentId);
-                    if (removedCount > 0)
-                        updated = true;
-                }
+					// Find the student in the attendance list
+					var attendanceRecord = stop.Attendance.FirstOrDefault(a => a.StudentId == studentId);
 
-                if (updated)
-                {
-                    tripsToUpdate.Add(trip);
-                }
-            }
+					// If found, mark as Absent and clear boarding info
+					if (attendanceRecord != null)
+					{
+						attendanceRecord.State = TripConstants.AttendanceStates.Absent;
+						attendanceRecord.BoardedAt = null;
+						attendanceRecord.AlightedAt = null;
+						attendanceRecord.BoardStatus = null;
+						attendanceRecord.AlightStatus = null;
+						updated = true;
+					}
+				}
 
-            if (tripsToUpdate.Any())
-            {
-                await _tripRepository.BulkUpdateAsync(tripsToUpdate);
-            }
-        }
-    }
+				if (updated)
+				{
+					tripsToUpdate.Add(trip);
+				}
+			}
+
+			if (tripsToUpdate.Any())
+			{
+				await _tripRepository.BulkUpdateAsync(tripsToUpdate);
+			}
+		}
+	}
 }
