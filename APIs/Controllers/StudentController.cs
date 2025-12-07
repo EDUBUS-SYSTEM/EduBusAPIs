@@ -13,10 +13,12 @@ namespace APIs.Controllers
     public class StudentController : ControllerBase
     {
         private readonly IStudentService _studentService;
+        private readonly IFileService _fileService;
 
-        public StudentController(IStudentService studentService)
+        public StudentController(IStudentService studentService, IFileService fileService)
         {
             _studentService = studentService;
+            _fileService = fileService;
         }
 
         private bool IsAuthorizedToAccessStudent(Guid studentParentId)
@@ -328,6 +330,86 @@ namespace APIs.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Upload photo for a student - Admin only
+        /// </summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{studentId}/upload-photo")]
+        [Consumes("multipart/form-data")]
+        [RequestSizeLimit(10 * 1024 * 1024)]
+        public async Task<ActionResult<object>> UploadStudentPhoto(Guid studentId, IFormFile file)
+        {
+            try
+            {
+                if (file == null)
+                    return BadRequest(new { message = "No file provided." });
+
+                var fileId = await _studentService.UploadStudentPhotoAsync(studentId, file);
+                return Ok(new { FileId = fileId, Message = "Student photo uploaded successfully." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while uploading the photo.", detail = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get student photo file ID
+        /// </summary>
+        [HttpGet("{studentId}/photo-file-id")]
+        public async Task<IActionResult> GetStudentPhotoFileId(Guid studentId)
+        {
+            try
+            {
+                var fileId = await _studentService.GetStudentPhotoFileIdAsync(studentId);
+                if (!fileId.HasValue)
+                    return NotFound(new { message = "Student photo not found." });
+
+                return Ok(new { FileId = fileId.Value });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while retrieving the photo file ID.", detail = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Get student photo - returns the image file directly
+        /// </summary>
+        [Authorize]
+        [HttpGet("{studentId}/photo")]
+        public async Task<IActionResult> GetStudentPhoto(Guid studentId)
+        {
+            try
+            {
+                var fileId = await _studentService.GetStudentPhotoFileIdAsync(studentId);
+                if (!fileId.HasValue)
+                    return NotFound(new { message = "Student photo not found." });
+
+                // Get file content directly from FileService
+                var fileContent = await _fileService.GetFileAsync(fileId.Value);
+                var contentType = await _fileService.GetFileContentTypeAsync(fileId.Value);
+
+                return File(fileContent, contentType);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "An error occurred while retrieving the photo.", detail = ex.Message });
             }
         }
     }

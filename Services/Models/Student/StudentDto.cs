@@ -15,6 +15,7 @@ namespace Services.Models.Student
         public string LastName { get; set; } = null!;
         public string ParentEmail { get; set; } = string.Empty;
         public StudentStatus Status { get; set; } = StudentStatus.Available;
+        public Guid? StudentImageId { get; set; }
         public DateTime? ActivatedAt { get; set; }
         public DateTime? DeactivatedAt { get; set; }
         public string? DeactivationReason { get; set; }

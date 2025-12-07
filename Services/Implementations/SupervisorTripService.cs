@@ -13,17 +13,20 @@ namespace Services.Implementations
         private readonly IMongoRepository<Trip> _tripRepository;
         private readonly IMongoRepository<Route> _routeRepository;
         private readonly IPickupPointRepository _pickupPointRepository;
+        private readonly IStudentRepository _studentRepository;
 
         public SupervisorTripService(
             ISupervisorVehicleRepository supervisorVehicleRepo,
             IMongoRepository<Trip> tripRepository,
             IMongoRepository<Route> routeRepository,
-            IPickupPointRepository pickupPointRepository)
+            IPickupPointRepository pickupPointRepository,
+            IStudentRepository studentRepository)
         {
             _supervisorVehicleRepo = supervisorVehicleRepo;
             _tripRepository = tripRepository;
             _routeRepository = routeRepository;
             _pickupPointRepository = pickupPointRepository;
+            _studentRepository = studentRepository;
         }
 
         public async Task<IEnumerable<SupervisorTripListItemDto>> GetSupervisorTripsAsync(
@@ -138,12 +141,29 @@ namespace Services.Implementations
                     var pickupPoint = await _pickupPointRepository.FindAsync(stop.PickupPointId);
                     var stopName = pickupPoint?.Description ?? "Unknown Stop";
                     
+                    // Get student image IDs for all students in this stop
+                    var studentIds = stop.Attendance?.Select(a => a.StudentId).Distinct().ToList() ?? new List<Guid>();
+                    var students = new Dictionary<Guid, Guid?>();
+                    foreach (var studentId in studentIds)
+                    {
+                        try
+                        {
+                            var student = await _studentRepository.FindAsync(studentId);
+                            students[studentId] = student?.StudentImageId;
+                        }
+                        catch
+                        {
+                            students[studentId] = null;
+                        }
+                    }
+
                     var attendance = stop.Attendance?
                         .Select(a => new SupervisorAttendanceDto
                         {
                             StudentId = a.StudentId,
                             StudentName = a.StudentName,
                             ClassName = string.Empty,
+                            StudentImageId = students.GetValueOrDefault(a.StudentId),
                             BoardedAt = a.BoardedAt,
                             AlightedAt = a.AlightedAt,
                             State = a.State,
