@@ -1,8 +1,6 @@
 namespace Services.Models.Dashboard
 {
-    /// <summary>
-    /// DTO for daily student statistics
-    /// </summary>
+
     public class DailyStudentsDto
     {
         public int Today { get; set; }

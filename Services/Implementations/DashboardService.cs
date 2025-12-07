@@ -58,11 +58,10 @@ namespace Services.Implementations
                 var targetDate = date ?? DateTime.UtcNow.Date;
                 var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
 
-                // Get counts for different periods
+          
                 var today = await GetStudentCountForDate(tripsCollection, targetDate);
                 var yesterday = await GetStudentCountForDate(tripsCollection, targetDate.AddDays(-1));
-                
-                // Week average
+          
                 var weekStart = targetDate.AddDays(-7);
                 var weekCounts = new List<int>();
                 for (var d = weekStart; d < targetDate; d = d.AddDays(1))
@@ -71,7 +70,7 @@ namespace Services.Implementations
                 }
                 var thisWeek = weekCounts.Any() ? (int)weekCounts.Average() : 0;
 
-                // Month average
+         
                 var monthStart = targetDate.AddDays(-30);
                 var monthCounts = new List<int>();
                 for (var d = monthStart; d < targetDate; d = d.AddDays(7)) // Sample every 7 days
@@ -80,7 +79,7 @@ namespace Services.Implementations
                 }
                 var thisMonth = monthCounts.Any() ? (int)monthCounts.Average() : 0;
 
-                // Last 7 days detail
+
                 var last7Days = new List<DailyStudentCount>();
                 for (var d = targetDate.AddDays(-6); d <= targetDate; d = d.AddDays(1))
                 {
@@ -116,8 +115,7 @@ namespace Services.Implementations
             );
 
             var trips = await collection.Find(filter).ToListAsync();
-            
-            // Count unique students across all trips
+ 
             var uniqueStudents = new HashSet<Guid>();
             foreach (var trip in trips)
             {
@@ -210,7 +208,6 @@ namespace Services.Implementations
                 var totalStudents = totalPresent + totalAbsent + totalLate + totalExcused + totalPending;
                 var todayRate = totalStudents > 0 ? (double)totalPresent / totalStudents * 100 : 0;
 
-                // Calculate week and month rates
                 var weekRate = await CalculateAttendanceRateForPeriod(tripsCollection, now.Date.AddDays(-7), now.Date.AddDays(1));
                 var monthRate = await CalculateAttendanceRateForPeriod(tripsCollection, now.Date.AddDays(-30), now.Date.AddDays(1));
 

@@ -1,8 +1,6 @@
 namespace Services.Models.Dashboard
 {
-    /// <summary>
-    /// Main DTO containing all dashboard statistics
-    /// </summary>
+
     public class DashboardStatisticsDto
     {
         public DailyStudentsDto DailyStudents { get; set; } = new();

@@ -17,9 +17,6 @@ namespace APIs.Controllers
             _dashboardService = dashboardService;
         }
 
-        /// <summary>
-        /// Get all dashboard statistics
-        /// </summary>
         [HttpGet("statistics")]
         public async Task<ActionResult<object>> GetDashboardStatistics(
             [FromQuery] DateTime? from = null,
@@ -36,9 +33,7 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get daily student counts
-        /// </summary>
+      
         [HttpGet("daily-students")]
         public async Task<ActionResult<object>> GetDailyStudents([FromQuery] DateTime? date = null)
         {
@@ -53,10 +48,7 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get attendance rate statistics
-        /// </summary>
-        /// <param name="period">today, week, or month</param>
+      
         [HttpGet("attendance-rate")]
         public async Task<ActionResult<object>> GetAttendanceRate([FromQuery] string period = "today")
         {
@@ -71,9 +63,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get vehicle runtime statistics
-        /// </summary>
         [HttpGet("vehicle-runtime")]
         public async Task<ActionResult<object>> GetVehicleRuntime(
             [FromQuery] Guid? vehicleId = null,
@@ -91,9 +80,7 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get route statistics
-        /// </summary>
+
         [HttpGet("route-statistics")]
         public async Task<ActionResult<object>> GetRouteStatistics(
             [FromQuery] Guid? routeId = null,

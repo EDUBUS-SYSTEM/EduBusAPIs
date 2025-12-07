@@ -1,8 +1,6 @@
 namespace Services.Models.Dashboard
 {
-    /// <summary>
-    /// DTO for vehicle runtime statistics
-    /// </summary>
+
     public class VehicleRuntimeDto
     {
         public double TotalHoursToday { get; set; }

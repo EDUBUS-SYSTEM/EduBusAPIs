@@ -1,8 +1,6 @@
 namespace Services.Models.Dashboard
 {
-    /// <summary>
-    /// DTO for route statistics
-    /// </summary>
+
     public class RouteStatisticsDto
     {
         public Guid RouteId { get; set; }
