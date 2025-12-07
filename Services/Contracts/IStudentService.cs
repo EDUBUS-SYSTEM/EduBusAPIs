@@ -28,5 +28,8 @@ namespace Services.Contracts
         // New admin workflow methods
         Task<IEnumerable<StudentDto>> GetUnassignedStudentsAsync();
         Task<BulkAssignParentResponse> BulkAssignParentAsync(BulkAssignParentRequest request);
+
+        Task<Guid> UploadStudentPhotoAsync(Guid studentId, Microsoft.AspNetCore.Http.IFormFile file);
+        Task<Guid?> GetStudentPhotoFileIdAsync(Guid studentId);
     }
 }
