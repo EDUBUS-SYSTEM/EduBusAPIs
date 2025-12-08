@@ -16,6 +16,9 @@ public class TransactionRepository : SqlRepository<Transaction>, ITransactionRep
             .Where(t => !t.IsDeleted && 
                        _dbContext.Set<TransportFeeItem>()
                            .Any(tfi => tfi.TransactionId == t.Id && tfi.StudentId == studentId && !tfi.IsDeleted))
+            .Include(t => t.Parent)
+            .Include(t => t.TransportFeeItems.Where(tfi => !tfi.IsDeleted))
+                .ThenInclude(tfi => tfi.Student)
             .OrderByDescending(t => t.CreatedAt);
 
         var totalCount = await query.CountAsync();
