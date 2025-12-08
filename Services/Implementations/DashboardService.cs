@@ -2,10 +2,13 @@ using Constants;
 using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Dashboard;
 using Route = Data.Models.Route;
+using Data.Models.Enums;
+using Data.Repos.Interfaces;
 using Utils;
 
 namespace Services.Implementations
@@ -15,15 +18,21 @@ namespace Services.Implementations
         private readonly IDatabaseFactory _databaseFactory;
         private readonly ILogger<DashboardService> _logger;
         private readonly IMongoDatabase _mongoDatabase;
+        private readonly ITransactionRepository _transactionRepository;
+        private readonly IAcademicCalendarRepository _academicCalendarRepository;
 
         public DashboardService(
             IDatabaseFactory databaseFactory,
             ILogger<DashboardService> logger,
-            IMongoDatabase mongoDatabase)
+            IMongoDatabase mongoDatabase,
+            ITransactionRepository transactionRepository,
+            IAcademicCalendarRepository academicCalendarRepository)
         {
             _databaseFactory = databaseFactory;
             _logger = logger;
             _mongoDatabase = mongoDatabase;
+            _transactionRepository = transactionRepository;
+            _academicCalendarRepository = academicCalendarRepository;
         }
 
         public async Task<DashboardStatisticsDto> GetDashboardStatisticsAsync(DateTime? from = null, DateTime? to = null)
@@ -422,6 +431,140 @@ namespace Services.Implementations
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting route statistics");
+                throw;
+            }
+        }
+
+        public async Task<RevenueStatisticsDto> GetRevenueStatisticsAsync(DateTime? from = null, DateTime? to = null)
+        {
+            try
+            {
+                var startDate = from ?? DateTime.UtcNow.Date.AddMonths(-1);
+                var endDate = to ?? DateTime.UtcNow;
+
+                var transactionsQuery = _transactionRepository.GetQueryable().Where(t => !t.IsDeleted);
+
+                transactionsQuery = transactionsQuery.Where(t =>
+                    (t.PaidAtUtc ?? t.CreatedAt) >= startDate &&
+                    (t.PaidAtUtc ?? t.CreatedAt) <= endDate);
+
+                var transactions = await transactionsQuery.ToListAsync();
+
+                var paidTransactions = transactions.Where(t => t.Status == TransactionStatus.Paid).ToList();
+                var pendingTransactions = transactions.Where(t => t.Status == TransactionStatus.Notyet).ToList();
+                var failedTransactions = transactions.Where(t =>
+                    t.Status == TransactionStatus.Failed ||
+                    t.Status == TransactionStatus.Cancelled ||
+                    t.Status == TransactionStatus.Expired).ToList();
+
+                return new RevenueStatisticsDto
+                {
+                    TotalRevenue = paidTransactions.Sum(t => t.Amount),
+                    PendingAmount = pendingTransactions.Sum(t => t.Amount),
+                    FailedAmount = failedTransactions.Sum(t => t.Amount),
+                    PaidTransactionCount = paidTransactions.Count,
+                    PendingTransactionCount = pendingTransactions.Count,
+                    FailedTransactionCount = failedTransactions.Count,
+                    Currency = transactions.FirstOrDefault()?.Currency ?? "VND"
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting revenue statistics");
+                throw;
+            }
+        }
+
+        public async Task<List<RevenueTimelinePointDto>> GetRevenueTimelineAsync(DateTime? from = null, DateTime? to = null)
+        {
+            try
+            {
+                var startDate = from ?? DateTime.UtcNow.Date.AddMonths(-1);
+                var endDate = to ?? DateTime.UtcNow.Date.AddDays(1);
+
+                var transactionsQuery = _transactionRepository.GetQueryable().Where(t =>
+                    !t.IsDeleted &&
+                    t.Status == TransactionStatus.Paid &&
+                    (t.PaidAtUtc ?? t.CreatedAt) >= startDate &&
+                    (t.PaidAtUtc ?? t.CreatedAt) < endDate);
+
+                var timeline = await transactionsQuery
+                    .GroupBy(t => (t.PaidAtUtc ?? t.CreatedAt).Date)
+                    .Select(g => new RevenueTimelinePointDto
+                    {
+                        Date = g.Key,
+                        Amount = g.Sum(t => t.Amount),
+                        Count = g.Count()
+                    })
+                    .OrderBy(p => p.Date)
+                    .ToListAsync();
+
+                return timeline;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting revenue timeline");
+                throw;
+            }
+        }
+
+        public async Task<ActiveSemesterDto?> GetCurrentSemesterAsync()
+        {
+            try
+            {
+                var now = DateTime.UtcNow;
+                var activeCalendars = await _academicCalendarRepository.GetActiveAsync();
+                if (!activeCalendars.Any())
+                {
+                    return null;
+                }
+
+                var currentSemester = activeCalendars
+                    .SelectMany(cal => cal.Semesters
+                        .Where(s => s.IsActive && s.StartDate <= now && s.EndDate >= now)
+                        .Select(s => new { Calendar = cal, Semester = s }))
+                    .OrderBy(x => x.Semester.StartDate)
+                    .FirstOrDefault();
+
+                if (currentSemester == null)
+                {
+                    // If no current semester, pick the next upcoming active semester
+                    currentSemester = activeCalendars
+                        .SelectMany(cal => cal.Semesters
+                            .Where(s => s.IsActive && s.StartDate > now)
+                            .Select(s => new { Calendar = cal, Semester = s }))
+                        .OrderBy(x => x.Semester.StartDate)
+                        .FirstOrDefault();
+                }
+
+                if (currentSemester == null)
+                {
+                    // Fallback to the latest past active semester
+                    currentSemester = activeCalendars
+                        .SelectMany(cal => cal.Semesters
+                            .Where(s => s.IsActive && s.EndDate < now)
+                            .Select(s => new { Calendar = cal, Semester = s }))
+                        .OrderByDescending(x => x.Semester.EndDate)
+                        .FirstOrDefault();
+                }
+
+                if (currentSemester == null)
+                {
+                    return null;
+                }
+
+                return new ActiveSemesterDto
+                {
+                    AcademicYear = currentSemester.Calendar.AcademicYear,
+                    SemesterCode = currentSemester.Semester.Code,
+                    SemesterName = currentSemester.Semester.Name,
+                    SemesterStartDate = currentSemester.Semester.StartDate,
+                    SemesterEndDate = currentSemester.Semester.EndDate
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting current semester");
                 throw;
             }
         }

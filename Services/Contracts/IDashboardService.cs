@@ -17,5 +17,11 @@ namespace Services.Contracts
 
   
         Task<List<RouteStatisticsDto>> GetRouteStatisticsAsync(Guid? routeId = null, DateTime? from = null, DateTime? to = null);
+
+        Task<RevenueStatisticsDto> GetRevenueStatisticsAsync(DateTime? from = null, DateTime? to = null);
+
+        Task<ActiveSemesterDto?> GetCurrentSemesterAsync();
+
+        Task<List<RevenueTimelinePointDto>> GetRevenueTimelineAsync(DateTime? from = null, DateTime? to = null);
     }
 }

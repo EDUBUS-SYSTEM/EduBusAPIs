@@ -97,5 +97,56 @@ namespace APIs.Controllers
                 return StatusCode(500, new { success = false, error = "An error occurred while retrieving route statistics." });
             }
         }
+
+        [HttpGet("revenue")]
+        public async Task<ActionResult<object>> GetRevenueStatistics(
+            [FromQuery] DateTime? from = null,
+            [FromQuery] DateTime? to = null)
+        {
+            try
+            {
+                var revenueStatistics = await _dashboardService.GetRevenueStatisticsAsync(from, to);
+                return Ok(new { success = true, data = revenueStatistics });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving revenue statistics." });
+            }
+        }
+
+        [HttpGet("revenue/timeline")]
+        public async Task<ActionResult<object>> GetRevenueTimeline(
+            [FromQuery] DateTime? from = null,
+            [FromQuery] DateTime? to = null)
+        {
+            try
+            {
+                var timeline = await _dashboardService.GetRevenueTimelineAsync(from, to);
+                return Ok(new { success = true, data = timeline });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving revenue timeline." });
+            }
+        }
+
+        [HttpGet("current-semester")]
+        public async Task<ActionResult<object>> GetCurrentSemester()
+        {
+            try
+            {
+                var semester = await _dashboardService.GetCurrentSemesterAsync();
+                if (semester == null)
+                {
+                    return NotFound(new { success = false, error = "No active semester found" });
+                }
+
+                return Ok(new { success = true, data = semester });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving current semester." });
+            }
+        }
     }
 }
