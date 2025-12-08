@@ -44,6 +44,7 @@ builder.Services.Configure<LeaveRequestSettings>(
 
 // Add services to the container
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
