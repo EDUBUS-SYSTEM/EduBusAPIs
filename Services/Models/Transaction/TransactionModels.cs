@@ -75,7 +75,10 @@ namespace Services.Models.Transaction
     {
         public Guid Id { get; set; }
         public Guid ParentId { get; set; }
+        public string ParentName { get; set; } = string.Empty;
         public string ParentEmail { get; set; } = null!;
+        public Guid? StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
         public string TransactionCode { get; set; } = null!;
         public TransactionStatus Status { get; set; }
         public decimal Amount { get; set; }
@@ -137,6 +140,10 @@ namespace Services.Models.Transaction
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAtUtc { get; set; }
         public Guid ParentId { get; set; }
+        public string ParentName { get; set; } = string.Empty;
+        public string ParentEmail { get; set; } = string.Empty;
+        public Guid? StudentId { get; set; }
+        public string StudentName { get; set; } = string.Empty;
         public int StudentCount { get; set; }
     }
 
