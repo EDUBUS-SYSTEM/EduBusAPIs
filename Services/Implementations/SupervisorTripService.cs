@@ -133,10 +133,10 @@ namespace Services.Implementations
             var stops = new List<SupervisorTripStopDto>();
             if (trip.Stops != null && trip.Stops.Any())
             {
-                foreach (var stop in trip.Stops)
+                foreach (var stop in trip.Stops.OrderBy(s => s.SequenceOrder))
                 {
-                    var pickupPoint = await _pickupPointRepository.FindAsync(stop.PickupPointId);
-                    var stopName = pickupPoint?.Description ?? "Unknown Stop";
+                    // Get address from stop.Location
+                    var address = stop.Location?.Address ?? "Unknown Stop";
                     
                     var attendance = stop.Attendance?
                         .Select(a => new SupervisorAttendanceDto
@@ -155,7 +155,7 @@ namespace Services.Implementations
                     stops.Add(new SupervisorTripStopDto
                     {
                         Id = stop.PickupPointId,
-                        Name = stopName,
+                        Name = address,
                         PlannedArrival = stop.PlannedAt,
                         ActualArrival = stop.ArrivedAt,
                         PlannedDeparture = stop.PlannedAt.AddMinutes(5), // Estimate
@@ -163,9 +163,9 @@ namespace Services.Implementations
                         Sequence = stop.SequenceOrder,
                         Location = new StopLocationDto
                         {
-                            Latitude = pickupPoint?.Geog?.Coordinate.Y ?? 0,
-                            Longitude = pickupPoint?.Geog?.Coordinate.X ?? 0,
-                            Address = pickupPoint?.Location ?? string.Empty
+                            Latitude = stop.Location?.Latitude ?? 0,
+                            Longitude = stop.Location?.Longitude ?? 0,
+                            Address = address
                         },
                         Attendance = attendance
                     });
