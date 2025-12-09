@@ -8,6 +8,7 @@ namespace Data.Repos.Interfaces
         Task<List<TransportFeeItem>> GetByTransactionIdAsync(Guid transactionId);
         Task<List<TransportFeeItem>> GetByStudentIdAsync(Guid studentId);
         Task<List<TransportFeeItem>> GetByParentEmailAsync(string parentEmail);
+        Task<List<TransportFeeItem>> GetByParentAndSemesterCodeAsync(string parentEmail, string semesterCode);
         Task<List<TransportFeeItem>> GetByStatusAsync(TransportFeeItemStatus status);
         Task<List<TransportFeeItem>> GetBySemesterAsync(string semesterName, string academicYear);
         Task<(List<TransportFeeItem> Items, int TotalCount)> GetListAsync(Guid? transactionId, Guid? studentId, string? parentEmail, 

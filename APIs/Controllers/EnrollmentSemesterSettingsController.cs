@@ -210,6 +210,23 @@ namespace APIs.Controllers
             }
         }
 
+        [Authorize(Roles = Roles.Parent)]
+        [HttpGet("active-list-parent")]
+        public async Task<ActionResult<List<EnrollmentSemesterSettingsDto>>> GetActiveSemestersForParent()
+        {
+            try
+            {
+                var result = await _service.QueryAsync(isActive: true, page: 1, perPage: 200, sortBy: "semesterstartdate", sortOrder: "asc");
+                var items = _mapper.Map<List<EnrollmentSemesterSettingsDto>>(result.Items);
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting active enrollment semesters for parent");
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+
         [HttpGet("semester-code/{semesterCode}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<EnrollmentSemesterSettingsDto>> GetBySemesterCode(string semesterCode)
