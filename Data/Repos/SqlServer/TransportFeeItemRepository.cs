@@ -35,6 +35,13 @@ namespace Data.Repos.SqlServer
                 .ToListAsync();
         }
 
+        public async Task<List<TransportFeeItem>> GetByParentAndSemesterCodeAsync(string parentEmail, string semesterCode)
+        {
+            return await GetQueryable()
+                .Where(tfi => tfi.ParentEmail == parentEmail && tfi.SemesterCode == semesterCode && !tfi.IsDeleted)
+                .ToListAsync();
+        }
+
         public async Task<List<TransportFeeItem>> GetByStatusAsync(TransportFeeItemStatus status)
         {
             return await GetQueryable()
