@@ -2,11 +2,13 @@
 using ClosedXML.Excel;
 using Data.Models;
 using Data.Repos.Interfaces;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
 using Services.Validators;
+using System.Net.Http.Json;
 using Utils;
 
 namespace Services.Implementations
@@ -19,10 +21,12 @@ namespace Services.Implementations
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         private readonly ILogger<ParentService> _logger;
-        
+        private readonly IFaceEmbeddingRepository _faceEmbeddingRepository;
+        private readonly IFileService _fileService;
+
         private readonly UserAccountValidationService _validationService;
         public ParentService(IParentRepository parentRepository, IUserAccountRepository userAccountRepository,
-            IStudentRepository studentRepository, IMapper mapper, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
+            IStudentRepository studentRepository, IMapper mapper, IFaceEmbeddingRepository faceEmbeddingRepository, IFileService fileService, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
         {
             _parentRepository = parentRepository;
             _userAccountRepository = userAccountRepository;
@@ -31,6 +35,8 @@ namespace Services.Implementations
             _validationService = validationService;
             _emailService = emailService;
             _logger = logger;
+            _faceEmbeddingRepository = faceEmbeddingRepository;
+            _fileService = fileService;
         }
 
         public async Task<CreateUserResponse> CreateParentAsync(CreateParentRequest dto)
@@ -433,6 +439,157 @@ namespace Services.Implementations
                 </html>";
 
             return (subject, bodyVietnamese);
+        }
+
+
+        public async Task<EnrollChildResponse> EnrollChildAsync(Guid userId, EnrollChildRequest request)
+        {
+            // 1. Validate parent owns this student
+            var parent = await _parentRepository.FindAsync(userId);
+            if (parent == null)
+                throw new KeyNotFoundException("Parent not found");
+            var student = await _studentRepository.FindAsync(request.StudentId);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found");
+            if (student.ParentId != parent.Id)
+                throw new ArgumentException("Student does not belong to this parent");
+            // 2. Check if student already enrolled
+            var existingEmbedding = await _faceEmbeddingRepository.GetByStudentIdAsync(request.StudentId);
+            if (existingEmbedding != null)
+            {
+                _logger.LogWarning("Student {StudentId} already has face embedding", request.StudentId);
+                return new EnrollChildResponse
+                {
+                    Success = false,
+                    Message = "Student already enrolled. Please contact support to update.",
+                    EmbeddingId = existingEmbedding.Id,
+                    PhotosProcessed = 0,
+                    AverageQuality = 0
+                };
+            }
+            var embedding = await ExtractEmbeddingsFromPhotosAsync(request.FacePhotos);
+            var embeddingJson = System.Text.Json.JsonSerializer.Serialize(embedding);
+            // 4. Save to database
+            var faceEmbedding = new Data.Models.FaceEmbedding
+            {
+                StudentId = request.StudentId,
+                EmbeddingJson = embeddingJson,
+                ModelVersion = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            var savedEmbedding = await _faceEmbeddingRepository.AddAsync(faceEmbedding);
+            
+            // 5. Save original photos
+             _logger.LogInformation("Saving {Count} original photos for enrollment...", request.FacePhotos.Count);
+            int photoIdx = 1;
+            Guid? firstPhotoId = null;
+            
+            foreach (var base64Photo in request.FacePhotos)
+            {
+                try
+                {
+                    // Clean base64 string if it has prefix
+                    var cleanBase64 = base64Photo;
+                    if (cleanBase64.Contains(","))
+                        cleanBase64 = cleanBase64.Split(',')[1];
+
+                    var bytes = Convert.FromBase64String(cleanBase64);
+                    var validFile = new MemoryFormFile(
+                        "face_photo.jpg", 
+                        $"enrollment_{request.StudentId}_{photoIdx}.jpg", 
+                        bytes, 
+                        "image/jpeg");
+
+                    // Upload and capture photo ID
+                    var uploadedFileId = await _fileService.UploadFileAsync(savedEmbedding.Id, "FaceEmbedding", "EnrollmentPhoto", validFile);
+                    
+                    // Store first photo ID for response AND in FaceEmbedding
+                    if (photoIdx == 1)
+                    {
+                        firstPhotoId = uploadedFileId;
+                        savedEmbedding.FirstPhotoFileId = uploadedFileId;
+                        await _faceEmbeddingRepository.UpdateAsync(savedEmbedding);
+                        _logger.LogInformation("Captured first photo ID {FileId} for student {StudentId}", uploadedFileId, request.StudentId);
+                    }
+                    
+                    photoIdx++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to save enrollment photo {Index} for student {StudentId}", photoIdx, request.StudentId);
+                    // Don't fail the whole request just because image save failed, as embedding is arguably more important
+                }
+            }
+
+            _logger.LogInformation("Successfully enrolled student {StudentId} with face embedding {EmbeddingId}",
+                request.StudentId, savedEmbedding.Id);
+            return new EnrollChildResponse
+            {
+                Success = true,
+                Message = "Child enrolled successfully",
+                EmbeddingId = savedEmbedding.Id,
+                PhotosProcessed = request.FacePhotos.Count,
+                AverageQuality = 1.0, // Assumed good quality for real photos
+                StudentImageId = firstPhotoId
+            };
+        }
+
+        private async Task<List<float>> ExtractEmbeddingsFromPhotosAsync(List<string> photos)
+        {
+            using var httpClient = new HttpClient();
+            // TODO: Move URL to config
+            var response = await httpClient.PostAsJsonAsync(
+                "http://localhost:5001/extract",
+                new { photos });
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<FaceExtractionResult>();
+            return result?.Embedding ?? throw new Exception("No embedding");
+        }
+
+        private class FaceExtractionResult
+        {
+            public List<float> Embedding { get; set; }
+        }
+
+        private class MemoryFormFile : IFormFile
+        {
+            private readonly byte[] _bytes;
+            private readonly MemoryStream _stream;
+
+            public MemoryFormFile(string name, string fileName, byte[] bytes, string contentType)
+            {
+                _bytes = bytes;
+                _stream = new MemoryStream(bytes);
+                Name = name;
+                FileName = fileName;
+                Length = bytes.Length;
+                ContentType = contentType;
+            }
+
+            public string ContentType { get; }
+            public string ContentDisposition => $"form-data; name=\"{Name}\"; filename=\"{FileName}\"";
+            public IHeaderDictionary Headers => new HeaderDictionary();
+            public long Length { get; }
+            public string Name { get; }
+            public string FileName { get; }
+
+            public void CopyTo(Stream target) => _stream.CopyTo(target);
+            public Task CopyToAsync(Stream target, CancellationToken cancellationToken = default) => _stream.CopyToAsync(target, cancellationToken);
+            public Stream OpenReadStream() => new MemoryStream(_bytes);
+        }
+
+        private List<float> GenerateRandomEmbedding(int dimension)
+        {
+            var random = new Random();
+            var embedding = new List<float>();
+            for (int i = 0; i < dimension; i++)
+            {
+                embedding.Add((float)(random.NextDouble() * 2 - 1)); // Range: -1 to 1
+            }
+            // Normalize (L2 norm = 1)
+            var norm = Math.Sqrt(embedding.Sum(x => x * x));
+            return embedding.Select(x => (float)(x / norm)).ToList();
         }
 
     }

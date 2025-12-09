@@ -168,6 +168,7 @@ builder.Services.AddScoped<IDriverWorkingHoursRepository, DriverWorkingHoursRepo
 builder.Services.AddScoped<IPickupPointRepository, PickupPointRepository>();
 builder.Services.AddScoped<IStudentPickupPointRepository, StudentPickupPointRepository>();
 builder.Services.AddScoped<IUnitPriceRepository, UnitPriceRepository>();
+builder.Services.AddScoped<IFaceEmbeddingRepository, FaceEmbeddingRepository>();
 
 // Payment Repositories
 builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
@@ -221,20 +222,20 @@ builder.Services.AddScoped<IPickupPointEnrollmentService, PickupPointEnrollmentS
 builder.Services.AddScoped<IOtpStore, InMemoryOtpStore>();
 //Route Services
 builder.Services.AddScoped<IRouteService, RouteService>();
-builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
-builder.Services.AddScoped<OrToolsVrpEngine>();
+/*builder.Services.AddScoped<IRouteSuggestionService, RouteSuggestionService>();
+*/builder.Services.AddScoped<OrToolsVrpEngine>();
 builder.Services.AddHttpClient<VietMapVrpEngine>();
-builder.Services.AddScoped<IVrpEngine>(sp =>
+/*builder.Services.AddScoped<IVrpEngine>(sp =>
 {
-	var settings = sp.GetRequiredService<IOptions<VRPSettings>>().Value;
-	var engineName = (settings.Engine ?? "OrTools").ToLowerInvariant();
+    var settings = sp.GetRequiredService<IOptions<VRPSettings>>().Value;
+    var engineName = (settings.Engine ?? "OrTools").ToLowerInvariant();
 
-	return engineName switch
-	{
-		"vietmap" => sp.GetRequiredService<VietMapVrpEngine>(),
-		_ => sp.GetRequiredService<OrToolsVrpEngine>(),
-	};
-});
+    return engineName switch
+    {
+        "vietmap" => sp.GetRequiredService<VietMapVrpEngine>(),
+        _ => sp.GetRequiredService<OrToolsVrpEngine>(),
+    };
+});*/
 builder.Services.AddScoped<IPickupPointService, PickupPointService>();
 builder.Services.AddScoped<ISchoolService, SchoolService>();
 builder.Services.AddScoped<IScheduleService, ScheduleService>();
@@ -244,6 +245,7 @@ builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsService, EnrollmentSemesterSettingsService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
+builder.Services.AddScoped<IJetsonService, JetsonService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();

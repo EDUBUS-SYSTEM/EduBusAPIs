@@ -90,5 +90,35 @@ namespace APIs.Controllers
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         "Parents.xlsx");
         }
+
+        [HttpPost("enroll-child")]
+        [Authorize(Roles = Roles.Parent)]
+        public async Task<ActionResult<EnrollChildResponse>> EnrollChild(
+    [FromBody] EnrollChildRequest request)
+        {
+            try
+            {
+                var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userId))
+                    return Unauthorized(new { message = "User not authenticated" });
+                var response = await _parentService.EnrollChildAsync(Guid.Parse(userId), request);
+
+                if (!response.Success)
+                    return BadRequest(response);
+                return Ok(response);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
     }
 }

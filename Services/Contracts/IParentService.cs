@@ -8,5 +8,6 @@ namespace Services.Contracts
         Task<CreateUserResponse> CreateParentAsync(CreateParentRequest dto);
         Task<ImportUsersResult> ImportParentsFromExcelAsync(Stream excelFileStream);
         Task<byte[]> ExportParentsToExcelAsync();
+        Task<EnrollChildResponse> EnrollChildAsync(Guid userId, EnrollChildRequest request);
     }
 }

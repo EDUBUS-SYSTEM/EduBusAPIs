@@ -3,17 +3,9 @@ using ClosedXML.Excel;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
-using Data.Repos.SqlServer;
-using Microsoft.EntityFrameworkCore;
+
 using Services.Contracts;
-using Services.Models.Parent;
 using Services.Models.Student;
-using Services.Models.UserAccount;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Utils;
 
 namespace Services.Implementations
@@ -27,8 +19,8 @@ namespace Services.Implementations
         public StudentService(IStudentRepository studentRepository, IParentRepository parentRepository, IMapper mapper)
         {
             _studentRepository = studentRepository;
-            _mapper = mapper;
             _parentRepository = parentRepository;
+            _mapper = mapper;
         }
         public async Task<StudentDto> CreateStudentAsync(CreateStudentRequest request)
         {
@@ -171,8 +163,23 @@ namespace Services.Implementations
 
         public async Task<IEnumerable<StudentDto>> GetStudentsByParentAsync(Guid parentId)
         {
-            var students = await _studentRepository.FindByConditionAsync(st => st.ParentId == parentId) ?? new List<Student>();
-            return _mapper.Map<IEnumerable<StudentDto>>(students);
+            var students = await _studentRepository.FindByConditionAsync(
+                st => st.ParentId == parentId,
+                st => st.FaceEmbedding
+            ) ?? new List<Student>();
+            
+            var studentDtos = _mapper.Map<IEnumerable<StudentDto>>(students).ToList();
+            
+            foreach (var dto in studentDtos)
+            {
+                var student = students.FirstOrDefault(s => s.Id == dto.Id);
+                if (student?.FaceEmbedding != null)
+                {
+                    dto.StudentImageId = student.FaceEmbedding.FirstPhotoFileId;
+                }
+            }
+            
+            return studentDtos;
         }
 
         public async Task<ImportStudentResult> ImportStudentsFromExcelAsync(Stream excelFileStream)

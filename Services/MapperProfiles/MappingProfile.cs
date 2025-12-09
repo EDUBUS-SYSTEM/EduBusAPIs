@@ -21,6 +21,7 @@ using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
 using Services.Models.EnrollmentSemesterSettings;
+using System.Linq;
 using Utils;
 
 namespace Services.MapperProfiles
@@ -77,7 +78,9 @@ namespace Services.MapperProfiles
             CreateMap<DriverLicense, DriverLicenseResponse>();
 
             // student mapping
-            CreateMap<Student, StudentDto>();
+            CreateMap<Student, StudentDto>()
+                .ForMember(dest => dest.StudentImageId, 
+                    opt => opt.MapFrom(src => src.Images.Any() ? (Guid?)src.Images.First().Id : null));
             CreateMap<CreateStudentRequest, Student>();
             CreateMap<UpdateStudentRequest, Student>();
             CreateMap<ImportStudentDto, Student>();

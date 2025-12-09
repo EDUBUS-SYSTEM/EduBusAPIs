@@ -20,5 +20,6 @@ namespace Services.Models.Student
         public string? DeactivationReason { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public Guid? StudentImageId { get; set; }
     }
 }
