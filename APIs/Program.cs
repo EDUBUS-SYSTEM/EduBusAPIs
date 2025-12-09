@@ -248,6 +248,7 @@ builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsService, EnrollmentSemesterSettingsService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
