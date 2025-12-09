@@ -31,7 +31,10 @@ namespace APIs.Services
 				};
 
 				await _hubContext.Clients.Group("Admins").SendAsync("TripStatusChanged", data);
-				_logger.LogInformation("Broadcasted trip status change to admins: TripId={TripId}, Status={Status}", tripId, status);
+			
+			// Broadcast to parents tracking this trip
+			await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("TripStatusChanged", data);
+				_logger.LogInformation("Broadcasted trip status change to admins and parents: TripId={TripId}, Status={Status}", tripId, status);
 			}
 			catch (Exception ex)
 			{
@@ -81,6 +84,31 @@ namespace APIs.Services
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error broadcasting stop arrival: TripId={TripId}, StopId={StopId}", tripId, stopId);
+			}
+		}
+
+		public async Task BroadcastStopsReorderedAsync(Guid tripId, List<object> stops)
+		{
+			try
+			{
+				var data = new
+				{
+					tripId = tripId,
+					stops = stops,
+					timestamp = DateTime.UtcNow
+				};
+
+				// Broadcast to parents tracking this trip
+				await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("StopsReordered", data);
+				
+				// Also broadcast to admins for real-time monitoring
+				await _hubContext.Clients.Group("Admins").SendAsync("StopsReordered", data);
+				
+				_logger.LogInformation("Broadcasted stops reordered: TripId={TripId}, StopsCount={Count}", tripId, stops.Count);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error broadcasting stops reordered: TripId={TripId}", tripId);
 			}
 		}
 	}
