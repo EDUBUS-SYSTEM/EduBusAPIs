@@ -591,8 +591,8 @@ namespace Data.Contexts.SqlServer
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // Apply Seed Configurations
-            modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
+			// Apply Seed Configurations
+			modelBuilder.ApplyConfiguration(new AdminSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverSeedConfiguration());
             modelBuilder.ApplyConfiguration(new ParentSeedConfiguration());
             modelBuilder.ApplyConfiguration(new DriverLicenseSeedConfiguration());
