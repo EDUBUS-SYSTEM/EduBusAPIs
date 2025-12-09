@@ -3098,7 +3098,7 @@ namespace Services.Implementations
 			trip.Stops = filteredStops;
 		}
 
-		public async Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId)
+        public async Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId)
 		{
 			// 1. Get trip from MongoDB
 			var tripRepository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
@@ -3149,7 +3149,7 @@ namespace Services.Implementations
 						{
 							StudentId = s.Id,
 							StudentName = $"{s.FirstName} {s.LastName}".Trim(),
-							PhotoUrl = null,
+							StudentImageId = s.StudentImageId,
 							CurrentStatus = GetAttendanceStatus(stop.Attendance, s.Id),
 							IsBoarded = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.BoardStatus),
 							IsAlighted = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.AlightStatus),
