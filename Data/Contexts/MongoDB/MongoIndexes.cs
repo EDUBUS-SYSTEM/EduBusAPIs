@@ -22,6 +22,9 @@ namespace Data.Contexts.MongoDB
             // Trip indexes
             await CreateTripIndexesAsync(db);
 
+            // Trip incident indexes
+            await CreateTripIncidentIndexesAsync(db);
+
             // Trip location history indexes
             await CreateTripLocationHistoryIndexesAsync(db);
             
@@ -150,8 +153,8 @@ namespace Data.Contexts.MongoDB
                     })
             );
 
-			// Actual Start/End (filter follow actual time) — only apply when had startTime
-			var actualKeys = Builders<Trip>.IndexKeys
+            // Actual Start/End (filter follow actual time) â€” only apply when had startTime
+            var actualKeys = Builders<Trip>.IndexKeys
 	        .Ascending(x => x.StartTime)
 	        .Ascending(x => x.EndTime);
 			await tripCollection.Indexes.CreateOneAsync(
@@ -233,6 +236,26 @@ namespace Data.Contexts.MongoDB
                 {
                     Name = "idx_tripLocationHistory_tripId_recordedAt"
                 }));
+        }
+
+        private static async Task CreateTripIncidentIndexesAsync(IMongoDatabase db)
+        {
+            var incidentCollection = db.GetCollection<TripIncidentReport>("trip_incidents");
+
+            var tripIndex = Builders<TripIncidentReport>.IndexKeys
+                .Ascending(x => x.TripId)
+                .Descending(x => x.CreatedAt);
+            await incidentCollection.Indexes.CreateOneAsync(new CreateIndexModel<TripIncidentReport>(tripIndex));
+
+            var supervisorIndex = Builders<TripIncidentReport>.IndexKeys
+                .Ascending(x => x.SupervisorId)
+                .Descending(x => x.CreatedAt);
+            await incidentCollection.Indexes.CreateOneAsync(new CreateIndexModel<TripIncidentReport>(supervisorIndex));
+
+            var statusIndex = Builders<TripIncidentReport>.IndexKeys
+                .Ascending(x => x.Status)
+                .Descending(x => x.CreatedAt);
+            await incidentCollection.Indexes.CreateOneAsync(new CreateIndexModel<TripIncidentReport>(statusIndex));
         }
 
     }

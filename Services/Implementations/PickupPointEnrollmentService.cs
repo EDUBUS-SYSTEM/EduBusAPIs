@@ -584,37 +584,18 @@ namespace Services.Implementations
             req.PickupPointId = pickupPoint.Id;
             await _requestRepo.UpdateAsync(req);
 
-            // Create StudentPickupPoint records for each student with semester information
-            // This replaces the previous logic of assigning pickup point directly to students
             var now = DateTime.UtcNow;
+            // Mark students as pending; assignment will happen after successful payment
             foreach (var sid in req.StudentIds)
             {
                 var s = await _studentRepo.FindAsync(sid);
                 if (s == null || s.IsDeleted) continue;
 
-                // Update student status to Pending
                 if (s.Status == StudentStatus.Available)
                 {
                     s.Status = StudentStatus.Pending;
                     await _studentRepo.UpdateAsync(s);
                 }
-
-                // Create StudentPickupPoint record with semester information
-                await _historyRepo.AddAsync(new StudentPickupPoint
-                {
-                    StudentId = sid,
-                    PickupPointId = pickupPoint.Id,
-                    AssignedAt = now,
-                    ChangeReason = "Assigned during approval",
-                    ChangedBy = $"Admin:{adminId}",
-                    // Semester information from request
-                    SemesterName = req.SemesterName,
-                    SemesterCode = req.SemesterCode,
-                    AcademicYear = req.AcademicYear,
-                    SemesterStartDate = req.SemesterStartDate,
-                    SemesterEndDate = req.SemesterEndDate,
-                    TotalSchoolDays = req.TotalSchoolDays
-                });
             }
 
             // Create user account for parent if not exists
@@ -1063,11 +1044,6 @@ namespace Services.Implementations
             {
                 var student = await _studentRepo.FindAsync(studentId);
                 if (student == null || student.IsDeleted) continue;
-
-                // Update student's current pickup point
-                student.CurrentPickupPointId = pickupPointId;
-                student.PickupPointAssignedAt = now;
-                await _studentRepo.UpdateAsync(student);
 
                 // Create StudentPickupPoint history record
                 await _historyRepo.AddAsync(new StudentPickupPoint
