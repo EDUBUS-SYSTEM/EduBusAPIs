@@ -24,8 +24,6 @@ namespace Services.Models.Trip
 		public SupervisorSnapshotDto? Supervisor { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
-
-		// School location (from School table)
 		public StopLocationDto? SchoolLocation { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }

@@ -516,7 +516,7 @@ namespace APIs.Controllers
 					.OrderBy(s => s.SequenceOrder)
 					.Select(s => new
 					{
-						pickupPointId = s.PickupPointId,
+						stopId = s.PickupPointId,
 						sequenceOrder = s.SequenceOrder,
 						address = s.Location?.Address,
 						arrivedAt = s.ArrivedAt,
@@ -730,38 +730,49 @@ namespace APIs.Controllers
 			}
 		}
 
-		[HttpPost("{tripId}/end")]
-		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
-		public async Task<ActionResult<object>> EndTrip(Guid tripId)
-		{
-			try
-			{
-				var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
-				if (!driverId.HasValue)
-				{
-					return Unauthorized(new { message = "User ID not found in token" });
-				}
+        [HttpPost("{tripId}/end")]
+        [Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
+        public async Task<ActionResult<object>> EndTrip(Guid tripId)
+        {
+            try
+            {
+                var driverId = AuthorizationHelper.GetCurrentUserId(Request.HttpContext);
+                if (!driverId.HasValue)
+                {
+                    return Unauthorized(new { message = "User ID not found in token" });
+                }
 
-				var success = await _tripService.EndTripAsync(tripId, driverId.Value);
-				if (!success)
-				{
-					return BadRequest(new { message = "Cannot end trip. Trip not found, you don't have access, or trip is not in InProgress status" });
-				}
+                var success = await _tripService.EndTripAsync(tripId, driverId.Value);
 
-				return Ok(new { 
-					tripId = tripId, 
-					message = "Trip ended successfully",
-					endedAt = DateTime.UtcNow
-				});
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error ending trip: {TripId}", tripId);
-				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
-			}
-		}
+                return Ok(new
+                {
+                    tripId = tripId,
+                    message = "Trip ended successfully",
+                    endedAt = DateTime.UtcNow
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning("Validation error ending trip {TripId}: {Message}", tripId, ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning("Business logic error ending trip {TripId}: {Message}", tripId, ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ending trip: {TripId}", tripId);
+                return StatusCode(500, new
+                {
+                    message = "Internal server error",
+                    error = ex.Message
+                });
+            }
+        }
 
-		[HttpPost("{tripId}/location")]
+        [HttpPost("{tripId}/location")]
 		[Authorize(Roles = $"{Roles.Driver},{Roles.Admin}")]
 		public async Task<ActionResult<object>> UpdateTripLocation(Guid tripId, [FromBody] UpdateTripLocationRequest request)
 		{
@@ -882,6 +893,21 @@ namespace APIs.Controllers
 			var trips = await _tripService.GetTripsByDateForParentAsync(parentEmail, date);
 			var tripDtos = MapTripsToDto(trips).ToList();
 
+			// Populate school location for each trip (from School table)
+			var school = await _schoolService.GetSchoolAsync();
+			if (school != null && school.Latitude.HasValue && school.Longitude.HasValue)
+			{
+				foreach (var tripDto in tripDtos)
+				{
+					tripDto.SchoolLocation = new StopLocationDto
+					{
+						Latitude = school.Latitude.Value,
+						Longitude = school.Longitude.Value,
+						Address = school.DisplayAddress ?? school.FullAddress ?? string.Empty
+					};
+				}
+			}
+
 			return Ok(tripDtos);
 			}
 			catch (Exception ex)
@@ -913,6 +939,21 @@ namespace APIs.Controllers
 
 				var trips = await _tripService.GetTripsByDateRangeForParentAsync(parentEmail, startDate, endDate);
 				var tripDtos = MapTripsToDto(trips).ToList();
+
+				// Populate school location for each trip (from School table)
+				var school = await _schoolService.GetSchoolAsync();
+				if (school != null && school.Latitude.HasValue && school.Longitude.HasValue)
+				{
+					foreach (var tripDto in tripDtos)
+					{
+						tripDto.SchoolLocation = new StopLocationDto
+						{
+							Latitude = school.Latitude.Value,
+							Longitude = school.Longitude.Value,
+							Address = school.DisplayAddress ?? school.FullAddress ?? string.Empty
+						};
+					}
+				}
 
 				return Ok(tripDtos);
 			}
@@ -946,7 +987,21 @@ namespace APIs.Controllers
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
-				return Ok(MapTripToDto(trip));
+				var tripDto = MapTripToDto(trip);
+
+				// Populate school location for parent (consistent with driver endpoint)
+				var school = await _schoolService.GetSchoolAsync();
+				if (school != null && school.Latitude.HasValue && school.Longitude.HasValue)
+				{
+					tripDto!.SchoolLocation = new StopLocationDto
+					{
+						Latitude = school.Latitude.Value,
+						Longitude = school.Longitude.Value,
+						Address = school.DisplayAddress ?? school.FullAddress ?? string.Empty
+					};
+				}
+
+				return Ok(tripDto);
 			}
 			catch (Exception ex)
 			{
