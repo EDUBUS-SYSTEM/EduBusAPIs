@@ -292,6 +292,10 @@ builder.Services.AddHostedService<Services.Backgrounds.PickupApproachNotificatio
 builder.Services.AddHostedService<Services.Backgrounds.RegistrationNotificationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EmailService>());
 
+// Relocation
+builder.Services.AddScoped<IRelocationRequestRepository, RelocationRequestRepository>();
+builder.Services.AddScoped<IRelocationRequestService, RelocationRequestService>();
+
 // Register DbContext for SqlRepository
 builder.Services.AddScoped<DbContext>(provider => provider.GetRequiredService<EduBusSqlContext>());
 // Register Parent AutoMapper

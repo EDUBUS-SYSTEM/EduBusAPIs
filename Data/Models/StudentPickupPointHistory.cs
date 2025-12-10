@@ -14,7 +14,11 @@ public partial class StudentPickupPoint : BaseDomain
     public DateTime SemesterStartDate { get; set; }
     public DateTime SemesterEndDate { get; set; }
     public int TotalSchoolDays { get; set; }
-    
+
     public virtual Student Student { get; set; } = null!;
     public virtual PickupPoint PickupPoint { get; set; } = null!;
+
+	public Guid? RelocationRequestId { get; set; }
+	public bool IsMidSemesterChange { get; set; }
+	public DateTime EffectiveDate { get; set; }
 }

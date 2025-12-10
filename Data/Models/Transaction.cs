@@ -19,4 +19,15 @@ public partial class Transaction : BaseDomain
 
     public virtual Parent Parent { get; set; } = null!;
     public virtual ICollection<TransportFeeItem> TransportFeeItems { get; set; } = new List<TransportFeeItem>();
+
+	public Guid? RelocationRequestId { get; set; }
+	public string TransactionType { get; set; } = TransactionTypeConstants.InitialPayment;
+
+	public static class TransactionTypeConstants
+	{
+		public const string InitialPayment = "InitialPayment";
+		public const string AdditionalPayment = "AdditionalPayment";
+		public const string Refund = "Refund";
+		public const string Adjustment = "Adjustment";
+	}
 }
