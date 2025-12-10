@@ -98,10 +98,8 @@ namespace APIs.Services
 					timestamp = DateTime.UtcNow
 				};
 
-				// Broadcast to parents tracking this trip
 				await _hubContext.Clients.Group($"Trip_{tripId}").SendAsync("StopsReordered", data);
 				
-				// Also broadcast to admins for real-time monitoring
 				await _hubContext.Clients.Group("Admins").SendAsync("StopsReordered", data);
 				
 				_logger.LogInformation("Broadcasted stops reordered: TripId={TripId}, StopsCount={Count}", tripId, stops.Count);
@@ -109,6 +107,38 @@ namespace APIs.Services
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error broadcasting stops reordered: TripId={TripId}", tripId);
+			}
+		}
+
+		public async Task BroadcastIncidentCreatedAsync(Data.Models.TripIncidentReport incident)
+		{
+			try
+			{
+				var data = new
+				{
+					incidentId = incident.Id,
+					tripId = incident.TripId,
+					supervisorId = incident.SupervisorId,
+					supervisorName = incident.SupervisorName,
+					reason = incident.Reason.ToString(),
+					title = incident.Title,
+					description = incident.Description,
+					status = incident.Status.ToString(),
+					routeName = incident.RouteName,
+					vehiclePlate = incident.VehiclePlate,
+					serviceDate = incident.ServiceDate,
+					createdAt = incident.CreatedAt,
+					timestamp = DateTime.UtcNow
+				};
+
+				await _hubContext.Clients.Group("Admins").SendAsync("IncidentCreated", data);
+				
+				_logger.LogInformation("Broadcasted incident created to admins: IncidentId={IncidentId}, TripId={TripId}", 
+					incident.Id, incident.TripId);
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error broadcasting incident created: IncidentId={IncidentId}", incident.Id);
 			}
 		}
 	}

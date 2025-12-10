@@ -1,12 +1,13 @@
-using System;
-using System.Collections.Generic;
 using AutoMapper;
 using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Services.Contracts;
 using Services.Models.Common;
+using Services.Models.Notification;
 using Services.Models.TripIncident;
 
 namespace Services.Implementations
@@ -17,20 +18,35 @@ namespace Services.Implementations
         private readonly ITripRepository _tripRepository;
         private readonly ISupervisorVehicleRepository _supervisorVehicleRepository;
         private readonly IMongoRepository<Route> _routeRepository;
+        private readonly INotificationService _notificationService;
+        private readonly ITripHubService? _tripHubService;
+        private readonly IUserAccountRepository _userAccountRepository;
+        private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly IMapper _mapper;
+        private readonly ILogger<TripIncidentService> _logger;
 
         public TripIncidentService(
             ITripIncidentRepository incidentRepository,
             ITripRepository tripRepository,
             ISupervisorVehicleRepository supervisorVehicleRepository,
             IMongoRepository<Route> routeRepository,
-            IMapper mapper)
+            INotificationService notificationService,
+            IUserAccountRepository userAccountRepository,
+            IServiceScopeFactory serviceScopeFactory,
+            IMapper mapper,
+            ILogger<TripIncidentService> logger,
+            ITripHubService? tripHubService = null)
         {
             _incidentRepository = incidentRepository;
             _tripRepository = tripRepository;
             _supervisorVehicleRepository = supervisorVehicleRepository;
             _routeRepository = routeRepository;
+            _notificationService = notificationService;
+            _userAccountRepository = userAccountRepository;
+            _serviceScopeFactory = serviceScopeFactory;
+            _tripHubService = tripHubService;
             _mapper = mapper;
+            _logger = logger;
         }
 
         public async Task<TripIncidentResponseDto> CreateAsync(Guid tripId, CreateTripIncidentRequestDto request, Guid supervisorId)
@@ -68,7 +84,26 @@ namespace Services.Implementations
             };
 
             await _incidentRepository.AddAsync(entity);
-            return _mapper.Map<TripIncidentResponseDto>(entity);
+            var response = _mapper.Map<TripIncidentResponseDto>(entity);
+
+            _ = Task.Run(async () =>
+            {
+                using var scope = _serviceScopeFactory.CreateScope();
+                try
+                {
+                    var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+                    var userAccountRepository = scope.ServiceProvider.GetRequiredService<IUserAccountRepository>();
+                    var tripHubService = scope.ServiceProvider.GetService<ITripHubService>();
+
+                    await SendIncidentNotificationsAsync(entity, trip, notificationService, userAccountRepository, tripHubService);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to send incident notifications for incident {IncidentId}", entity.Id);
+                }
+            });
+
+            return response;
         }
 
         public async Task<TripIncidentListResponse> GetByTripAsync(Guid tripId, Guid requesterId, bool isAdmin, int page, int perPage)
@@ -78,6 +113,19 @@ namespace Services.Implementations
             await EnsureTripAccessAsync(tripId, requesterId, isAdmin);
 
             var (items, totalCount) = await _incidentRepository.GetByTripAsync(tripId, page, perPage);
+
+            return new TripIncidentListResponse
+            {
+                Data = _mapper.Map<List<TripIncidentListItemDto>>(items),
+                Pagination = BuildPagination(totalCount, page, perPage)
+            };
+        }
+
+        public async Task<TripIncidentListResponse> GetAllAsync(Guid? tripId, Guid? supervisorId, TripIncidentStatus? status, int page, int perPage)
+        {
+            (page, perPage) = NormalizePaging(page, perPage);
+
+            var (items, totalCount) = await _incidentRepository.GetAllAsync(tripId, supervisorId, status, page, perPage);
 
             return new TripIncidentListResponse
             {
@@ -150,6 +198,73 @@ namespace Services.Implementations
                 HasNextPage = page < totalPages,
                 HasPreviousPage = page > 1
             };
+        }
+
+        private async Task SendIncidentNotificationsAsync(
+            TripIncidentReport incident,
+            Trip trip,
+            INotificationService notificationService,
+            IUserAccountRepository userAccountRepository,
+            ITripHubService? tripHubService)
+        {
+            try
+            {
+                var adminUsers = await userAccountRepository.GetAdminUsersAsync();
+                if (!adminUsers.Any())
+                {
+                    _logger.LogWarning("No admin users found to send incident notification");
+                    return;
+                }
+
+                var reasonText = incident.Reason == TripIncidentReason.Other
+                    ? incident.Title
+                    : incident.Reason.ToString();
+
+                var notificationTitle = "New Trip Incident Report";
+                var notificationMessage = $"Supervisor {incident.SupervisorName} reported an incident: {reasonText} on route {incident.RouteName}.";
+
+                foreach (var admin in adminUsers)
+                {
+                    var notificationDto = new CreateNotificationDto
+                    {
+                        UserId = admin.Id,
+                        Title = notificationTitle,
+                        Message = notificationMessage,
+                        NotificationType = NotificationType.TripInfo,
+                        RecipientType = RecipientType.Admin,
+                        Priority = 3,
+                        RelatedEntityId = incident.Id,
+                        RelatedEntityType = "TripIncident",
+                        ActionRequired = true,
+                        ActionUrl = $"/admin/driver-requests?tab=incidents&incidentId={incident.Id}",
+                        Metadata = new Dictionary<string, object>
+                        {
+                            { "incidentId", incident.Id.ToString() },
+                            { "tripId", incident.TripId.ToString() },
+                            { "supervisorId", incident.SupervisorId.ToString() },
+                            { "supervisorName", incident.SupervisorName },
+                            { "reason", incident.Reason.ToString() },
+                            { "status", incident.Status.ToString() },
+                            { "routeName", incident.RouteName },
+                            { "vehiclePlate", incident.VehiclePlate }
+                        }
+                    };
+
+                    await notificationService.CreateNotificationAsync(notificationDto);
+                }
+
+                if (tripHubService != null)
+                {
+                    await tripHubService.BroadcastIncidentCreatedAsync(incident);
+                }
+
+                _logger.LogInformation("Sent incident notifications to {AdminCount} admins for incident {IncidentId}",
+                    adminUsers.Count(), incident.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending incident notifications for incident {IncidentId}", incident.Id);
+            }
         }
     }
 }

@@ -322,6 +322,7 @@ public class PaymentService : IPaymentService
                 await _transportFeeItemRepository.UpdateAsync(item);
             }
             await ActivateStudentsForTransactionAsync(transactionId, PaymentEventSource.manual);
+            await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transactionId);
 
             // Log event
             var message = $"Transaction marked as paid manually. Note: {request.Note}";
@@ -408,6 +409,7 @@ public class PaymentService : IPaymentService
                     await _transportFeeItemRepository.UpdateAsync(item);
                 }
                 await ActivateStudentsForTransactionAsync(transaction.Id, PaymentEventSource.webhook);
+                await _pickupPointEnrollmentService.AssignPickupPointAfterPaymentAsync(transaction.Id);
             }
             else
             {

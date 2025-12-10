@@ -1,5 +1,6 @@
 using System;
 using Constants;
+using Data.Models.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
@@ -115,6 +116,27 @@ namespace APIs.Controllers
             catch (UnauthorizedAccessException)
             {
                 return Forbid();
+            }
+        }
+
+        [Authorize(Roles = Roles.Admin)]
+        [HttpGet]
+        public async Task<IActionResult> GetAll(
+            [FromQuery] Guid? tripId,
+            [FromQuery] Guid? supervisorId,
+            [FromQuery] TripIncidentStatus? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int perPage = 20)
+        {
+            try
+            {
+                var response = await _incidentService.GetAllAsync(tripId, supervisorId, status, page, perPage);
+                return Ok(response);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting incident reports");
+                return StatusCode(500, new { message = "An error occurred while getting incident reports." });
             }
         }
 
