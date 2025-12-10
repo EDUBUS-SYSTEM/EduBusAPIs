@@ -187,6 +187,7 @@ builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
 builder.Services.AddScoped<IMongoRepository<PickupPointResetLog>, PickupPointResetLogRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
+builder.Services.AddScoped<IMultiStudentPolicyRepository, MultiStudentPolicyRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsRepository, EnrollmentSemesterSettingsRepository>();
 builder.Services.AddScoped<IStudentAbsenceRequestRepository, StudentAbsenceRequestRepository>();
@@ -247,6 +248,7 @@ builder.Services.AddScoped<IRouteScheduleService, RouteScheduleService>();
 builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsService, EnrollmentSemesterSettingsService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
+builder.Services.AddScoped<IMultiStudentPolicyService, MultiStudentPolicyService>();
 builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
 
 // Payment Services

@@ -160,16 +160,26 @@ namespace Services.Models.Transaction
         
         // Optional: If not provided, will use current active unit price
         public Guid? UnitPriceId { get; set; }
+        
+        /// <summary>
+        /// Số lượng học sinh (để tính chính sách giảm giá)
+        /// </summary>
+        public int StudentCount { get; set; } = 1;
     }
 
     public class CalculateFeeResponse
     {
         public decimal TotalFee { get; set; }
+        public decimal OriginalFee { get; set; } // Phí gốc trước khi áp dụng chính sách
+        public decimal PolicyReductionAmount { get; set; } // Số tiền được giảm
+        public decimal PolicyReductionPercentage { get; set; } // % giảm giá
+        public string PolicyDescription { get; set; } = string.Empty; // Mô tả chính sách
         public decimal UnitPricePerKm { get; set; }
         public double DistanceKm { get; set; }
         public int TotalSchoolDays { get; set; }
         public int TotalTrips { get; set; }
         public double TotalDistanceKm { get; set; }
+        public int StudentCount { get; set; } // Số lượng học sinh
         public string SemesterName { get; set; } = null!;
         public string AcademicYear { get; set; } = null!;
         public DateTime SemesterStartDate { get; set; }

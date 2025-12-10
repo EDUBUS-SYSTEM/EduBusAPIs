@@ -17,6 +17,7 @@ namespace Services.Implementations
         private readonly IUnitPriceRepository _unitPriceRepo;
         private readonly IAcademicCalendarRepository _academicCalendarRepo;
         private readonly IScheduleRepository _scheduleRepo;
+        private readonly IMultiStudentPolicyService _policyService;
         private readonly DbContext _dbContext;
 
         public TransactionService(
@@ -28,6 +29,7 @@ namespace Services.Implementations
             IUnitPriceRepository unitPriceRepo,
             IAcademicCalendarRepository academicCalendarRepo,
             IScheduleRepository scheduleRepo,
+            IMultiStudentPolicyService policyService,
             DbContext dbContext)
         {
             _transactionRepo = transactionRepo;
@@ -38,6 +40,7 @@ namespace Services.Implementations
             _unitPriceRepo = unitPriceRepo;
             _academicCalendarRepo = academicCalendarRepo;
             _scheduleRepo = scheduleRepo;
+            _policyService = policyService;
             _dbContext = dbContext;
         }
 
@@ -410,26 +413,47 @@ namespace Services.Implementations
             // 4. Calculate total distance for the semester (unit price is per day, not per trip)
             var totalDistanceKm = request.DistanceKm * totalSchoolDays;
             
-            // 5. Calculate total fee
-            var totalFee = unitPrice.PricePerKm * (decimal)totalDistanceKm;
+            // 5. Calculate ORIGINAL fee (before policy)
+            var originalFee = unitPrice.PricePerKm * (decimal)totalDistanceKm;
             
-            // 6. Build calculation details
+            // 6. Calculate policy reduction
+            var studentCount = request.StudentCount > 0 ? request.StudentCount : 1;
+            var policyResult = await _policyService.CalculatePolicyAsync(studentCount, originalFee);
+            
+            // 7. Calculate final fee after policy
+            var totalFee = originalFee - policyResult.ReductionAmount;
+            
+            // 8. Build calculation details
             var calculationDetails = $"Transport fee for {semesterInfo.Name} {semesterInfo.AcademicYear}:\n" +
                                    $"- Distance: {request.DistanceKm} km\n" +
                                    $"- Unit price: {unitPrice.PricePerKm:N0} VND/km\n" +
                                    $"- School days: {totalSchoolDays} days (excluding weekends and holidays)\n" +
                                    $"- Total trips: {totalTrips} trips (round trip per day)\n" +
                                    $"- Total distance: {totalDistanceKm:N1} km\n" +
-                                   $"- Total fee: {totalFee:N0} VND";
+                                   $"- Original fee: {originalFee:N0} VND\n" +
+                                   $"- Student count: {studentCount}\n";
+            
+            if (policyResult.ReductionAmount > 0)
+            {
+                calculationDetails += $"- Policy reduction: {policyResult.ReductionPercentage}% ({policyResult.ReductionAmount:N0} VND)\n" +
+                                     $"- Policy: {policyResult.Description}\n";
+            }
+            
+            calculationDetails += $"- Final fee: {totalFee:N0} VND";
             
             return new CalculateFeeResponse
             {
                 TotalFee = totalFee,
+                OriginalFee = originalFee,
+                PolicyReductionAmount = policyResult.ReductionAmount,
+                PolicyReductionPercentage = policyResult.ReductionPercentage,
+                PolicyDescription = policyResult.Description,
                 UnitPricePerKm = unitPrice.PricePerKm,
                 DistanceKm = request.DistanceKm,
                 TotalSchoolDays = totalSchoolDays,
                 TotalTrips = totalTrips,
                 TotalDistanceKm = totalDistanceKm,
+                StudentCount = studentCount,
                 SemesterName = semesterInfo.Name,
                 AcademicYear = semesterInfo.AcademicYear,
                 SemesterStartDate = semesterInfo.StartDate,

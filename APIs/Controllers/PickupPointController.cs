@@ -124,6 +124,35 @@ namespace APIs.Controllers
 		}
 
 
+		[HttpGet("parent/existing-count")]
+		[Authorize(Roles = Roles.Parent)]
+		public async Task<IActionResult> GetExistingStudentCount(
+			[FromQuery] Guid? pickupPointId,
+			[FromQuery] double? latitude = null,
+			[FromQuery] double? longitude = null,
+			[FromQuery] double radiusMeters = 200,
+			[FromQuery] string? parentEmail = null)
+		{
+			// Require either pickupPointId or lat/lng
+			if ((pickupPointId is null || pickupPointId == Guid.Empty) &&
+				(!latitude.HasValue || !longitude.HasValue))
+			{
+				return BadRequest(new { message = "pickupPointId or latitude/longitude is required." });
+			}
+
+			var email = string.IsNullOrWhiteSpace(parentEmail) ? ResolveParentEmailFromClaims() : parentEmail;
+			if (string.IsNullOrWhiteSpace(email))
+			{
+				return Unauthorized(Problem(title: "Unauthorized",
+									  detail: "Parent email not found in claims.",
+									  statusCode: StatusCodes.Status401Unauthorized));
+			}
+
+			var count = await _svc.GetExistingStudentCountAsync(pickupPointId, email!, latitude, longitude, radiusMeters);
+			return Ok(new { count });
+		}
+
+
 		/// <summary>
 		/// [DEPRECATED] OTP verification endpoint for public parent registration
 		/// Use admin-managed workflow instead
@@ -477,5 +506,12 @@ namespace APIs.Controllers
 			var parentIdStr = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 			return Guid.TryParse(parentIdStr, out var id) ? id : null;
 		}
+
+        private string? ResolveParentEmailFromClaims()
+        {
+            return User.FindFirst(ClaimTypes.Email)?.Value
+                ?? User.FindFirst("email")?.Value
+                ?? User.FindFirst("upn")?.Value;
+        }
 	}
 }

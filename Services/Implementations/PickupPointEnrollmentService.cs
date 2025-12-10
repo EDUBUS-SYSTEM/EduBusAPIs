@@ -2,9 +2,11 @@
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using MongoDB.Driver;
 using NetTopologySuite.Geometries;
 using Services.Contracts;
 using Services.Models.PickupPoint;
+using System.Linq;
 
 namespace Services.Implementations
 {
@@ -421,7 +423,8 @@ namespace Services.Implementations
             // Calculate transport fee using TransactionService
             var calculateFeeRequest = new Services.Models.Transaction.CalculateFeeRequest
             {
-                DistanceKm = dto.DistanceKm
+                DistanceKm = dto.DistanceKm,
+                StudentCount = dto.StudentIds?.Count ?? 1 // Thêm số lượng học sinh để tính chính sách
             };
             
             var feeCalculation = await _transactionService.CalculateTransportFeeAsync(calculateFeeRequest);
@@ -1013,6 +1016,105 @@ namespace Services.Implementations
             }
 
             return result;
+        }
+
+        public async Task<int> GetExistingStudentCountAsync(
+            Guid? pickupPointId,
+            string parentEmail,
+            double? latitude = null,
+            double? longitude = null,
+            double radiusMeters = 200)
+        {
+            if (string.IsNullOrWhiteSpace(parentEmail))
+            {
+                return 0;
+            }
+
+            // 1) Count students already assigned to a pickup point (SQL)
+            var studentQuery = _studentRepo.GetQueryable()
+                .Include(s => s.CurrentPickupPoint)
+                .Where(s =>
+                    !s.IsDeleted &&
+                    s.ParentEmail == parentEmail &&
+                    (s.Status == StudentStatus.Active || s.Status == StudentStatus.Pending));
+
+            if (pickupPointId.HasValue && pickupPointId != Guid.Empty)
+            {
+                studentQuery = studentQuery.Where(s => s.CurrentPickupPointId == pickupPointId);
+            }
+            else if (latitude.HasValue && longitude.HasValue)
+            {
+                var point = new Point(longitude.Value, latitude.Value) { SRID = 4326 };
+                studentQuery = studentQuery.Where(s =>
+                    s.CurrentPickupPoint != null &&
+                    s.CurrentPickupPoint.Geog != null &&
+                    s.CurrentPickupPoint.Geog.Distance(point) <= radiusMeters);
+            }
+            else
+            {
+                studentQuery = studentQuery.Where(s => false);
+            }
+
+            var studentIds = await studentQuery.Select(s => s.Id).ToListAsync();
+            var studentCount = studentIds.Count;
+
+            // 2) Count pickup point requests in Mongo (Pending/Approved), same parent, same location rule
+            var baseRequestFilter = Builders<PickupPointRequestDocument>.Filter.And(
+                Builders<PickupPointRequestDocument>.Filter.Eq(x => x.IsDeleted, false),
+                Builders<PickupPointRequestDocument>.Filter.Eq(x => x.ParentEmail, parentEmail),
+                Builders<PickupPointRequestDocument>.Filter.In(x => x.Status, new[] { "Pending", "Approved" })
+            );
+
+            // If pickupPointId is provided, exact match (IDs created after approval)
+            if (pickupPointId.HasValue && pickupPointId != Guid.Empty)
+            {
+                var idFilter = Builders<PickupPointRequestDocument>.Filter.Eq(x => x.PickupPointId, pickupPointId.Value);
+                var requests = await _requestRepo.FindByFilterAsync(Builders<PickupPointRequestDocument>.Filter.And(baseRequestFilter, idFilter));
+                var reqIds = requests.SelectMany(r => r.StudentIds ?? new List<Guid>()).Distinct().ToList();
+                var newIds = reqIds.Where(id => !studentIds.Contains(id)).ToList();
+                return studentCount + newIds.Count;
+            }
+
+            // If coordinates provided, use bounding box then precise Haversine <= radiusMeters
+            if (latitude.HasValue && longitude.HasValue)
+            {
+                var lat = latitude.Value;
+                var lng = longitude.Value;
+                var latDiff = radiusMeters / 111320.0; // rough meters per degree
+                var lngDiff = radiusMeters / (111320.0 * Math.Cos(lat * Math.PI / 180));
+
+                var minLat = lat - latDiff;
+                var maxLat = lat + latDiff;
+                var minLng = lng - lngDiff;
+                var maxLng = lng + lngDiff;
+
+                var boxFilter = Builders<PickupPointRequestDocument>.Filter.And(
+                    Builders<PickupPointRequestDocument>.Filter.Gte(x => x.Latitude, minLat),
+                    Builders<PickupPointRequestDocument>.Filter.Lte(x => x.Latitude, maxLat),
+                    Builders<PickupPointRequestDocument>.Filter.Gte(x => x.Longitude, minLng),
+                    Builders<PickupPointRequestDocument>.Filter.Lte(x => x.Longitude, maxLng)
+                );
+
+                var candidates = await _requestRepo.FindByFilterAsync(Builders<PickupPointRequestDocument>.Filter.And(baseRequestFilter, boxFilter));
+                var withinRadius = candidates.Where(r =>
+                {
+                    var dLat = (r.Latitude - lat) * Math.PI / 180;
+                    var dLng = (r.Longitude - lng) * Math.PI / 180;
+                    var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                            Math.Cos(lat * Math.PI / 180) * Math.Cos(r.Latitude * Math.PI / 180) *
+                            Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+                    var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+                    var distMeters = 6371000 * c;
+                    return distMeters <= radiusMeters;
+                }).ToList();
+
+                var reqIds = withinRadius.SelectMany(r => r.StudentIds ?? new List<Guid>()).Distinct().ToList();
+                var newIds = reqIds.Where(id => !studentIds.Contains(id)).ToList();
+                return studentCount + newIds.Count;
+            }
+
+            // No pickupPointId and no coords
+            return studentCount;
         }
 
         public async Task AssignPickupPointAfterPaymentAsync(Guid transactionId)

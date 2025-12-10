@@ -18,6 +18,7 @@ using Services.Models.StudentAbsenceRequest;
 using Services.Models.StudentGrade;
 using Services.Models.Trip;
 using Services.Models.UnitPrice;
+using Services.Models.MultiStudentPolicy;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
 using Services.Models.EnrollmentSemesterSettings;
@@ -224,6 +225,10 @@ namespace Services.MapperProfiles
             CreateMap<UnitPrice, UnitPriceResponseDto>();
             CreateMap<CreateUnitPriceDto, UnitPrice>();
             CreateMap<UpdateUnitPriceDto, UnitPrice>();
+
+            // MultiStudentPolicy mapping (MongoDB)
+            CreateMap<MultiStudentPolicyDocument, MultiStudentPolicyResponseDto>();
+            CreateMap<MultiStudentPolicyTierDocument, PolicyTierResponseDto>();
 
             // School mapping
             // Base entity to DTO mapping (file content mapped separately via extensions)
