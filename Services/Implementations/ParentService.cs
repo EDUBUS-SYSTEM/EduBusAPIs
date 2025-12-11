@@ -3,6 +3,7 @@ using ClosedXML.Excel;
 using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Services.Contracts;
 using Services.Models.Parent;
@@ -23,10 +24,11 @@ namespace Services.Implementations
         private readonly ILogger<ParentService> _logger;
         private readonly IFaceEmbeddingRepository _faceEmbeddingRepository;
         private readonly IFileService _fileService;
+        private readonly IConfiguration _configuration;
 
         private readonly UserAccountValidationService _validationService;
         public ParentService(IParentRepository parentRepository, IUserAccountRepository userAccountRepository,
-            IStudentRepository studentRepository, IMapper mapper, IFaceEmbeddingRepository faceEmbeddingRepository, IFileService fileService, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
+            IStudentRepository studentRepository, IMapper mapper, IFaceEmbeddingRepository faceEmbeddingRepository, IFileService fileService, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService, IConfiguration configuration)
         {
             _parentRepository = parentRepository;
             _userAccountRepository = userAccountRepository;
@@ -37,6 +39,7 @@ namespace Services.Implementations
             _logger = logger;
             _faceEmbeddingRepository = faceEmbeddingRepository;
             _fileService = fileService;
+            _configuration = configuration;
         }
 
         public async Task<CreateUserResponse> CreateParentAsync(CreateParentRequest dto)
@@ -538,13 +541,73 @@ namespace Services.Implementations
         private async Task<List<float>> ExtractEmbeddingsFromPhotosAsync(List<string> photos)
         {
             using var httpClient = new HttpClient();
-            // TODO: Move URL to config
-            var response = await httpClient.PostAsJsonAsync(
-                "http://localhost:5001/extract",
-                new { photos });
-            response.EnsureSuccessStatusCode();
-            var result = await response.Content.ReadFromJsonAsync<FaceExtractionResult>();
-            return result?.Embedding ?? throw new Exception("No embedding");
+            
+            var faceExtractionUrl = _configuration["FaceExtraction:Url"] 
+                ?? "";
+            var timeoutSeconds = _configuration.GetValue<int>("FaceExtraction:TimeoutSeconds", 300);
+            
+            httpClient.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+            
+            _logger.LogInformation("Calling Face Extraction Service at {Url} with timeout {Timeout}s (photos: {Count})", 
+                faceExtractionUrl, timeoutSeconds, photos.Count);
+            
+            try
+            {
+                var response = await httpClient.PostAsJsonAsync(faceExtractionUrl, new { photos });
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Face extraction service returned {StatusCode}: {ErrorBody}", 
+                        response.StatusCode, errorBody);
+                    
+                    // Parse quality validation errors
+                    if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && !string.IsNullOrEmpty(errorBody))
+                    {
+                        try
+                        {
+                            var errorJson = System.Text.Json.JsonDocument.Parse(errorBody);
+                            if (errorJson.RootElement.TryGetProperty("error", out var errorMsg))
+                            {
+                                var userFriendlyError = errorMsg.GetString();
+                                if (errorJson.RootElement.TryGetProperty("quality_issue", out var qualityIssue))
+                                {
+                                    var issue = qualityIssue.GetString();
+                                    throw new ArgumentException($"Photo quality issue: {userFriendlyError}");
+                                }
+                                throw new ArgumentException($"Face extraction failed: {userFriendlyError}");
+                            }
+                        }
+                        catch (System.Text.Json.JsonException)
+                        {
+                            // If JSON parsing fails, throw generic error
+                        }
+                    }
+                    
+                    response.EnsureSuccessStatusCode();
+                }
+                
+                var result = await response.Content.ReadFromJsonAsync<FaceExtractionResult>();
+                
+                _logger.LogInformation("Successfully extracted face embedding from {Count} photos", photos.Count);
+                
+                return result?.Embedding ?? throw new Exception("No embedding returned from face extraction service");
+            }
+            catch (ArgumentException)
+            {
+                // Re-throw quality validation errors as-is
+                throw;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogError(ex, "Face extraction service timed out after {Timeout}s. Service may be cold-starting on Render.", timeoutSeconds);
+                throw new Exception("Face recognition service is taking too long to respond (cold start). Please try again in a moment.");
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "Failed to connect to face extraction service at {Url}", faceExtractionUrl);
+                throw new Exception("Unable to connect to face recognition service. Please try again later.");
+            }
         }
 
         private class FaceExtractionResult
