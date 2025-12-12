@@ -68,6 +68,28 @@ public class PaymentController : ControllerBase
 
     // Removed simple create-and-QR endpoint per user's request
 
+    [HttpGet("unpaid-fees")]
+    [Authorize(Roles = Roles.Parent)]
+    public async Task<ActionResult<UnpaidFeesResponse>> GetUnpaidFees()
+    {
+        try
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId) || !Guid.TryParse(userId, out var parentId))
+            {
+                return Unauthorized(new { message = "Invalid user identity" });
+            }
+
+            var result = await _paymentService.GetUnpaidFeesAsync(parentId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting unpaid fees for parent");
+            return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+        }
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<TransactionDetailResponse>> GetTransactionDetail(Guid id)
     {

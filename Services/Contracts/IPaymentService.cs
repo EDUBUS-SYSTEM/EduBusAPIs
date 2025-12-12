@@ -21,5 +21,8 @@ public interface IPaymentService
 
     // Business Logic
     Task<Transaction> CreateTransactionForPickupPointRequestAsync(string pickupPointRequestId, Guid scheduleId);
+
+    // Parent utilities
+    Task<UnpaidFeesResponse> GetUnpaidFeesAsync(Guid parentId);
 }
 
