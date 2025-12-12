@@ -1516,14 +1516,13 @@ namespace Services.Implementations
 				var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
 				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
 				
-				// Get active driver-vehicle assignments for the date range
 				var driverVehicles = await driverVehicleRepo.GetActiveDriverVehiclesByDateRangeAsync(driverId, startDate, endDate);
 				if (!driverVehicles.Any())
 					return Enumerable.Empty<Trip>();
 
-				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).ToList();
+				var driverVehicleIds = driverVehicles.Select(dv => dv.Id).ToList();
+				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).Distinct().ToList();
 				
-				// Get all routes for these vehicles
 				var routes = new List<Route>();
 				foreach (var vehicleId in vehicleIds)
 				{
@@ -1534,19 +1533,22 @@ namespace Services.Implementations
 				if (!routes.Any())
 					return Enumerable.Empty<Trip>();
 
-				var routeIds = routes.Select(r => r.Id).ToList();
+				var routeIds = routes.Select(r => r.Id).Distinct().ToList();
 				
-				// Get trips for these routes in the date range
-				var trips = new List<Trip>();
+				var allTrips = new List<Trip>();
 				foreach (var routeId in routeIds)
 				{
 					var routeTrips = await tripRepo.GetTripsByRouteAsync(routeId);
-					var rangeTrips = routeTrips.Where(t => t.ServiceDate.Date >= startDate.Date && t.ServiceDate.Date <= endDate.Date);
-					trips.AddRange(rangeTrips);
+					var rangeTrips = routeTrips.Where(t => 
+						!t.IsDeleted &&
+						t.ServiceDate.Date >= startDate.Date && 
+						t.ServiceDate.Date <= endDate.Date &&
+						t.DriverVehicleId.HasValue &&
+						driverVehicleIds.Contains(t.DriverVehicleId.Value));
+					allTrips.AddRange(rangeTrips);
 				}
 
-				// Sort by service date and planned start time
-				return trips.OrderBy(t => t.ServiceDate).ThenBy(t => t.PlannedStartAt);
+				return allTrips.OrderBy(t => t.ServiceDate).ThenBy(t => t.PlannedStartAt);
 			}
 			catch (Exception ex)
 			{
@@ -1689,55 +1691,72 @@ namespace Services.Implementations
 					{
 						var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
 
-						// Get active driver-vehicle assignments for this vehicle
-						// We want assignments that are active at the trip's service date
-						var serviceDate = trip.ServiceDate;
-						var activeAssignments = await driverVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+						// If DriverVehicleId is already set, use it directly instead of searching by vehicle
+						if (trip.DriverVehicleId.HasValue)
+						{
+							var specificDriverVehicle = await driverVehicleRepo.FindAsync(trip.DriverVehicleId.Value);
+							if (specificDriverVehicle != null && !specificDriverVehicle.IsDeleted && 
+								specificDriverVehicle.Status == DriverVehicleStatus.Assigned &&
+								specificDriverVehicle.Driver != null && !specificDriverVehicle.Driver.IsDeleted)
+							{
+								trip.Driver = new Trip.DriverSnapshot
+								{
+									Id = specificDriverVehicle.Driver.Id,
+									FullName = $"{specificDriverVehicle.Driver.FirstName} {specificDriverVehicle.Driver.LastName}".Trim(),
+									Phone = specificDriverVehicle.Driver.PhoneNumber ?? string.Empty,
+									IsPrimary = specificDriverVehicle.IsPrimaryDriver,
+									SnapshottedAtUtc = DateTime.UtcNow
+								};
 
-						// Filter to assignments that are active on the service date
-						var assignmentsOnServiceDate = activeAssignments
-							.Where(dv => dv.StartTimeUtc.Date <= serviceDate.Date &&
+								_logger.LogDebug("Populated driver snapshot for trip {TripId} using specified DriverVehicleId {DriverVehicleId}, driver {DriverId}",
+									trip.Id, trip.DriverVehicleId.Value, specificDriverVehicle.Driver.Id);
+							}
+							else
+							{
+								_logger.LogWarning("Specified DriverVehicleId {DriverVehicleId} for trip {TripId} is invalid or deleted, falling back to vehicle-based lookup",
+									trip.DriverVehicleId.Value, trip.Id);
+								// Fall through to vehicle-based lookup below
+							}
+						}
+
+						// Only do vehicle-based lookup if DriverVehicleId was not set or was invalid
+						if (trip.Driver == null || !trip.DriverVehicleId.HasValue)
+						{
+							var serviceDate = trip.ServiceDate;
+							var activeAssignments = await driverVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+
+							var assignmentsOnServiceDate = activeAssignments
+								.Where(dv => dv.StartTimeUtc.Date <= serviceDate.Date &&
 										 (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc.Value.Date >= serviceDate.Date) &&
 										 dv.Status == DriverVehicleStatus.Assigned &&
 										 !dv.IsDeleted &&
 										 dv.Driver != null &&
 										 !dv.Driver.IsDeleted)
-							.ToList();
+								.ToList();
 
-						if (assignmentsOnServiceDate.Any())
-						{
-							// Prefer primary driver, otherwise use the first active assignment
-							var driverVehicle = assignmentsOnServiceDate
-								.FirstOrDefault(dv => dv.IsPrimaryDriver)
-								?? assignmentsOnServiceDate.FirstOrDefault();
-
-							if (driverVehicle != null && driverVehicle.Driver != null)
+							if (assignmentsOnServiceDate.Any())
 							{
-								trip.Driver = new Trip.DriverSnapshot
+								var driverVehicle = assignmentsOnServiceDate
+									.FirstOrDefault(dv => dv.IsPrimaryDriver)
+									?? assignmentsOnServiceDate.FirstOrDefault();
+
+								if (driverVehicle != null && driverVehicle.Driver != null)
 								{
-									Id = driverVehicle.Driver.Id,
-									FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
-									Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
-									IsPrimary = driverVehicle.IsPrimaryDriver,
-									SnapshottedAtUtc = DateTime.UtcNow
-								};
+									trip.Driver = new Trip.DriverSnapshot
+									{
+										Id = driverVehicle.Driver.Id,
+										FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
+										Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
+										IsPrimary = driverVehicle.IsPrimaryDriver,
+										SnapshottedAtUtc = DateTime.UtcNow
+									};
 
-								// Update trip.DriverVehicleId to match the found assignment
-								trip.DriverVehicleId = driverVehicle.Id;
+									trip.DriverVehicleId = driverVehicle.Id;
 
-								_logger.LogDebug("Populated driver snapshot for trip {TripId} from route {RouteId}, driver {DriverId} (DriverVehicleId: {DriverVehicleId})",
-									trip.Id, trip.RouteId, driverVehicle.Driver.Id, driverVehicle.Id);
+									_logger.LogDebug("Populated driver snapshot for trip {TripId} from route {RouteId}, driver {DriverId} (DriverVehicleId: {DriverVehicleId})",
+										trip.Id, trip.RouteId, driverVehicle.Driver.Id, driverVehicle.Id);
+								}
 							}
-							else
-							{
-								_logger.LogWarning("No valid driver found in active assignments for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
-									route.VehicleId, trip.RouteId, trip.Id, serviceDate);
-							}
-						}
-						else
-						{
-							_logger.LogWarning("No active driver-vehicle assignments found for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
-								route.VehicleId, trip.RouteId, trip.Id, serviceDate);
 						}
 					}
 					catch (Exception ex)

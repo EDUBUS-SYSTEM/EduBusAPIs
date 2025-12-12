@@ -524,56 +524,7 @@ namespace APIs.Controllers
 
                 Guid adminId = Guid.Parse(adminIdClaim.Value);
                 
-                // Approve leave request
                 var leave = await _driverLeaveService.ApproveLeaveRequestAsync(leaveId, request, adminId);
-                
-                // Tạo assignment cho replacement driver (nếu có)
-                if (request.ReplacementDriverId.HasValue)
-                {
-                    try
-                    {
-                        // Validate replacement driver exists
-                        var replacementDriver = await _driverService.GetDriverByIdAsync(request.ReplacementDriverId.Value);
-                        if (replacementDriver == null)
-                            return BadRequest("Replacement driver not found.");
-                        
-                        // Check if replacement driver is available during leave period
-                        var isAvailable = await _driverService.IsDriverAvailableAsync(
-                            request.ReplacementDriverId.Value, 
-                            leave.StartDate, 
-                            leave.EndDate);
-                            
-                        if (!isAvailable)
-                            return BadRequest("Replacement driver is not available during the leave period.");
-                        
-                        // Determine vehicle ID - always use current driver's vehicle
-                        var vehicleId = await _driverVehicleService.GetVehicleForDriverReplacementAsync(leave.DriverId);
-                        if (!vehicleId.HasValue)
-                            return BadRequest("Current driver has no active vehicle assignment.");
-                        
-                        // Create assignment for replacement driver
-                        var assignmentRequest = new DriverAssignmentRequest
-                        {
-                            DriverId = request.ReplacementDriverId.Value,
-                            StartTimeUtc = leave.StartDate,
-                            EndTimeUtc = leave.EndDate,
-                            IsPrimaryDriver = false
-                        };
-                        
-                        var assignment = await _driverVehicleService.AssignDriverAsync(
-                            vehicleId.Value, 
-                            assignmentRequest, 
-                            adminId);
-                        
-                        if (assignment?.Success != true)
-                            return BadRequest("Failed to create replacement assignment.");
-                    }
-                    catch (Exception ex)
-                    {
-                        return BadRequest($"Leave approved but failed to create replacement assignment: {ex.Message}");
-                    }
-                }
-                
                 return Ok(leave);
             }
             catch (InvalidOperationException ex)
