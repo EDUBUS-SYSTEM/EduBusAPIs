@@ -160,6 +160,7 @@ namespace Services.Models.Trip
 	{
 		public Guid StudentId { get; set; }
 		public string StudentName { get; set; } = string.Empty;
+		public Guid? StudentImageId { get; set; }
 		public string? BoardStatus { get; set; }
 		public string? AlightStatus { get; set; }
 		public DateTime? BoardedAt { get; set; }
