@@ -156,6 +156,7 @@ builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
 // Repository Registration for SqlServer
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
 builder.Services.AddScoped<IParentRepository, ParentRepository>();
 builder.Services.AddScoped<ISupervisorRepository, SupervisorRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
@@ -272,6 +273,10 @@ builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Serv
 
 // Trip Hub Service for admin monitoring
 builder.Services.AddScoped<Services.Contracts.ITripHubService, APIs.Services.TripHubService>();
+
+// Push Notification Service
+builder.Services.AddScoped<Services.Contracts.IPushNotificationService, Services.Implementations.PushNotificationService>();
+builder.Services.AddHttpClient<Services.Implementations.PushNotificationService>();
 
 //VietMap Service
 builder.Services.AddHttpClient<Services.Contracts.IVietMapService, Services.Implementations.VietMapService>();

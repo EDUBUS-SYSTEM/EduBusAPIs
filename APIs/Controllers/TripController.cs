@@ -62,7 +62,7 @@ namespace APIs.Controllers
 				if (upcomingDays.HasValue)
 				{
 					var tripsUpcoming = await _tripService.GetUpcomingTripsAsync(DateTime.UtcNow, upcomingDays.Value);
-					var tripDtosUpcoming = MapTripsToDto(tripsUpcoming).ToList();
+					var tripDtosUpcoming = (await MapTripsToDto(tripsUpcoming)).ToList();
 					await PopulateRouteNamesAndVehiclePlatesAsync(tripDtosUpcoming, tripsUpcoming);
 					// Return as simple array for upcoming trips (no pagination needed)
 					return Ok(tripDtosUpcoming);
@@ -74,7 +74,7 @@ namespace APIs.Controllers
 					page, perPage, sortBy, sortOrder);
 
 				// Map trips to DTOs using MapTripsToDto to avoid AutoMapper issues
-				var tripDtos = MapTripsToDto(response.Trips).ToList();
+				var tripDtos = (await MapTripsToDto(response.Trips)).ToList();
 
 				// Map stops for each trip
 				foreach (var tripDto in tripDtos)
@@ -82,7 +82,7 @@ namespace APIs.Controllers
 					var trip = response.Trips.FirstOrDefault(t => t.Id == tripDto.Id);
 					if (trip != null)
 					{
-						tripDto.Stops = MapStopsToDto(trip);
+						tripDto.Stops = await MapStopsToDto(trip);
 					}
 				}
 
@@ -118,13 +118,13 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var trip = await _tripService.GetTripWithStopsAsync(id);
-				if (trip == null)
-				{
-					return NotFound(new { message = "Trip not found" });
-				}
+			var trip = await _tripService.GetTripWithStopsAsync(id);
+			if (trip == null)
+			{
+				return NotFound(new { message = "Trip not found" });
+			}
 
-				return Ok(MapTripToDto(trip));
+			return Ok(await MapTripToDto(trip));
 			}
 			catch (Exception ex)
 			{
@@ -139,9 +139,9 @@ namespace APIs.Controllers
 		{
 			try
 			{
-				var entity = _mapper.Map<Trip>(request);
-				var createdTrip = await _tripService.CreateTripAsync(entity);
-				return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.Id }, MapTripToDto(createdTrip));
+			var entity = _mapper.Map<Trip>(request);
+			var createdTrip = await _tripService.CreateTripAsync(entity);
+			return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.Id }, await MapTripToDto(createdTrip));
 			}
 			catch (ArgumentException ex)
 			{
@@ -215,7 +215,7 @@ namespace APIs.Controllers
 			{
 			var trips = await _tripService.GetTripsByRouteAsync(routeId);
 			var tripsList = trips.ToList();
-			var tripDtos = MapTripsToDto(tripsList).ToList();
+			var tripDtos = (await MapTripsToDto(tripsList)).ToList();
 
 			return Ok(tripDtos);
 			}
@@ -235,7 +235,7 @@ namespace APIs.Controllers
 			var tripsList = trips.ToList();
 
 			// Map to DTOs using MapTripsToDto
-			var tripDtos = MapTripsToDto(tripsList).ToList();
+			var tripDtos = (await MapTripsToDto(tripsList)).ToList();
 
 			return Ok(tripDtos);
 			}
@@ -253,7 +253,7 @@ namespace APIs.Controllers
 			{
 			var trips = await _tripService.GetUpcomingTripsAsync(DateTime.UtcNow, days);
 			var tripsList = trips.ToList();
-			var tripDtos = MapTripsToDto(tripsList).ToList();
+			var tripDtos = (await MapTripsToDto(tripsList)).ToList();
 			
 			return Ok(tripDtos);
 			}
@@ -274,7 +274,7 @@ namespace APIs.Controllers
 			try
 			{
 				var trips = await _tripService.GenerateTripsFromScheduleAsync(scheduleId, startDate, endDate);
-				return Ok(MapTripsToDto(trips));
+				return Ok(await MapTripsToDto(trips));
 			}
 			catch (Exception ex)
 			{
@@ -371,7 +371,7 @@ namespace APIs.Controllers
 					return NotFound(new { message = "Trip not found" });
 				}
 
-				var stops = MapStopsToDto(trip);
+				var stops = await MapStopsToDto(trip);
 				return Ok(stops);
 			}
 			catch (Exception ex)
@@ -676,7 +676,7 @@ namespace APIs.Controllers
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
-				var tripDto = MapTripToDto(trip);
+				var tripDto = await MapTripToDto(trip);
 
 				// Populate school location from School table
 				var school = await _schoolService.GetSchoolAsync();
@@ -867,7 +867,7 @@ namespace APIs.Controllers
 				}
 
 				var trips = await _tripService.GetTripsByScheduleForParentAsync(parentEmail, days);
-				var tripDtos = MapTripsToDto(trips).ToList();
+				var tripDtos = (await MapTripsToDto(trips)).ToList();
 
 				return Ok(tripDtos);
 			}
@@ -891,7 +891,7 @@ namespace APIs.Controllers
 				}
 
 			var trips = await _tripService.GetTripsByDateForParentAsync(parentEmail, date);
-			var tripDtos = MapTripsToDto(trips).ToList();
+			var tripDtos = (await MapTripsToDto(trips)).ToList();
 
 			// Populate school location for each trip (from School table)
 			var school = await _schoolService.GetSchoolAsync();
@@ -938,7 +938,7 @@ namespace APIs.Controllers
 				}
 
 				var trips = await _tripService.GetTripsByDateRangeForParentAsync(parentEmail, startDate, endDate);
-				var tripDtos = MapTripsToDto(trips).ToList();
+				var tripDtos = (await MapTripsToDto(trips)).ToList();
 
 				// Populate school location for each trip (from School table)
 				var school = await _schoolService.GetSchoolAsync();
@@ -987,7 +987,7 @@ namespace APIs.Controllers
 					return NotFound(new { message = "Trip not found or you don't have access to this trip" });
 				}
 
-				var tripDto = MapTripToDto(trip);
+				var tripDto = await MapTripToDto(trip);
 
 				// Populate school location for parent (consistent with driver endpoint)
 				var school = await _schoolService.GetSchoolAsync();
@@ -1104,16 +1104,16 @@ namespace APIs.Controllers
 
 		#endregion
 
-		private TripDto? MapTripToDto(Trip? trip)
+		private async Task<TripDto?> MapTripToDto(Trip? trip)
 		{
 			if (trip == null) return null;
 			
 			var tripDto = _mapper.Map<TripDto>(trip);
-			tripDto.Stops = MapStopsToDto(trip);
+			tripDto.Stops = await MapStopsToDto(trip);
 			return tripDto;
 		}
 
-		private IEnumerable<TripDto> MapTripsToDto(IEnumerable<Trip> trips)
+		private async Task<IEnumerable<TripDto>> MapTripsToDto(IEnumerable<Trip> trips)
 		{
 			if (trips == null) return Enumerable.Empty<TripDto>();
 			
@@ -1122,7 +1122,7 @@ namespace APIs.Controllers
 			
 			foreach (var trip in tripsList)
 			{
-				var tripDto = MapTripToDto(trip);
+				var tripDto = await MapTripToDto(trip);
 				if (tripDto != null)
 				{
 					tripDtos.Add(tripDto);
@@ -1132,10 +1132,37 @@ namespace APIs.Controllers
 			return tripDtos;
 		}
 
-		private List<TripStopDto> MapStopsToDto(Trip trip)
+		private async Task<List<TripStopDto>> MapStopsToDto(Trip trip)
 		{
 			if (trip.Stops == null || !trip.Stops.Any())
 				return new List<TripStopDto>();
+
+			// Collect all unique student IDs from all stops
+			var allStudentIds = trip.Stops
+				.Where(stop => stop.Attendance != null && stop.Attendance.Any())
+				.SelectMany(stop => stop.Attendance)
+				.Select(a => a.StudentId)
+				.Distinct()
+				.ToList();
+
+			// Query batch to get StudentImageId for all students
+			var studentImageIds = new Dictionary<Guid, Guid?>();
+			if (allStudentIds.Any())
+			{
+				var studentRepo = _databaseFactory.GetRepositoryByType<IStudentRepository>(DatabaseType.SqlServer);
+				foreach (var studentId in allStudentIds)
+				{
+					try
+					{
+						var student = await studentRepo.FindAsync(studentId);
+						studentImageIds[studentId] = student?.StudentImageId;
+					}
+					catch
+					{
+						studentImageIds[studentId] = null;
+					}
+				}
+			}
 
 			return trip.Stops
 				.Where(stop => stop.PickupPointId != Guid.Empty) // Filter out stops with empty PickupPointId
@@ -1158,6 +1185,7 @@ namespace APIs.Controllers
 					{
 						StudentId = a.StudentId,
 						StudentName = a.StudentName ?? string.Empty,
+						StudentImageId = studentImageIds.GetValueOrDefault(a.StudentId),
 						BoardStatus = a.BoardStatus,
 						AlightStatus = a.AlightStatus,
 						BoardedAt = a.BoardedAt,
