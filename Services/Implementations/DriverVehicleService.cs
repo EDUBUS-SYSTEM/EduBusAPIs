@@ -88,7 +88,6 @@ namespace Services.Implementations
             if (startDate < DateTime.UtcNow.Date)
                 throw new ArgumentException("Start date cannot be in the past");
 
-            // Tìm tài xế khả dụng trong khoảng thời gian
             var availableDrivers = await _driverVehicleRepo.FindAvailableDriversAsync(startDate, endDate, null);
 
             return availableDrivers.Select(d => new GetAvailableDriverDto
@@ -117,7 +116,6 @@ namespace Services.Implementations
         {
             try
             {
-                // Lấy primary vehicle của tài xế
                 var primaryVehicle = await _driverVehicleRepo.GetPrimaryVehicleForDriverAsync(driverId);
                 return primaryVehicle?.VehicleId;
             }
