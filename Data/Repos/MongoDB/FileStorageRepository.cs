@@ -37,6 +37,7 @@ namespace Data.Repos.MongoDB
             var filter = Builders<FileStorage>.Filter.Eq(x => x.Id, fileId);
             var update = Builders<FileStorage>.Update
                 .Set(x => x.IsActive, false)
+                .Set(x => x.IsDeleted, true)
                 .Set(x => x.UpdatedAt, DateTime.UtcNow);
 
             var result = await _collection.UpdateOneAsync(filter, update);

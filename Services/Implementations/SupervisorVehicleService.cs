@@ -272,5 +272,24 @@ namespace Services.Implementations
 
             return _mapper.Map<SupervisorAssignmentDto>(currentAssignment);
         }
+
+        public async Task<IEnumerable<SupervisorInfoDto>> GetAvailableSupervisorsForVehicleAsync(Guid vehicleId, DateTime startTime, DateTime? endTime)
+        {
+            // Get available supervisors from repository
+            var availableSupervisors = await _supervisorVehicleRepo.GetAvailableSupervisorsForVehicleAsync(vehicleId, startTime, endTime);
+            
+            // Map to DTOs
+            var supervisorDtos = availableSupervisors.Select(s => new SupervisorInfoDto
+            {
+                Id = s.Id.ToString(),
+                FirstName = s.FirstName,
+                LastName = s.LastName,
+                Email = s.Email,
+                PhoneNumber = s.PhoneNumber,
+                Status = s.Status.ToString()
+            });
+
+            return supervisorDtos;
+        }
     }
 }

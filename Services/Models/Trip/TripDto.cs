@@ -24,6 +24,7 @@ namespace Services.Models.Trip
 		public SupervisorSnapshotDto? Supervisor { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<TripStopDto> Stops { get; set; } = new List<TripStopDto>();
+		public StopLocationDto? SchoolLocation { get; set; }
 		public DateTime CreatedAt { get; set; }
 		public DateTime? UpdatedAt { get; set; }
 	}
@@ -126,6 +127,7 @@ namespace Services.Models.Trip
 	public class ParentTripDto
 	{
 		public Guid Id { get; set; }
+		public Guid RouteId { get; set; }
 		public DateTime ServiceDate { get; set; }
 		public DateTime PlannedStartAt { get; set; }
 		public DateTime PlannedEndAt { get; set; }
@@ -134,8 +136,11 @@ namespace Services.Models.Trip
 		public string Status { get; set; } = string.Empty;
 		public VehicleSnapshotDto? Vehicle { get; set; }
 		public DriverSnapshotDto? Driver { get; set; }
+		public TripLocationDto? CurrentLocation { get; set; }
 		public ScheduleSnapshotDto ScheduleSnapshot { get; set; } = new ScheduleSnapshotDto();
 		public List<ParentTripStopDto> Stops { get; set; } = new List<ParentTripStopDto>();
+		public DateTime CreatedAt { get; set; }
+		public DateTime? UpdatedAt { get; set; }
 	}
 
 	public class ParentTripStopDto
@@ -147,6 +152,7 @@ namespace Services.Models.Trip
 		public DateTime PlannedDeparture { get; set; }
 		public DateTime? ActualDeparture { get; set; }
 		public int Sequence { get; set; }
+		public StopLocationDto Location { get; set; } = new StopLocationDto();
 		public List<ParentAttendanceDto> Attendance { get; set; } = new List<ParentAttendanceDto>();
 	}
 
@@ -154,8 +160,12 @@ namespace Services.Models.Trip
 	{
 		public Guid StudentId { get; set; }
 		public string StudentName { get; set; } = string.Empty;
+		public Guid? StudentImageId { get; set; }
+		public string? BoardStatus { get; set; }
+		public string? AlightStatus { get; set; }
 		public DateTime? BoardedAt { get; set; }
-		public string State { get; set; } = string.Empty;
+		public DateTime? AlightedAt { get; set; }
+	public string State { get; set; } = string.Empty;
 	}
 
 	public class TripLocationDto

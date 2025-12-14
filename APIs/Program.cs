@@ -17,6 +17,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
 using Services.Contracts;
+using Services.Helpers;
 using Services.Implementations;
 using Services.MapperProfiles;
 using Services.Models.Configuration;
@@ -42,6 +43,8 @@ builder.Services.Configure<LeaveRequestSettings>(
     builder.Configuration.GetSection("LeaveRequestSettings"));
 
 // Add services to the container
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -153,6 +156,7 @@ builder.Services.AddScoped(typeof(ISqlRepository<>), typeof(SqlRepository<>));
 // Repository Registration for SqlServer
 builder.Services.AddScoped<IUserAccountRepository, UserAccountRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IDeviceTokenRepository, DeviceTokenRepository>();
 builder.Services.AddScoped<IParentRepository, ParentRepository>();
 builder.Services.AddScoped<ISupervisorRepository, SupervisorRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();
@@ -182,11 +186,13 @@ builder.Services.AddScoped<IMongoRepository<Data.Models.Route>, RouteRepository>
 builder.Services.AddScoped<IMongoRepository<RouteSchedule>, RouteScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Schedule>, ScheduleRepository>();
 builder.Services.AddScoped<IMongoRepository<Trip>, TripRepository>();
+builder.Services.AddScoped<IMongoRepository<TripIncidentReport>, TripIncidentRepository>();
 builder.Services.AddScoped<IMongoRepository<PickupPointResetLog>, PickupPointResetLogRepository>();
 builder.Services.AddScoped<IPickupPointRequestRepository, PickupPointRequestRepository>();
 builder.Services.AddScoped<IParentRegistrationRepository, ParentRegistrationRepository>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsRepository, EnrollmentSemesterSettingsRepository>();
 builder.Services.AddScoped<IStudentAbsenceRequestRepository, StudentAbsenceRequestRepository>();
+builder.Services.AddScoped<ITripIncidentRepository, TripIncidentRepository>();
 
 builder.Services.AddScoped<IScheduleRepository, ScheduleRepository>();
 builder.Services.AddScoped<ITripRepository, TripRepository>();
@@ -205,6 +211,7 @@ builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddSingleton<EmailService>();
 builder.Services.AddSingleton<IEmailService>(sp => sp.GetRequiredService<EmailService>());
 builder.Services.AddSingleton<ISimpleEmailService, SimpleEmailService>();
+builder.Services.AddSingleton<IOtpService, OtpService>();
 builder.Services.AddScoped<LicensePlateValidator>();
 builder.Services.AddScoped<UserAccountValidationService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -244,6 +251,8 @@ builder.Services.AddScoped<IAcademicCalendarService, AcademicCalendarService>();
 builder.Services.AddScoped<IEnrollmentSemesterSettingsService, EnrollmentSemesterSettingsService>();
 builder.Services.AddScoped<IUnitPriceService, UnitPriceService>();
 builder.Services.AddScoped<IStudentAbsenceRequestService, StudentAbsenceRequestService>();
+builder.Services.AddScoped<ITripIncidentService, TripIncidentService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Payment Services
 builder.Services.AddScoped<IPaymentService, PaymentService>();
@@ -264,6 +273,10 @@ builder.Services.AddScoped<Services.Contracts.INotificationHubService, APIs.Serv
 
 // Trip Hub Service for admin monitoring
 builder.Services.AddScoped<Services.Contracts.ITripHubService, APIs.Services.TripHubService>();
+
+// Push Notification Service
+builder.Services.AddScoped<Services.Contracts.IPushNotificationService, Services.Implementations.PushNotificationService>();
+builder.Services.AddHttpClient<Services.Implementations.PushNotificationService>();
 
 //VietMap Service
 builder.Services.AddHttpClient<Services.Contracts.IVietMapService, Services.Implementations.VietMapService>();

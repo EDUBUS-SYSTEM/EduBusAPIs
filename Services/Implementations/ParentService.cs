@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using ClosedXML.Excel;
 using Data.Models;
+using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Microsoft.Extensions.Logging;
 using Services.Contracts;
@@ -8,6 +9,7 @@ using Services.Models.Parent;
 using Services.Models.UserAccount;
 using Services.Validators;
 using Utils;
+using Constants;
 
 namespace Services.Implementations
 {
@@ -16,17 +18,26 @@ namespace Services.Implementations
         private readonly IParentRepository _parentRepository;
         private readonly IUserAccountRepository _userAccountRepository;
         private readonly IStudentRepository _studentRepository;
+        private readonly IEnrollmentSemesterSettingsRepository _semesterRepository;
+        private readonly ITransportFeeItemRepository _transportFeeItemRepository;
+        private readonly ITripRepository _tripRepository;
+        private readonly IAcademicCalendarService _academicCalendarService;
         private readonly IMapper _mapper;
         private readonly IEmailService _emailService;
         private readonly ILogger<ParentService> _logger;
         
         private readonly UserAccountValidationService _validationService;
         public ParentService(IParentRepository parentRepository, IUserAccountRepository userAccountRepository,
-            IStudentRepository studentRepository, IMapper mapper, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
+            IStudentRepository studentRepository, IEnrollmentSemesterSettingsRepository semesterRepository, ITransportFeeItemRepository transportFeeItemRepository,
+            ITripRepository tripRepository, IAcademicCalendarService academicCalendarService, IMapper mapper, IEmailService emailService, ILogger<ParentService> logger, UserAccountValidationService validationService)
         {
             _parentRepository = parentRepository;
             _userAccountRepository = userAccountRepository;
             _studentRepository = studentRepository;
+            _semesterRepository = semesterRepository;
+            _transportFeeItemRepository = transportFeeItemRepository;
+            _tripRepository = tripRepository;
+            _academicCalendarService = academicCalendarService;
             _mapper = mapper;
             _validationService = validationService;
             _emailService = emailService;
@@ -329,6 +340,168 @@ namespace Services.Implementations
                     return stream.ToArray();
                 }
             }
+        }
+
+        public async Task<ParentTripReportResponse> GetTripReportBySemesterAsync(string parentEmail, string semesterKey)
+        {
+            if (string.IsNullOrWhiteSpace(parentEmail))
+            {
+                throw new ArgumentException("Parent email is required.", nameof(parentEmail));
+            }
+
+            if (string.IsNullOrWhiteSpace(semesterKey))
+            {
+                throw new ArgumentException("Semester key is required.", nameof(semesterKey));
+            }
+
+            semesterKey = semesterKey.Trim();
+
+            var parentRecords = await _parentRepository.FindByConditionAsync(p => p.Email == parentEmail);
+            if (parentRecords == null || !parentRecords.Any())
+            {
+                throw new KeyNotFoundException("Parent not found.");
+            }
+
+            EnrollmentSemesterSettings? semester = null;
+
+            if (Guid.TryParse(semesterKey, out var semesterGuid))
+            {
+                semester = await _semesterRepository.FindAsync(semesterGuid);
+            }
+            else
+            {
+                semester = await _semesterRepository.FindBySemesterCodeAsync(semesterKey);
+                if (semester == null)
+                {
+                    var activeCalendars = await _academicCalendarService.GetActiveAcademicCalendarsAsync();
+                    var matchingSemester = activeCalendars
+                        .SelectMany(ac => ac.Semesters.Select(s => new { Semester = s, Calendar = ac }))
+                        .FirstOrDefault(x => string.Equals(x.Semester.Code, semesterKey, StringComparison.OrdinalIgnoreCase) && x.Semester.IsActive && x.Calendar.IsActive);
+
+                    if (matchingSemester != null)
+                    {
+                        semester = new EnrollmentSemesterSettings
+                        {
+                            Id = Guid.NewGuid(),
+                            SemesterName = matchingSemester.Semester.Name,
+                            SemesterCode = matchingSemester.Semester.Code,
+                            AcademicYear = matchingSemester.Calendar.AcademicYear,
+                            SemesterStartDate = matchingSemester.Semester.StartDate,
+                            SemesterEndDate = matchingSemester.Semester.EndDate,
+                            RegistrationStartDate = matchingSemester.Calendar.StartDate,
+                            RegistrationEndDate = matchingSemester.Calendar.EndDate,
+                            IsActive = true,
+                            Description = matchingSemester.Calendar.Name
+                        };
+                    }
+                }
+            }
+
+            if (semester == null || !semester.IsActive)
+            {
+                throw new KeyNotFoundException("Semester not found or inactive.");
+            }
+
+            var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail) ?? new List<Student>();
+
+            var allFeeItemsForParent = await _transportFeeItemRepository.GetByParentEmailAsync(parentEmail) ?? new List<TransportFeeItem>();
+            var feeItems = allFeeItemsForParent
+                .Where(f =>
+                    string.Equals(f.AcademicYear?.Trim(), semester.AcademicYear?.Trim(), StringComparison.OrdinalIgnoreCase) &&
+                    f.SemesterStartDate <= semester.SemesterEndDate &&
+                    f.SemesterEndDate >= semester.SemesterStartDate)
+                .ToList();
+
+            var registeredStudentIds = feeItems.Any()
+                ? students
+                    .Where(s => feeItems.Any(f => f.StudentId == s.Id))
+                    .Select(s => s.Id)
+                    .Distinct()
+                    .ToList()
+                : students.Select(s => s.Id).Distinct().ToList();
+
+            var trips = await _tripRepository.GetTripsBySemesterForStudentsAsync(
+                registeredStudentIds,
+                semester.SemesterStartDate,
+                semester.SemesterEndDate);
+
+            var tripList = trips ?? new List<Trip>();
+
+            var response = new ParentTripReportResponse
+            {
+                SemesterId = semester.Id.ToString(),
+                SemesterName = semester.SemesterName,
+                SemesterCode = semester.SemesterCode,
+                AcademicYear = semester.AcademicYear,
+                SemesterStartDate = semester.SemesterStartDate,
+                SemesterEndDate = semester.SemesterEndDate,
+                TotalStudentsRegistered = registeredStudentIds.Count,
+                TotalAmountPaid = feeItems.Where(f => f.Status == TransportFeeItemStatus.Paid).Sum(f => f.Subtotal),
+                TotalAmountPending = feeItems.Where(f => f.Status != TransportFeeItemStatus.Paid && f.Status != TransportFeeItemStatus.Cancelled).Sum(f => f.Subtotal),
+                TotalTrips = tripList.Count,
+                CompletedTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.Completed),
+                ScheduledTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.Scheduled),
+                CancelledTrips = tripList.Count(t => t.Status == TripConstants.TripStatus.Cancelled)
+            };
+
+            var studentStatistics = new List<StudentTripStatistics>();
+
+            foreach (var student in students.Where(s => registeredStudentIds.Contains(s.Id)))
+            {
+                var studentFees = feeItems.Where(f => f.StudentId == student.Id).ToList();
+                var studentTrips = tripList
+                    .Where(t => t.Stops.Any(s => s.Attendance.Any(a => a.StudentId == student.Id)))
+                    .ToList();
+
+                var statistics = new StudentTripStatistics
+                {
+                    StudentId = student.Id,
+                    StudentName = $"{student.FirstName} {student.LastName}".Trim(),
+                    Grade = string.Empty,
+                    AmountPaid = studentFees.Where(f => f.Status == TransportFeeItemStatus.Paid).Sum(f => f.Subtotal),
+                    AmountPending = studentFees.Where(f => f.Status != TransportFeeItemStatus.Paid && f.Status != TransportFeeItemStatus.Cancelled).Sum(f => f.Subtotal),
+                    TotalTripsForStudent = studentTrips.Count,
+                    CompletedTripsForStudent = studentTrips.Count(t => t.Status == TripConstants.TripStatus.Completed),
+                    UpcomingTripsForStudent = studentTrips.Count(t => t.Status == TripConstants.TripStatus.Scheduled)
+                };
+
+                var attendanceRecords = studentTrips
+                    .SelectMany(t => t.Stops)
+                    .Where(stop => stop.Attendance != null)
+                    .SelectMany(stop => stop.Attendance.Where(a => a.StudentId == student.Id));
+
+                foreach (var attendance in attendanceRecords)
+                {
+                    statistics.TotalAttendanceRecords += 1;
+
+                    var state = attendance.State;
+
+                    var isPresent =
+                        state == TripConstants.AttendanceStates.Present ||
+                        state == TripConstants.AttendanceStates.Boarded ||
+                        state == TripConstants.AttendanceStates.Alighted;
+
+                    if (isPresent)
+                    {
+                        statistics.PresentCount += 1;
+                    }
+                    else if (state == TripConstants.AttendanceStates.Absent)
+                    {
+                        statistics.AbsentCount += 1;
+                    }
+                }
+
+                if (statistics.TotalAttendanceRecords > 0)
+                {
+                    statistics.AttendanceRate = Math.Round((double)statistics.PresentCount / statistics.TotalAttendanceRecords * 100, 2);
+                }
+
+                studentStatistics.Add(statistics);
+            }
+
+            response.StudentStatistics = studentStatistics;
+
+            return response;
         }
         private async Task SendWelcomeEmailAsync(string email, string subject, string body)
         {

@@ -1,4 +1,4 @@
-using Constants;
+﻿using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -1265,7 +1265,170 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId)
+        private bool HasIncompleteAttendance(Trip trip)
+        {
+            if (trip?.Stops == null || trip.Stops.Count == 0)
+            {
+                return false;
+            }
+
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+
+            foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty))
+            {
+                if (stop.Attendance == null || stop.Attendance.Count == 0)
+                    continue;
+
+                foreach (var attendance in stop.Attendance)
+                {
+                    // State is Pending
+                    if (string.IsNullOrWhiteSpace(attendance.State) ||
+                        attendance.State == TripConstants.AttendanceStates.Pending)
+                    {
+                        return true;
+                    }
+
+                    // Invalid combination
+                    if (attendance.BoardStatus == TripConstants.AttendanceStates.Present &&
+                        attendance.AlightStatus == TripConstants.AttendanceStates.Absent)
+                    {
+                        return true;
+                    }
+
+                    // Check 3: For Return trips, must have both BoardStatus and AlightStatus
+                    if (tripType == TripType.Return)
+                    {
+                        if (attendance.BoardStatus == TripConstants.AttendanceStates.Present &&
+                            (string.IsNullOrWhiteSpace(attendance.AlightStatus) ||
+                             attendance.AlightStatus == TripConstants.AttendanceStates.Pending))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private bool HasStudentsStillOnBus(Trip trip)
+        {
+            if (trip?.Stops == null)
+                return false;
+
+            foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty))
+            {
+                if (stop.Attendance == null) continue;
+
+                foreach (var attendance in stop.Attendance)
+                {
+                    // Student boarded but hasn't alighted
+                    if (attendance.BoardStatus == TripConstants.AttendanceStates.Present &&
+                        (string.IsNullOrWhiteSpace(attendance.AlightStatus) ||
+                         attendance.AlightStatus == TripConstants.AttendanceStates.Pending))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+        private async Task SendTripCompletionNotificationsAsync(Trip trip)
+        {
+            if (trip == null) return;
+
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+
+            // Get all unique parents from trip
+            var parentIds = new HashSet<Guid>();
+
+            if (trip.Stops != null)
+            {
+                foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty))
+                {
+                    if (stop.Attendance == null) continue;
+
+                    foreach (var attendance in stop.Attendance)
+                    {
+                        var student = await _studentRepository.FindAsync(attendance.StudentId);
+                        if (student != null && student.ParentId.HasValue)
+                        {
+                            parentIds.Add(student.ParentId.Value);
+                        }
+                    }
+                }
+            }
+
+            string title = tripType == TripType.Departure
+                ? "Departure Trip Completed"
+                : "Return Trip Completed";
+
+            string message = tripType == TripType.Departure
+				? "The departure trip has been completed."
+				: "The return trip has been completed.";
+
+            // Send to each parent
+            foreach (var parentId in parentIds)
+            {
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = parentId,
+                    Title = title,
+                    Message = message,
+                    NotificationType = NotificationType.TripInfo,
+                    RecipientType = RecipientType.Parent,
+                    Priority = 2,
+                    RelatedEntityId = trip.Id,
+                    RelatedEntityType = "Trip",
+                    ActionRequired = false,
+                    ActionUrl = $"/trip/{trip.Id}",
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "tripId", trip.Id.ToString() },
+                        { "status", trip.Status },
+                        { "endTime", trip.EndTime?.ToString("O") ?? DateTime.UtcNow.ToString("O") },
+                        { "tripType", tripType.ToString() }
+                    }
+                };
+
+                await _notificationService.CreateNotificationAsync(notificationDto);
+            }
+
+			// Send to supervisor if exists
+			Guid? supervisorId = trip.Supervisor?.Id;
+            if (supervisorId.HasValue)
+            {
+                var supervisorNotification = new CreateNotificationDto
+                {
+                    UserId = supervisorId.Value,
+                    Title = title,
+                    Message = message,
+                    NotificationType = NotificationType.TripInfo,
+                    RecipientType = RecipientType.Supervisor,
+                    Priority = 2,
+                    RelatedEntityId = trip.Id,
+                    RelatedEntityType = "Trip",
+                    ActionRequired = false,
+                    ActionUrl = $"/trip/{trip.Id}",
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "tripId", trip.Id.ToString() },
+                        { "status", trip.Status },
+                        { "endTime", trip.EndTime?.ToString("O") ?? DateTime.UtcNow.ToString("O") },
+                        { "tripType", tripType.ToString() }
+                    }
+                };
+
+                await _notificationService.CreateNotificationAsync(supervisorNotification);
+            }
+
+            _logger.LogInformation(
+                "Sent trip completion notifications: TripId={TripId}, Parents={ParentCount}, Supervisor={HasSupervisor}",
+                trip.Id, parentIds.Count, supervisorId.HasValue);
+        }
+
+        public async Task<bool> CascadeDeactivateTripsByRouteAsync(Guid routeId)
 		{
 			try
 			{
@@ -1353,14 +1516,13 @@ namespace Services.Implementations
 				var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
 				var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
 				
-				// Get active driver-vehicle assignments for the date range
 				var driverVehicles = await driverVehicleRepo.GetActiveDriverVehiclesByDateRangeAsync(driverId, startDate, endDate);
 				if (!driverVehicles.Any())
 					return Enumerable.Empty<Trip>();
 
-				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).ToList();
+				var driverVehicleIds = driverVehicles.Select(dv => dv.Id).ToList();
+				var vehicleIds = driverVehicles.Select(dv => dv.VehicleId).Distinct().ToList();
 				
-				// Get all routes for these vehicles
 				var routes = new List<Route>();
 				foreach (var vehicleId in vehicleIds)
 				{
@@ -1371,19 +1533,22 @@ namespace Services.Implementations
 				if (!routes.Any())
 					return Enumerable.Empty<Trip>();
 
-				var routeIds = routes.Select(r => r.Id).ToList();
+				var routeIds = routes.Select(r => r.Id).Distinct().ToList();
 				
-				// Get trips for these routes in the date range
-				var trips = new List<Trip>();
+				var allTrips = new List<Trip>();
 				foreach (var routeId in routeIds)
 				{
 					var routeTrips = await tripRepo.GetTripsByRouteAsync(routeId);
-					var rangeTrips = routeTrips.Where(t => t.ServiceDate.Date >= startDate.Date && t.ServiceDate.Date <= endDate.Date);
-					trips.AddRange(rangeTrips);
+					var rangeTrips = routeTrips.Where(t => 
+						!t.IsDeleted &&
+						t.ServiceDate.Date >= startDate.Date && 
+						t.ServiceDate.Date <= endDate.Date &&
+						t.DriverVehicleId.HasValue &&
+						driverVehicleIds.Contains(t.DriverVehicleId.Value));
+					allTrips.AddRange(rangeTrips);
 				}
 
-				// Sort by service date and planned start time
-				return trips.OrderBy(t => t.ServiceDate).ThenBy(t => t.PlannedStartAt);
+				return allTrips.OrderBy(t => t.ServiceDate).ThenBy(t => t.PlannedStartAt);
 			}
 			catch (Exception ex)
 			{
@@ -1526,55 +1691,72 @@ namespace Services.Implementations
 					{
 						var driverVehicleRepo = _databaseFactory.GetRepository<IDriverVehicleRepository>();
 
-						// Get active driver-vehicle assignments for this vehicle
-						// We want assignments that are active at the trip's service date
-						var serviceDate = trip.ServiceDate;
-						var activeAssignments = await driverVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+						// If DriverVehicleId is already set, use it directly instead of searching by vehicle
+						if (trip.DriverVehicleId.HasValue)
+						{
+							var specificDriverVehicle = await driverVehicleRepo.FindAsync(trip.DriverVehicleId.Value);
+							if (specificDriverVehicle != null && !specificDriverVehicle.IsDeleted && 
+								specificDriverVehicle.Status == DriverVehicleStatus.Assigned &&
+								specificDriverVehicle.Driver != null && !specificDriverVehicle.Driver.IsDeleted)
+							{
+								trip.Driver = new Trip.DriverSnapshot
+								{
+									Id = specificDriverVehicle.Driver.Id,
+									FullName = $"{specificDriverVehicle.Driver.FirstName} {specificDriverVehicle.Driver.LastName}".Trim(),
+									Phone = specificDriverVehicle.Driver.PhoneNumber ?? string.Empty,
+									IsPrimary = specificDriverVehicle.IsPrimaryDriver,
+									SnapshottedAtUtc = DateTime.UtcNow
+								};
 
-						// Filter to assignments that are active on the service date
-						var assignmentsOnServiceDate = activeAssignments
-							.Where(dv => dv.StartTimeUtc.Date <= serviceDate.Date &&
+								_logger.LogDebug("Populated driver snapshot for trip {TripId} using specified DriverVehicleId {DriverVehicleId}, driver {DriverId}",
+									trip.Id, trip.DriverVehicleId.Value, specificDriverVehicle.Driver.Id);
+							}
+							else
+							{
+								_logger.LogWarning("Specified DriverVehicleId {DriverVehicleId} for trip {TripId} is invalid or deleted, falling back to vehicle-based lookup",
+									trip.DriverVehicleId.Value, trip.Id);
+								// Fall through to vehicle-based lookup below
+							}
+						}
+
+						// Only do vehicle-based lookup if DriverVehicleId was not set or was invalid
+						if (trip.Driver == null || !trip.DriverVehicleId.HasValue)
+						{
+							var serviceDate = trip.ServiceDate;
+							var activeAssignments = await driverVehicleRepo.GetActiveAssignmentsByVehicleAsync(route.VehicleId);
+
+							var assignmentsOnServiceDate = activeAssignments
+								.Where(dv => dv.StartTimeUtc.Date <= serviceDate.Date &&
 										 (!dv.EndTimeUtc.HasValue || dv.EndTimeUtc.Value.Date >= serviceDate.Date) &&
 										 dv.Status == DriverVehicleStatus.Assigned &&
 										 !dv.IsDeleted &&
 										 dv.Driver != null &&
 										 !dv.Driver.IsDeleted)
-							.ToList();
+								.ToList();
 
-						if (assignmentsOnServiceDate.Any())
-						{
-							// Prefer primary driver, otherwise use the first active assignment
-							var driverVehicle = assignmentsOnServiceDate
-								.FirstOrDefault(dv => dv.IsPrimaryDriver)
-								?? assignmentsOnServiceDate.FirstOrDefault();
-
-							if (driverVehicle != null && driverVehicle.Driver != null)
+							if (assignmentsOnServiceDate.Any())
 							{
-								trip.Driver = new Trip.DriverSnapshot
+								var driverVehicle = assignmentsOnServiceDate
+									.FirstOrDefault(dv => dv.IsPrimaryDriver)
+									?? assignmentsOnServiceDate.FirstOrDefault();
+
+								if (driverVehicle != null && driverVehicle.Driver != null)
 								{
-									Id = driverVehicle.Driver.Id,
-									FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
-									Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
-									IsPrimary = driverVehicle.IsPrimaryDriver,
-									SnapshottedAtUtc = DateTime.UtcNow
-								};
+									trip.Driver = new Trip.DriverSnapshot
+									{
+										Id = driverVehicle.Driver.Id,
+										FullName = $"{driverVehicle.Driver.FirstName} {driverVehicle.Driver.LastName}".Trim(),
+										Phone = driverVehicle.Driver.PhoneNumber ?? string.Empty,
+										IsPrimary = driverVehicle.IsPrimaryDriver,
+										SnapshottedAtUtc = DateTime.UtcNow
+									};
 
-								// Update trip.DriverVehicleId to match the found assignment
-								trip.DriverVehicleId = driverVehicle.Id;
+									trip.DriverVehicleId = driverVehicle.Id;
 
-								_logger.LogDebug("Populated driver snapshot for trip {TripId} from route {RouteId}, driver {DriverId} (DriverVehicleId: {DriverVehicleId})",
-									trip.Id, trip.RouteId, driverVehicle.Driver.Id, driverVehicle.Id);
+									_logger.LogDebug("Populated driver snapshot for trip {TripId} from route {RouteId}, driver {DriverId} (DriverVehicleId: {DriverVehicleId})",
+										trip.Id, trip.RouteId, driverVehicle.Driver.Id, driverVehicle.Id);
+								}
 							}
-							else
-							{
-								_logger.LogWarning("No valid driver found in active assignments for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
-									route.VehicleId, trip.RouteId, trip.Id, serviceDate);
-							}
-						}
-						else
-						{
-							_logger.LogWarning("No active driver-vehicle assignments found for vehicle {VehicleId} on route {RouteId} for trip {TripId} on service date {ServiceDate}. Driver snapshot will not be populated.",
-								route.VehicleId, trip.RouteId, trip.Id, serviceDate);
 						}
 					}
 					catch (Exception ex)
@@ -1843,6 +2025,16 @@ namespace Services.Implementations
 					}
 				}
 
+                // Send start-trip notifications to parents
+                try
+                {
+                    await SendTripStartNotificationsAsync(trip);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send start-trip notifications for trip {TripId}", tripId);
+                }
+
 				return true;
 			}
 			catch (Exception ex)
@@ -1852,61 +2044,139 @@ namespace Services.Implementations
 			}
 		}
 
-		public async Task<bool> EndTripAsync(Guid tripId, Guid driverId)
-		{
-			try
-			{
-				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
-				var trip = await tripRepo.FindAsync(tripId);
-				
-				if (trip == null || trip.IsDeleted)
-					return false;
+        public async Task<bool> EndTripAsync(Guid tripId, Guid driverId)
+        {
+            try
+            {
+                var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+                var trip = await tripRepo.FindAsync(tripId);
 
-				// Verify driver owns this trip
-				if (trip.Driver?.Id != driverId)
-					return false;
+                if (trip == null || trip.IsDeleted)
+                    throw new ArgumentException("Trip not found");
 
-				// Check if trip can be ended
-				if (trip.Status != TripConstants.TripStatus.InProgress)
-				{
-					_logger.LogWarning("Cannot end trip {TripId} with status {Status}", tripId, trip.Status);
-					return false;
-				}
+                if (trip.Driver?.Id != driverId)
+                    throw new ArgumentException("You don't have access to this trip");
 
-				// Update trip status and end time
-				trip.Status = TripConstants.TripStatus.Completed;
-				trip.EndTime = DateTime.UtcNow;
+                if (trip.Status != TripConstants.TripStatus.InProgress)
+                    throw new InvalidOperationException(
+                        $"Cannot end trip with status {trip.Status}. Trip must be in InProgress status.");
+                // Enhanced attendance check
+                if (HasIncompleteAttendance(trip))
+                    throw new InvalidOperationException("Incomplete attendance at some stops");
 
-				await tripRepo.UpdateAsync(trip);
-				_logger.LogInformation("Trip {TripId} ended by driver {DriverId}", tripId, driverId);
+                // Check students still on bus
+                if (HasStudentsStillOnBus(trip))
+                    throw new InvalidOperationException("Students still on bus");
+                // Update trip status and end time
+                trip.Status = TripConstants.TripStatus.Completed;
+                trip.EndTime = DateTime.UtcNow;
+                await tripRepo.UpdateAsync(trip);
 
-				if (_tripHubService != null)
-				{
-					try
-					{
-						await _tripHubService.BroadcastTripStatusChangedAsync(
-							tripId,
-							trip.Status,
-							trip.StartTime,
-							trip.EndTime);
-					}
-					catch (Exception ex)
-					{
-						_logger.LogWarning(ex, "Failed to broadcast trip status change for trip {TripId}", tripId);
-						// Don't fail the operation if broadcast fails
-					}
-				}
+                _logger.LogInformation("Trip {TripId} ended by driver {DriverId}", tripId, driverId);
+                // Broadcast via SignalR
+                if (_tripHubService != null)
+                {
+                    try
+                    {
+                        await _tripHubService.BroadcastTripStatusChangedAsync(
+                            tripId, trip.Status, trip.StartTime, trip.EndTime);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to broadcast trip status change for trip {TripId}", tripId);
+                    }
+                }
+                try
+                {
+                    await SendTripCompletionNotificationsAsync(trip);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send trip completion notifications for trip {TripId}", tripId);
+                }
+                
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                throw; 
+            }
+            catch (InvalidOperationException)
+            {
+                throw; 
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ending trip: {TripId}, {DriverId}", tripId, driverId);
+                throw;
+            }
+        }
 
-				return true;
-			}
-			catch (Exception ex)
-			{
-				_logger.LogError(ex, "Error ending trip: {TripId}, {DriverId}", tripId, driverId);
-				throw;
-			}
-		}
+        private async Task SendTripStartNotificationsAsync(Trip trip)
+        {
+            if (trip == null) return;
 
-		public async Task<bool> UpdateTripLocationAsync(Guid tripId, Guid driverId, double latitude, double longitude, double? speed = null, double? accuracy = null, bool isMoving = false)
+            var parentIds = new HashSet<Guid>();
+
+            if (trip.Stops != null)
+            {
+                foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty))
+                {
+                    if (stop.Attendance == null) continue;
+
+                    foreach (var attendance in stop.Attendance)
+                    {
+                        var student = await _studentRepository.FindAsync(attendance.StudentId);
+                        if (student != null && student.ParentId.HasValue && student.ParentId.Value != Guid.Empty)
+                        {
+                            parentIds.Add(student.ParentId.Value);
+                        }
+                    }
+                }
+            }
+
+            if (!parentIds.Any())
+                return;
+
+            var title = "Trip started";
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var message = tripType == TripType.Departure
+                ? "The departure trip has started. Please get ready."
+                : tripType == TripType.Return
+                    ? "The return trip has started. Please get ready."
+                    : "The trip has started. Please get ready.";
+
+            var tasks = parentIds.Select(parentId =>
+            {
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = parentId,
+                    Title = title,
+                    Message = message,
+                    NotificationType = NotificationType.TripInfo,
+                    RecipientType = RecipientType.Parent,
+                    Priority = 2,
+                    RelatedEntityId = trip.Id,
+                    RelatedEntityType = "Trip",
+                    ActionRequired = false,
+                    ActionUrl = $"/trip/{trip.Id}",
+                    Metadata = new Dictionary<string, object>
+                    {
+                        { "tripId", trip.Id.ToString() },
+                        { "status", trip.Status },
+                        { "tripType", tripType.ToString() },
+                        { "serviceDate", trip.ServiceDate.ToString("yyyy-MM-dd") }
+                    }
+                };
+
+                return _notificationService.CreateNotificationAsync(notificationDto);
+            });
+
+            await Task.WhenAll(tasks);
+            _logger.LogInformation("Sent start-trip notifications for trip {TripId} to {Count} parents", trip.Id, parentIds.Count);
+        }
+
+        public async Task<bool> UpdateTripLocationAsync(Guid tripId, Guid driverId, double latitude, double longitude, double? speed = null, double? accuracy = null, bool isMoving = false)
 		{
 			try
 			{
@@ -2339,6 +2609,74 @@ namespace Services.Implementations
 			}
 		}
 
+		public async Task<IEnumerable<Trip>> GetTripsByDateRangeForParentAsync(string parentEmail, DateTime startDate, DateTime endDate)
+		{
+			try
+			{
+				// Validate date range
+				var dateRange = (endDate.Date - startDate.Date).TotalDays;
+				if (dateRange < 0)
+					throw new ArgumentException("End date must be after start date");
+				
+				if (dateRange > 365)
+					throw new ArgumentException("Date range cannot exceed 365 days");
+
+				var students = await _studentRepository.GetStudentsByParentEmailAsync(parentEmail);
+				
+				if (!students.Any())
+					return Enumerable.Empty<Trip>();
+
+				var studentIds = students.Select(s => s.Id).ToList();
+				var pickupPointIds = await GetPickupPointIdsForStudentsAsync(studentIds);
+
+				if (!pickupPointIds.Any())
+					return Enumerable.Empty<Trip>();
+
+				var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+				var allTrips = await tripRepo.GetTripsByDateRangeAsync(startDate.Date, endDate.Date);
+				var tripsList = allTrips.ToList();
+
+				var filteredTrips = tripsList.Where(trip => 
+					trip.Stops != null && 
+					trip.Stops.Any(stop => pickupPointIds.Contains(stop.PickupPointId))
+				).ToList();
+
+				foreach (var trip in filteredTrips)
+				{
+					await PopulateTripSnapshotsAsync(trip);
+					await PopulateStopsWithPickupPointNamesAsync(trip);
+					FilterTripForParent(trip, studentIds, pickupPointIds);
+				}
+
+				foreach (var trip in filteredTrips)
+				{
+					if (trip.Vehicle != null && trip.VehicleId != Guid.Empty)
+					{
+						try
+						{
+							var vehicle = await _vehicleRepository.FindAsync(trip.VehicleId);
+							if (vehicle != null && vehicle.HashedLicensePlate != null && vehicle.HashedLicensePlate.Length > 0)
+							{
+								trip.Vehicle.MaskedPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+							}
+						}
+						catch (Exception ex)
+						{
+							_logger.LogWarning(ex, "Error decrypting vehicle plate for trip {TripId}", trip.Id);
+						}
+					}
+				}
+
+				return filteredTrips;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting trips by date range for parent: {ParentEmail}, {StartDate} to {EndDate}", 
+					parentEmail, startDate, endDate);
+				throw;
+			}
+		}
+
 		public async Task<Trip?> GetTripDetailForParentAsync(Guid tripId, string parentEmail)
 		{
 			try
@@ -2698,6 +3036,14 @@ namespace Services.Implementations
 					throw new InvalidOperationException("Cannot rearrange a stop that has already been passed");
 				}
 
+				// Validate the stop hasn't been departed yet (DepartedAt is null)
+				if (stopToMove.DepartedAt.HasValue)
+				{
+					_logger.LogWarning("Cannot move stop {PickupPointId} that has already been departed (departed at {DepartedAt})",
+						pickupPointId, stopToMove.DepartedAt);
+					throw new InvalidOperationException("Cannot rearrange a stop that has already been departed from");
+				}
+
 				// Validate new sequence order is within valid range (0-based)
 				if (newSequenceOrder < 0 || newSequenceOrder >= trip.Stops.Count)
 				{
@@ -2750,6 +3096,32 @@ namespace Services.Implementations
 
 				// Save changes
 				await tripRepo.UpdateAsync(trip);
+
+				// Broadcast realtime update via TripHub
+				try
+				{
+					if (_tripHubService != null)
+					{
+						var sortedStops = trip.Stops
+							.OrderBy(s => s.SequenceOrder)
+							.Select(s => new
+							{
+								pickupPointId = s.PickupPointId,
+								sequenceOrder = s.SequenceOrder,
+								address = s.Location?.Address,
+								arrivedAt = s.ArrivedAt,
+								departedAt = s.DepartedAt
+							})
+							.Cast<object>()
+							.ToList();
+
+						await _tripHubService.BroadcastStopsReorderedAsync(tripId, sortedStops);
+					}
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Error broadcasting stops reordered via SignalR for trip {TripId}", tripId);
+				}
 
 				_logger.LogInformation("Driver {DriverId} rearranged stop {PickupPointId} from sequence {OldSequence} to {NewSequence} in trip {TripId}",
 					driverId, pickupPointId, currentSequence, newSequenceOrder, tripId);
@@ -2909,6 +3281,32 @@ namespace Services.Implementations
 				// Save changes
 				await tripRepo.UpdateAsync(trip);
 
+				// Broadcast realtime update via TripHub
+				try
+				{
+					if (_tripHubService != null)
+					{
+						var broadcastStops = trip.Stops
+							.OrderBy(s => s.SequenceOrder)
+							.Select(s => new
+							{
+								pickupPointId = s.PickupPointId,
+								sequenceOrder = s.SequenceOrder,
+								address = s.Location?.Address,
+								arrivedAt = s.ArrivedAt,
+								departedAt = s.DepartedAt
+							})
+							.Cast<object>()
+							.ToList();
+
+						await _tripHubService.BroadcastStopsReorderedAsync(tripId, broadcastStops);
+					}
+				}
+				catch (Exception ex)
+				{
+					_logger.LogError(ex, "Error broadcasting stops reordered via SignalR for trip {TripId}", tripId);
+				}
+
 				_logger.LogInformation("Driver {DriverId} updated sequence for {Count} stops in trip {TripId}",
 					driverId, stopSequences.Count, tripId);
 
@@ -2985,7 +3383,7 @@ namespace Services.Implementations
 			trip.Stops = filteredStops;
 		}
 
-		public async Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId)
+        public async Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId)
 		{
 			// 1. Get trip from MongoDB
 			var tripRepository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
@@ -3036,7 +3434,7 @@ namespace Services.Implementations
 						{
 							StudentId = s.Id,
 							StudentName = $"{s.FirstName} {s.LastName}".Trim(),
-							PhotoUrl = null,
+							StudentImageId = s.StudentImageId,
 							CurrentStatus = GetAttendanceStatus(stop.Attendance, s.Id),
 							IsBoarded = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.BoardStatus),
 							IsAlighted = attendanceRecord != null && !string.IsNullOrEmpty(attendanceRecord.AlightStatus),
@@ -3155,49 +3553,186 @@ namespace Services.Implementations
 				}
 
 				stop.Attendance.Add(newAttendance);
+				existingAttendance = newAttendance;
 			}
 
-			// Save to MongoDB
+			var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+			bool allAccountedFor;
+
+			if (tripType == TripType.Return)
+			{
+				allAccountedFor = stop.Attendance.All(a =>
+					!string.IsNullOrEmpty(a.BoardStatus) &&
+					(a.BoardStatus == TripConstants.AttendanceStates.Present ||
+					 a.BoardStatus == TripConstants.AttendanceStates.Absent) &&
+					!string.IsNullOrEmpty(a.AlightStatus) &&
+					(a.AlightStatus == TripConstants.AttendanceStates.Present ||
+					 a.AlightStatus == TripConstants.AttendanceStates.Absent) &&
+					a.BoardedAt.HasValue &&
+					a.AlightedAt.HasValue);
+			}
+			else
+			{
+				allAccountedFor = stop.Attendance.All(a =>
+					!string.IsNullOrEmpty(a.BoardStatus) &&
+					(a.BoardStatus == TripConstants.AttendanceStates.Present ||
+					 a.BoardStatus == TripConstants.AttendanceStates.Absent) &&
+					a.BoardedAt.HasValue);
+			}
+
+			if (allAccountedFor && stop.ArrivedAt.HasValue && !stop.DepartedAt.HasValue)
+			{
+				stop.DepartedAt = timestamp;
+			}
+
 			await tripRepository.UpdateAsync(trip);
 
-			// Send SignalR notification
-			if (_tripHubService != null)
-			{
-				try
-				{
-					var attendanceSummary = new
+            // Send realtime parents tracking this trip
+            if (_tripHubService != null)
+            {
+                try
+                {
+                    var attendanceUpdate = new
 					{
-						total = stop.Attendance.Count,
-						boarded = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Boarded),
-						alighted = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Alighted),
-						present = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Present),
-						absent = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Absent),
-						pending = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Pending),
-						late = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Late),
-						excused = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Excused),
-						arrivedAt = stop.ArrivedAt,
-						departedAt = stop.DepartedAt,
+						tripId = tripId,
+						stopId = stop.PickupPointId,
 						studentId = request.StudentId,
 						studentName = studentName,
+						boardStatus = request.BoardStatus,
+						alightStatus = request.AlightStatus,
+						boardedAt = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.BoardedAt,
+						alightedAt = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.AlightedAt,
+						state = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId)?.State,
+						arrivedAt = stop.ArrivedAt,
+						departedAt = stop.DepartedAt,
 						timestamp = timestamp
 					};
 
-					await _tripHubService.BroadcastAttendanceUpdatedAsync(
-						tripId: tripId,
-						stopId: stop.PickupPointId, // Use PickupPointId for SignalR
-						attendanceSummary: attendanceSummary);
-				}
-				catch (Exception ex)
-				{
-					_logger.LogWarning(ex, "Failed to send SignalR notification for attendance update");
-					// Don't fail the request if SignalR fails
-				}
-			}
+                    await _tripHubService.BroadcastAttendanceUpdatedAsync(
+                        tripId: tripId,
+                        stopId: stop.PickupPointId,
+                        attendanceSummary: attendanceUpdate
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send TripHub realtime update for attendance");
+                }
+            }
 
-			return (true, "Attendance updated successfully", request.StudentId, timestamp);
+            // Send notification to parent
+            await SendAttendanceNotificationAsync(student, trip, request, studentName, timestamp);
+
+            return (true, "Attendance updated successfully", request.StudentId, timestamp);
 		}
+        /// <summary>
+        /// Sends attendance notification to parent when supervisor manually updates attendance
+        /// </summary>
+        private async Task SendAttendanceNotificationAsync(
+            Student student,
+            Trip trip,
+            ManualAttendanceRequest request,
+            string studentName,
+            DateTime timestamp)
+        {
+            try
+            {
+                if (!student.ParentId.HasValue)
+                {
+                    _logger.LogWarning("Student {StudentId} has no parent assigned, skipping notification", student.Id);
+                    return;
+                }
 
-		private string GetAttendanceStatus(List<Attendance> attendance, Guid studentId)
+                var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+                var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+                var serviceDate = trip.ServiceDate.ToString("MMMM dd, yyyy");
+                
+                string notificationTitle;
+                string notificationMessage;
+
+                // Determine notification content based on board/alight status
+                if (!string.IsNullOrEmpty(request.BoardStatus))
+                {
+                    if (request.BoardStatus == TripConstants.AttendanceStates.Present)
+                    {
+                        notificationTitle = tripType == TripType.Departure
+                            ? "Student Boarded Bus"
+                            : "Student Picked Up";
+                        notificationMessage = $"{studentName} has boarded the bus ({tripTypeText} - {serviceDate}).";
+                    }
+                    else if (request.BoardStatus == TripConstants.AttendanceStates.Absent)
+                    {
+                        notificationTitle = "Student Absent - Boarding";
+                        notificationMessage = $"{studentName} was marked as absent during boarding ({tripTypeText} - {serviceDate}).";
+                    }
+                    else
+                    {
+                        notificationTitle = "Attendance Updated - Boarding";
+                        notificationMessage = $"{studentName}'s boarding status: {request.BoardStatus} ({tripTypeText} - {serviceDate})";
+                    }
+                }
+                else if (!string.IsNullOrEmpty(request.AlightStatus))
+                {
+                    if (request.AlightStatus == TripConstants.AttendanceStates.Present)
+                    {
+                        notificationTitle = tripType == TripType.Departure
+                            ? "Student Arrived at School"
+                            : "Student Dropped Off";
+                        notificationMessage = $"{studentName} has alighted from the bus ({tripTypeText} - {serviceDate}).";
+                    }
+                    else if (request.AlightStatus == TripConstants.AttendanceStates.Absent)
+                    {
+                        notificationTitle = "Student Absent - Drop-off";
+                        notificationMessage = $"{studentName} was marked as absent during drop-off ({tripTypeText} - {serviceDate}).";
+                    }
+                    else
+                    {
+                        notificationTitle = "Attendance Updated - Drop-off";
+                        notificationMessage = $"{studentName}'s drop-off status: {request.AlightStatus} ({tripTypeText} - {serviceDate})";
+                    }
+                }
+                else
+                {
+                    notificationTitle = "Attendance Updated";
+                    notificationMessage = $"Attendance for {studentName} has been updated ({tripTypeText} - {serviceDate}).";
+                }
+
+                // Create notification
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = student.ParentId.Value,
+                    Title = notificationTitle,
+                    Message = notificationMessage,
+                    NotificationType = NotificationType.TripInfo,
+                    Metadata = new Dictionary<string, object>
+            {
+                { "tripId", trip.Id.ToString() },
+                { "studentId", student.Id.ToString() },
+                { "studentName", studentName },
+                { "boardStatus", request.BoardStatus ?? "" },
+                { "alightStatus", request.AlightStatus ?? "" },
+                { "timestamp", timestamp.ToString("O") }
+            }
+                };
+
+                await _notificationService.CreateNotificationAsync(notificationDto);
+
+                _logger.LogInformation(
+                    "Sent attendance notification to parent {ParentId} for student {StudentId}: Board={BoardStatus}, Alight={AlightStatus}",
+                    student.ParentId.Value,
+                    student.Id,
+                    request.BoardStatus ?? "null",
+                    request.AlightStatus ?? "null"
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send notification to parent for student {StudentId}", student.Id);
+                // Don't throw - notification failure shouldn't fail the attendance update
+            }
+        }
+
+        private string GetAttendanceStatus(List<Attendance> attendance, Guid studentId)
 		{
 			var record = attendance.FirstOrDefault(a => a.StudentId == studentId);
 			

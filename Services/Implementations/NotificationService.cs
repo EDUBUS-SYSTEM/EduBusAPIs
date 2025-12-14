@@ -17,19 +17,22 @@ namespace Services.Implementations
         private readonly IMapper _mapper;
         private readonly ILogger<NotificationService> _logger;
         private readonly INotificationHubService? _hubService;
+        private readonly IPushNotificationService? _pushNotificationService;
 
         public NotificationService(
             IDatabaseFactory databaseFactory,
             IUserAccountRepository userAccountRepository,
             IMapper mapper,
             ILogger<NotificationService> logger,
-            INotificationHubService? hubService = null)
+            INotificationHubService? hubService = null,
+            IPushNotificationService? pushNotificationService = null)
         {
             _databaseFactory = databaseFactory;
             _userAccountRepository = userAccountRepository;
             _mapper = mapper;
             _logger = logger;
             _hubService = hubService;
+            _pushNotificationService = pushNotificationService;
         }
 
         private IMongoRepository<Notification> GetRepository()
@@ -108,6 +111,20 @@ namespace Services.Implementations
                 {
                     _logger.LogError(ex, "Error sending real-time notification for user {UserId}", dto.UserId);
                     // Don't fail the notification creation if real-time fails
+                }
+                
+                // Send push notification 
+                try
+                {
+                    if (_pushNotificationService != null)
+                    {
+                        await _pushNotificationService.SendPushNotificationAsync(dto.UserId, response);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error sending push notification for user {UserId}", dto.UserId);
+                    // Don't fail notification creation if push fails
                 }
                 
                 _logger.LogInformation("Created notification {NotificationId} for user {UserId}", created.Id, dto.UserId);

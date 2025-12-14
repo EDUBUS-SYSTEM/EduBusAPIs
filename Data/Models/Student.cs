@@ -17,6 +17,7 @@ public partial class Student : BaseDomain
     public string? DeactivationReason { get; set; }
     public Guid? CurrentPickupPointId { get; set; }
     public DateTime? PickupPointAssignedAt { get; set; }
+    public Guid? StudentImageId { get; set; }
 
     public virtual ICollection<Image> Images { get; set; } = new List<Image>();
 

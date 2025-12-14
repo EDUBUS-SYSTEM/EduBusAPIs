@@ -2,6 +2,7 @@ using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Services.Contracts;
+using Utils;
 
 namespace Services.Implementations
 {
@@ -11,17 +12,23 @@ namespace Services.Implementations
         private readonly IDriverRepository _driverRepository;
         private readonly IUserAccountRepository _userAccountRepository;
         private readonly IDriverLicenseRepository _driverLicenseRepository;
+        private readonly IStudentRepository _studentRepository;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
         public FileService(
             IFileStorageRepository fileStorageRepository,
             IDriverRepository driverRepository,
             IUserAccountRepository userAccountRepository,
-            IDriverLicenseRepository driverLicenseRepository)
+            IDriverLicenseRepository driverLicenseRepository,
+            IStudentRepository studentRepository,
+            IHttpContextAccessor httpContextAccessor)
         {
             _fileStorageRepository = fileStorageRepository;
             _driverRepository = driverRepository;
             _userAccountRepository = userAccountRepository;
             _driverLicenseRepository = driverLicenseRepository;
+            _studentRepository = studentRepository;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         public async Task<Guid> UploadFileAsync(Guid entityId, string entityType, string fileType, IFormFile file)
@@ -40,6 +47,10 @@ namespace Services.Implementations
                 await _fileStorageRepository.DeactivateFileAsync(existingFile.Id);
             }
 
+            var httpContext = _httpContextAccessor.HttpContext;
+            var currentUserId = httpContext != null ? AuthorizationHelper.GetCurrentUserId(httpContext) : null;
+            var uploadedBy = currentUserId ?? actualEntityId;
+
             var fileStorage = new FileStorage
             {
                 FileName = $"{fileType.ToLower()}_{actualEntityId}_{DateTime.UtcNow:yyyyMMddHHmmss}{Path.GetExtension(file.FileName)}",
@@ -50,7 +61,7 @@ namespace Services.Implementations
                 FileType = fileType,
                 EntityId = actualEntityId,
                 EntityType = entityType,
-                UploadedBy = actualEntityId, // Assuming the entity ID is the creator
+                UploadedBy = uploadedBy,
                 IsActive = true
             };
 
@@ -236,6 +247,7 @@ namespace Services.Implementations
             return fileType.ToLower() switch
             {
                 "userphoto" => (new[] { ".jpg", ".jpeg", ".png" }, 2 * 1024 * 1024), // 2MB
+                "studentphoto" => (new[] { ".jpg", ".jpeg", ".png" }, 2 * 1024 * 1024), // 2MB
                 "healthcertificate" => (new[] { ".pdf", ".jpg", ".jpeg", ".png" }, 5 * 1024 * 1024), // 5MB
                 "licenseimage" => (new[] { ".jpg", ".jpeg", ".png", ".pdf" }, 5 * 1024 * 1024), // 5MB
                 "document" => (new[] { ".pdf", ".doc", ".docx", ".txt" }, 10 * 1024 * 1024), // 10MB
@@ -278,6 +290,16 @@ namespace Services.Implementations
                         driverLicense.LicenseImageFileId = fileId;
                         driverLicense.UpdatedAt = DateTime.UtcNow;
                         await _driverLicenseRepository.UpdateAsync(driverLicense);
+                    }
+                    break;
+
+                case "student" when fileType.ToLower() == "studentphoto":
+                    var student = await _studentRepository.FindAsync(entityId);
+                    if (student != null)
+                    {
+                        student.StudentImageId = fileId;
+                        student.UpdatedAt = DateTime.UtcNow;
+                        await _studentRepository.UpdateAsync(student);
                     }
                     break;
             }

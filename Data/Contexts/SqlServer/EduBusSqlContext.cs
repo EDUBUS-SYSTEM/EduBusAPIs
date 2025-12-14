@@ -54,6 +54,8 @@ namespace Data.Contexts.SqlServer
 
         public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        public virtual DbSet<DeviceToken> DeviceTokens { get; set; }
+
         public virtual DbSet<DriverLeaveRequest> DriverLeaveRequests { get; set; }
         public virtual DbSet<DriverWorkingHours> DriverWorkingHours { get; set; }
         public virtual DbSet<School> Schools { get; set; }
@@ -61,12 +63,12 @@ namespace Data.Contexts.SqlServer
         public virtual DbSet<FaceEmbedding> FaceEmbeddings { get; set; }
 
 
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-            => optionsBuilder.UseSqlServer(
-                "Server=localhost,49898;Database=edubus_dev_Test1;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
-                sql => sql.UseNetTopologySuite()
-            );
+//        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+//            => optionsBuilder.UseSqlServer(
+//                "Server=localhost;Database=edubus_dev_demo_l3_2;User Id=sa;Password=12345;Trusted_Connection=True;TrustServerCertificate=True",
+//                sql => sql.UseNetTopologySuite()
+//            );
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -335,6 +337,7 @@ namespace Data.Contexts.SqlServer
                 entity.Property(e => e.IsDeleted).HasDefaultValue(false);
                 entity.Property(e => e.LastName).HasMaxLength(200);
                 entity.Property(e => e.PickupPointAssignedAt).HasPrecision(3);
+                entity.Property(e => e.StudentImageId).HasColumnName("StudentImageId");
                 entity.Property(e => e.UpdatedAt)
                     .HasPrecision(3);
                 entity.Property(e => e.Status)
@@ -587,6 +590,36 @@ namespace Data.Contexts.SqlServer
 
                 entity.HasOne(e => e.User)
                       .WithMany()  
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+            //device token entity configuration
+            modelBuilder.Entity<DeviceToken>(entity =>
+            {
+                entity.ToTable("DeviceTokens");
+
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.Token)
+                      .HasMaxLength(500)
+                      .IsRequired();
+
+                entity.Property(e => e.Platform)
+                      .HasMaxLength(50)
+                      .IsRequired();
+
+                entity.HasIndex(e => e.Token);
+                entity.HasIndex(e => e.UserId);
+
+                entity.Property(e => e.CreatedAt)
+                      .HasPrecision(3)
+                      .HasDefaultValueSql("(sysutcdatetime())");
+
+                entity.Property(e => e.IsActive)
+                      .HasDefaultValue(true);
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
                       .HasForeignKey(e => e.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
