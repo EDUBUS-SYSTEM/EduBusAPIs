@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Services.Models.Trip
 {
@@ -106,7 +106,11 @@ namespace Services.Models.Trip
 		public string DeviceId { get; set; } = null!;
 
 		public DateTime? RecognizedAt { get; set; }
+
+		[Required]
+		public string Action { get; set; } = "board";  // "board" or "alight"
 	}
 
 }
+
 

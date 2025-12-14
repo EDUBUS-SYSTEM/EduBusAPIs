@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using Constants;
 using Data.Models;
 using Data.Models.Enums;
@@ -882,7 +882,8 @@ namespace APIs.Controllers
 					pickupPointId = pickupPointId.Value,
 					stopName = stop.Location?.Address ?? "Unknown",
 					arrivedAt = stop.ArrivedAt,
-					sequenceOrder = stop.SequenceOrder
+					sequenceOrder = stop.SequenceOrder,
+					tripType = trip.ScheduleSnapshot?.TripType.ToString() ?? "Unknown"  // NEW: For Jetson action detection
 				});
 			}
 			catch (Exception ex)

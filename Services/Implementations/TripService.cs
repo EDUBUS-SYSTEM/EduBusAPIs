@@ -1,4 +1,4 @@
-﻿using Constants;
+using Constants;
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
@@ -852,7 +852,7 @@ namespace Services.Implementations
 			if (scheduleEnd <= scheduleStart)
 				scheduleEnd = scheduleEnd.AddDays(1);
 
-			// Validate trip times are within reasonable range of schedule times (�30 minutes)
+			// Validate trip times are within reasonable range of schedule times (?30 minutes)
 			var startDiff = Math.Abs((trip.PlannedStartAt - scheduleStart).TotalMinutes);
 			var endDiff = Math.Abs((trip.PlannedEndAt - scheduleEnd).TotalMinutes);
 
@@ -3800,41 +3800,80 @@ namespace Services.Implementations
     
     if (existingAttendance != null)
     {
-        // Update existing record (boarding if not already boarded)
-        if (existingAttendance.BoardStatus == null || existingAttendance.BoardedAt == null)
+        // Update existing record based on action (board or alight)
+        existingAttendance.StudentName = studentName;
+        existingAttendance.RecognitionMethod = Constants.TripConstants.FaceRecognitionConstants.RecognitionMethods.FaceRecognition;
+        
+        if (request.Action.ToLower() == "board")
         {
-            existingAttendance.StudentName = studentName;
-            existingAttendance.BoardStatus = Constants.TripConstants.AttendanceStates.Present;
-            existingAttendance.BoardedAt = timestamp;
-            existingAttendance.RecognitionMethod = Constants.TripConstants.FaceRecognitionConstants.RecognitionMethods.FaceRecognition;
-            
-            // Update or create face recognition data
-            if (existingAttendance.FaceRecognitionData == null)
+            // BOARDING LOGIC
+            if (existingAttendance.BoardStatus == null || existingAttendance.BoardedAt == null)
             {
-                existingAttendance.FaceRecognitionData = new Data.Models.FaceRecognitionData();
+                existingAttendance.BoardStatus = Constants.TripConstants.AttendanceStates.Present;
+                existingAttendance.BoardedAt = timestamp;
+                
+                // Update or create face recognition data
+                if (existingAttendance.FaceRecognitionData == null)
+                {
+                    existingAttendance.FaceRecognitionData = new Data.Models.FaceRecognitionData();
+                }
+                existingAttendance.FaceRecognitionData.Similarity = request.Similarity;
+                existingAttendance.FaceRecognitionData.LivenessScore = request.LivenessScore;
+                existingAttendance.FaceRecognitionData.FramesConfirmed = request.FramesConfirmed;
+                existingAttendance.FaceRecognitionData.DeviceId = request.DeviceId;
+                existingAttendance.FaceRecognitionData.ModelVersion = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1;
+                existingAttendance.FaceRecognitionData.RecognizedAt = timestamp;
+                
+                // Update state
+                if (existingAttendance.AlightStatus == TripConstants.AttendanceStates.Present)
+                {
+                    existingAttendance.State = TripConstants.AttendanceStates.Alighted;
+                }
+                else
+                {
+                    existingAttendance.State = TripConstants.AttendanceStates.Boarded;
+                }
             }
-            existingAttendance.FaceRecognitionData.Similarity = request.Similarity;
-            existingAttendance.FaceRecognitionData.LivenessScore = request.LivenessScore;
-            existingAttendance.FaceRecognitionData.FramesConfirmed = request.FramesConfirmed;
-            existingAttendance.FaceRecognitionData.DeviceId = request.DeviceId;
-            existingAttendance.FaceRecognitionData.ModelVersion = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1;
-            existingAttendance.FaceRecognitionData.RecognizedAt = timestamp;
-            
-            // Update state based on board/alight status
-            if (existingAttendance.AlightStatus == TripConstants.AttendanceStates.Present)
+            else
             {
+                _logger.LogWarning("Student {StudentId} already boarded at stop {StopId}",
+                    request.StudentId, request.PickupPointId);
+                return (false, "Student already boarded at this stop", request.StudentId, existingAttendance.BoardedAt);
+            }
+        }
+        else if (request.Action.ToLower() == "alight")
+        {
+            // ALIGHTING LOGIC
+            if (existingAttendance.AlightStatus == null || existingAttendance.AlightedAt == null)
+            {
+                existingAttendance.AlightStatus = Constants.TripConstants.AttendanceStates.Present;
+                existingAttendance.AlightedAt = timestamp;
+                
+                // Update or create face recognition data for alight
+                if (existingAttendance.FaceRecognitionData == null)
+                {
+                    existingAttendance.FaceRecognitionData = new Data.Models.FaceRecognitionData();
+                }
+                existingAttendance.FaceRecognitionData.Similarity = request.Similarity;
+                existingAttendance.FaceRecognitionData.LivenessScore = request.LivenessScore;
+                existingAttendance.FaceRecognitionData.FramesConfirmed = request.FramesConfirmed;
+                existingAttendance.FaceRecognitionData.DeviceId = request.DeviceId;
+                existingAttendance.FaceRecognitionData.RecognizedAt = timestamp;
+                
+                // Update state - always Alighted when alighting
                 existingAttendance.State = TripConstants.AttendanceStates.Alighted;
             }
-            else if (existingAttendance.BoardStatus == TripConstants.AttendanceStates.Present)
+            else
             {
-                existingAttendance.State = TripConstants.AttendanceStates.Boarded;
+                _logger.LogWarning("Student {StudentId} already alighted at stop {StopId}",
+                    request.StudentId, request.PickupPointId);
+                return (false, "Student already alighted at this stop", request.StudentId, existingAttendance.AlightedAt);
             }
         }
         else
         {
-            _logger.LogWarning("Student {StudentId} already boarded at stop {StopId}",
-                request.StudentId, request.PickupPointId);
-            return (false, "Student already boarded at this stop", request.StudentId, existingAttendance.BoardedAt);
+            _logger.LogError("Invalid action '{Action}' for student {StudentId}", request.Action, request.StudentId);
+            return (false, $"Invalid action: {request.Action}. Must be 'board' or 'alight'", null, null);
         }
     }
     else
@@ -3844,11 +3883,6 @@ namespace Services.Implementations
         {
             StudentId = request.StudentId,
             StudentName = studentName,
-            BoardStatus = Constants.TripConstants.AttendanceStates.Present,
-            BoardedAt = timestamp,
-            AlightStatus = null,
-            AlightedAt = null,
-            State = Constants.TripConstants.AttendanceStates.Boarded,
             RecognitionMethod = Constants.TripConstants.FaceRecognitionConstants.RecognitionMethods.FaceRecognition,
             FaceRecognitionData = new Data.Models.FaceRecognitionData
             {
@@ -3861,10 +3895,60 @@ namespace Services.Implementations
             }
         };
         
+        // Set board or alight based on action
+        if (request.Action.ToLower() == "board")
+        {
+            attendance.BoardStatus = Constants.TripConstants.AttendanceStates.Present;
+            attendance.BoardedAt = timestamp;
+            attendance.State = TripConstants.AttendanceStates.Boarded;
+        }
+        else if (request.Action.ToLower() == "alight")
+        {
+            attendance.AlightStatus = Constants.TripConstants.AttendanceStates.Present;
+            attendance.AlightedAt = timestamp;
+            attendance.State = TripConstants.AttendanceStates.Alighted;
+        }
+        
         stop.Attendance.Add(attendance);
     }
     
-    // 6. Update trip in MongoDB
+    // 6. Check if all students accounted for and auto-set DepartedAt
+    var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+    bool allAccountedFor;
+    
+    if (tripType == TripType.Return)
+    {
+        // Return trip: need both board and alight
+        allAccountedFor = stop.Attendance.All(a =>
+            !string.IsNullOrEmpty(a.BoardStatus) &&
+            (a.BoardStatus == TripConstants.AttendanceStates.Present ||
+             a.BoardStatus == TripConstants.AttendanceStates.Absent) &&
+            !string.IsNullOrEmpty(a.AlightStatus) &&
+            (a.AlightStatus == TripConstants.AttendanceStates.Present ||
+             a.AlightStatus == TripConstants.AttendanceStates.Absent) &&
+            a.BoardedAt.HasValue &&
+            a.AlightedAt.HasValue
+        );
+    }
+    else
+    {
+        // Departure trip: only need board
+        allAccountedFor = stop.Attendance.All(a =>
+            !string.IsNullOrEmpty(a.BoardStatus) &&
+            (a.BoardStatus == TripConstants.AttendanceStates.Present ||
+             a.BoardStatus == TripConstants.AttendanceStates.Absent) &&
+            a.BoardedAt.HasValue
+        );
+    }
+    
+    if (allAccountedFor && stop.ArrivedAt.HasValue && !stop.DepartedAt.HasValue)
+    {
+        stop.DepartedAt = timestamp;
+        _logger.LogInformation("Auto-set DepartedAt for stop {StopId} in trip {TripId} - all students accounted for via face recognition",
+            request.PickupPointId, tripId);
+    }
+    
+    // 7. Update trip in MongoDB
     await tripRepository.UpdateAsync(trip);
     
     _logger.LogInformation("Face recognition attendance recorded: Student {StudentId} ({StudentName}), Stop {StopId}, Similarity {Similarity}",
@@ -3913,14 +3997,14 @@ namespace Services.Implementations
     {
         if (student.ParentId.HasValue)
         {
-            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
-            var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+            var parentNotifTripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var tripTypeText = parentNotifTripType == TripType.Departure ? "Departure Trip" : "Return Trip";
             var serviceDate = trip.ServiceDate.ToString("MMMM dd, yyyy");
 
             var parentNotification = new CreateNotificationDto
             {
                 UserId = student.ParentId.Value,
-                Title = tripType == TripType.Departure ? "Student Boarded Bus" : "Student Picked Up",
+                Title = parentNotifTripType == TripType.Departure ? "Student Boarded Bus" : "Student Picked Up",
                 Message = $"{studentName} has boarded the bus via face recognition ({tripTypeText} - {serviceDate}).",
                 NotificationType = NotificationType.TripInfo,
                 Metadata = new Dictionary<string, object>
@@ -3959,8 +4043,8 @@ namespace Services.Implementations
     {
         if (trip.Supervisor?.Id != null)
         {
-            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
-            var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+            var supervisorNotifTripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var tripTypeText = supervisorNotifTripType == TripType.Departure ? "Departure Trip" : "Return Trip";
 
             var supervisorNotification = new CreateNotificationDto
             {
