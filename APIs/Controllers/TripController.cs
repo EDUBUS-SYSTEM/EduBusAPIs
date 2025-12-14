@@ -883,7 +883,7 @@ namespace APIs.Controllers
 					stopName = stop.Location?.Address ?? "Unknown",
 					arrivedAt = stop.ArrivedAt,
 					sequenceOrder = stop.SequenceOrder,
-					tripType = trip.ScheduleSnapshot?.TripType.ToString() ?? "Unknown"  // NEW: For Jetson action detection
+					totalStops = trip.Stops.Count,
 				});
 			}
 			catch (Exception ex)
