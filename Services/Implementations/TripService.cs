@@ -3426,9 +3426,9 @@ namespace Services.Implementations
 				Stops = new List<StopWithStudents>()
 			};
 
-			// 5. For each stop, get students
-			foreach (var stop in trip.Stops.OrderBy(s => s.SequenceOrder))
-			{
+            // 5. For each stop, get students
+            foreach (var stop in trip.Stops.Where(s => s.PickupPointId != Guid.Empty).OrderBy(s => s.SequenceOrder))
+            {
 				// Get pickup point info
 				var pickupPoint = await pickupPointRepository.FindAsync(stop.PickupPointId);
 				
