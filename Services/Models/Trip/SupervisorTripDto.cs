@@ -51,7 +51,6 @@ namespace Services.Models.Trip
     public class SupervisorTripStopDto
     {
         public Guid PickupPointId { get; set; }
-        public string Name { get; set; } = string.Empty;
         public DateTime PlannedArrival { get; set; }
         public DateTime? ActualArrival { get; set; }
         public DateTime PlannedDeparture { get; set; }
