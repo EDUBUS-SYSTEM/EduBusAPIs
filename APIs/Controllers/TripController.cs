@@ -884,8 +884,10 @@ namespace APIs.Controllers
 					arrivedAt = stop.ArrivedAt,
 					sequenceOrder = stop.SequenceOrder,
 					totalStops = trip.Stops.Count,
+					tripType = trip.ScheduleSnapshot?.TripType.ToString() ?? "Unknown"
 				});
 			}
+
 			catch (Exception ex)
 			{
 				_logger.LogError(ex, "Error getting current stop for trip {TripId}", tripId);
