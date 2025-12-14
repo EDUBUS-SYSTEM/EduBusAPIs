@@ -3792,6 +3792,16 @@ namespace Services.Implementations
     if (student == null)
         throw new ArgumentException($"Student {request.StudentId} not found");
     
+    // 3.5 VALIDATE: Check if student belongs to this pickup point (CRITICAL SECURITY)
+    if (student.CurrentPickupPointId != request.PickupPointId)
+    {
+        _logger.LogWarning("SECURITY: Student {StudentId} ({StudentName}) attempted attendance at WRONG pickup point. " +
+                          "Assigned: {AssignedPickupPoint}, Attempted: {AttemptedPickupPoint}",
+            request.StudentId, $"{student.FirstName} {student.LastName}", 
+            student.CurrentPickupPointId, request.PickupPointId);
+        return (false, "Student not assigned to this pickup point", request.StudentId, null);
+    }
+    
     var timestamp = request.RecognizedAt ?? DateTime.UtcNow;
     var studentName = $"{student.FirstName} {student.LastName}".Trim();
     
