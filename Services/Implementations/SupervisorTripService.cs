@@ -154,7 +154,6 @@ namespace Services.Implementations
 
                     stops.Add(new SupervisorTripStopDto
                     {
-                        Id = stop.PickupPointId,
                         PickupPointId = stop.PickupPointId,
                         Name = stopName,
                         PlannedArrival = stop.PlannedAt,

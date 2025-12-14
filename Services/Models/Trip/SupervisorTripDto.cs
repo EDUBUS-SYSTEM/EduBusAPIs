@@ -50,7 +50,6 @@ namespace Services.Models.Trip
     /// </summary>
     public class SupervisorTripStopDto
     {
-        public Guid Id { get; set; }
         public Guid PickupPointId { get; set; }
         public string Name { get; set; } = string.Empty;
         public DateTime PlannedArrival { get; set; }
