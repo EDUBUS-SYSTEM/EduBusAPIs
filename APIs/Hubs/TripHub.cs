@@ -163,18 +163,7 @@ namespace APIs.Hubs
 		{
 			try
 			{
-				var parentId = GetUserId();
-				var userRole = GetUserRole();
-
-				if (userRole != Roles.Parent || parentId == Guid.Empty)
-				{
-					await Clients.Caller.SendAsync("Error", "Only parents can join trip");
-					return;
-				}
-
 				await Groups.AddToGroupAsync(Context.ConnectionId, $"Trip_{tripId}");
-				_logger.LogInformation("Parent {ParentId} joined trip {TripId}", parentId, tripId);
-
 				await Clients.Caller.SendAsync("JoinedTrip", new { tripId = tripId });
 			}
 			catch (Exception ex)

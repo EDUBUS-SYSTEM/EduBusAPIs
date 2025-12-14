@@ -9,5 +9,6 @@ namespace Services.Contracts
         Task<ImportUsersResult> ImportParentsFromExcelAsync(Stream excelFileStream);
         Task<byte[]> ExportParentsToExcelAsync();
         Task<EnrollChildResponse> EnrollChildAsync(Guid userId, EnrollChildRequest request);
+        Task<ParentTripReportResponse> GetTripReportBySemesterAsync(string parentEmail, string semesterId);
     }
 }

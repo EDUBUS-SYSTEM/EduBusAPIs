@@ -204,6 +204,41 @@ namespace APIs.Controllers
             }
         }
 
+        /// <summary>
+        /// Get available supervisors for a vehicle during a specific time period
+        /// Returns supervisors who are NOT assigned to ANY vehicle during the specified time
+        /// </summary>
+        [HttpGet("vehicle/{vehicleId}/supervisors")]
+        public async Task<ActionResult<object>> GetAvailableSupervisorsForVehicle(
+            Guid vehicleId,
+            [FromQuery] bool availableOnly = false,
+            [FromQuery] DateTime? startTimeUtc = null,
+            [FromQuery] DateTime? endTimeUtc = null,
+            [FromQuery] bool? isActive = null)
+        {
+            try
+            {
+                // If availableOnly is true and time range is provided, get available supervisors
+                if (availableOnly && startTimeUtc.HasValue)
+                {
+                    var availableSupervisors = await _supervisorVehicleService.GetAvailableSupervisorsForVehicleAsync(
+                        vehicleId,
+                        startTimeUtc.Value,
+                        endTimeUtc);
+
+                    return Ok(new { success = true, data = availableSupervisors });
+                }
+                
+                // Otherwise, get assigned supervisors (existing behavior)
+                var result = await _supervisorVehicleService.GetSupervisorsByVehicleAsync(vehicleId, isActive);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving supervisors." });
+            }
+        }
+
         #endregion
 
         #region Create Assignment

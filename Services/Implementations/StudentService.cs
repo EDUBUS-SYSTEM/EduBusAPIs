@@ -14,13 +14,19 @@ namespace Services.Implementations
     {
         private readonly IStudentRepository _studentRepository;
         private readonly IParentRepository _parentRepository;
+        private readonly IFileService _fileService;
         private readonly IMapper _mapper;
 
-        public StudentService(IStudentRepository studentRepository, IParentRepository parentRepository, IMapper mapper)
+        public StudentService(
+            IStudentRepository studentRepository, 
+            IParentRepository parentRepository, 
+            IFileService fileService,
+            IMapper mapper)
         {
             _studentRepository = studentRepository;
             _parentRepository = parentRepository;
             _mapper = mapper;
+            _fileService = fileService;
         }
         public async Task<StudentDto> CreateStudentAsync(CreateStudentRequest request)
         {
@@ -537,6 +543,28 @@ namespace Services.Implementations
                 // If any update fails, throw exception to trigger rollback
                 throw new InvalidOperationException($"Failed to assign students to parent: {ex.Message}", ex);
             }
+        }
+
+        public async Task<Guid> UploadStudentPhotoAsync(Guid studentId, Microsoft.AspNetCore.Http.IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                throw new InvalidOperationException("File is empty.");
+
+            var student = await _studentRepository.FindAsync(studentId);
+            if (student == null)
+                throw new KeyNotFoundException("Student not found.");
+
+            // Upload file to FileStorage using FileService
+            // FileService will automatically update Student.StudentImageId via UpdateEntityWithFileId
+            var fileId = await _fileService.UploadFileAsync(studentId, "Student", "StudentPhoto", file);
+
+            return fileId;
+        }
+
+        public async Task<Guid?> GetStudentPhotoFileIdAsync(Guid studentId)
+        {
+            var student = await _studentRepository.FindAsync(studentId);
+            return student?.StudentImageId;
         }
     }
 }

@@ -246,18 +246,14 @@ namespace APIs.Controllers
         }
 
         /// <summary>
-        /// Get user photo - Users can view their own photo, Admin can view any user's photo
+        /// Get user photo - Any authenticated user can view
         /// </summary>
+        [Authorize]
         [HttpGet("{userId}/user-photo")]
         public async Task<IActionResult> GetUserPhoto(Guid userId)
         {
             try
             {
-                if (!AuthorizationHelper.CanAccessUserData(Request.HttpContext, userId))
-                {
-                    return Forbid();
-                }
-
                 var fileId = await _fileService.GetUserPhotoFileIdAsync(userId);
                 if (!fileId.HasValue)
                     return NotFound("User photo not found.");

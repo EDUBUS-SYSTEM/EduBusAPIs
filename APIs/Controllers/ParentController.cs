@@ -3,7 +3,9 @@ using Services.Contracts;
 using Services.Models.Parent;
 using Services.Models.UserAccount;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using Constants;
+using System.Security.Claims;
 
 namespace APIs.Controllers
 {
@@ -12,9 +14,11 @@ namespace APIs.Controllers
     public class ParentController : ControllerBase
     {
         private readonly IParentService _parentService;
-        public ParentController(IParentService parentService)
+        private readonly ILogger<ParentController> _logger;
+        public ParentController(IParentService parentService, ILogger<ParentController> logger)
         {
             _parentService = parentService;
+            _logger = logger;
         }
         [Authorize(Roles = Roles.Admin)]
         [HttpPost]
@@ -89,6 +93,36 @@ namespace APIs.Controllers
             return File(fileContent,
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         "Parents.xlsx");
+        }
+        
+        [Authorize(Roles = Roles.Parent)]
+        [HttpGet("trip-report/{semesterId}")]
+        public async Task<ActionResult<ParentTripReportResponse>> GetTripReportBySemester([FromRoute] string semesterId)
+        {
+            try
+            {
+                var userEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+                if (string.IsNullOrEmpty(userEmail))
+                {
+                    return Unauthorized(new { message = "User email not found in token." });
+                }
+
+                var report = await _parentService.GetTripReportBySemesterAsync(userEmail, semesterId);
+                return Ok(report);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting trip report for semester {SemesterId}", semesterId);
+                return StatusCode(500, new { message = "An error occurred while retrieving trip report." });
+            }
         }
 
         [HttpPost("enroll-child")]

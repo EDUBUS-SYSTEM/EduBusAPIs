@@ -186,11 +186,18 @@ namespace Services.Implementations
                 };
             }).ToList();
 
+            var parent = await _parentRepo.FindAsync(transaction.ParentId);
+            var primaryItem = transportFeeItems.FirstOrDefault();
+            var primaryStudent = primaryItem != null ? students.FirstOrDefault(s => s.Id == primaryItem.StudentId) : null;
+
             return new TransactionDetailResponseDto
             {
                 Id = transaction.Id,
                 ParentId = transaction.ParentId,
-                ParentEmail = "", // Will be populated from parent service if needed
+                ParentName = parent != null ? $"{parent.FirstName} {parent.LastName}" : string.Empty,
+                ParentEmail = parent?.Email ?? string.Empty,
+                StudentId = primaryItem?.StudentId,
+                StudentName = primaryStudent != null ? $"{primaryStudent.FirstName} {primaryStudent.LastName}" : string.Empty,
                 TransactionCode = transaction.TransactionCode,
                 Status = transaction.Status,
                 Amount = transaction.Amount,
@@ -235,11 +242,18 @@ namespace Services.Implementations
                 };
             }).ToList();
 
+            var parent = await _parentRepo.FindAsync(transaction.ParentId);
+            var primaryItem = transportFeeItems.FirstOrDefault();
+            var primaryStudent = primaryItem != null ? students.FirstOrDefault(s => s.Id == primaryItem.StudentId) : null;
+
             return new TransactionDetailResponseDto
             {
                 Id = transaction.Id,
                 ParentId = transaction.ParentId,
-                ParentEmail = "", // Will be populated from parent service if needed
+                ParentName = parent != null ? $"{parent.FirstName} {parent.LastName}" : string.Empty,
+                ParentEmail = parent?.Email ?? string.Empty,
+                StudentId = primaryItem?.StudentId,
+                StudentName = primaryStudent != null ? $"{primaryStudent.FirstName} {primaryStudent.LastName}" : string.Empty,
                 TransactionCode = transaction.TransactionCode,
                 Status = transaction.Status,
                 Amount = transaction.Amount,
@@ -258,7 +272,8 @@ namespace Services.Implementations
             if (request.FromDate.HasValue && request.ToDate.HasValue && request.FromDate.Value > request.ToDate.Value)
                 throw new ArgumentException("FromDate cannot be greater than ToDate");
 
-            var query = _transactionRepo.GetQueryable().Where(t => !t.IsDeleted);
+            IQueryable<Transaction> query = _transactionRepo.GetQueryable()
+                .Where(t => !t.IsDeleted);
 
             // Apply filters
             if (request.ParentId.HasValue)
@@ -276,6 +291,11 @@ namespace Services.Implementations
             if (request.ToDate.HasValue)
                 query = query.Where(t => t.CreatedAt <= request.ToDate.Value);
 
+            query = query
+                .Include(t => t.Parent)
+                .Include(t => t.TransportFeeItems.Where(tfi => !tfi.IsDeleted))
+                    .ThenInclude(tfi => tfi.Student);
+
             // Get total count
             var totalCount = await query.CountAsync();
 
@@ -287,18 +307,33 @@ namespace Services.Implementations
                 .ToListAsync();
 
             // Map to DTOs
-            var transactionSummaries = transactions.Select(t => new TransactionSummary
+            var transactionSummaries = transactions.Select(t =>
             {
-                Id = t.Id,
-                TransactionCode = t.TransactionCode,
-                Status = t.Status,
-                Amount = t.Amount,
-                Currency = t.Currency,
-                Description = t.Description,
-                CreatedAt = t.CreatedAt,
-                PaidAtUtc = t.PaidAtUtc,
-                ParentId = t.ParentId,
-                StudentCount = 0 // Will be calculated separately if needed
+                var firstItem = t.TransportFeeItems?.FirstOrDefault();
+                var studentName = firstItem?.Student != null
+                    ? $"{firstItem.Student.FirstName} {firstItem.Student.LastName}"
+                    : string.Empty;
+                var parentName = t.Parent != null
+                    ? $"{t.Parent.FirstName} {t.Parent.LastName}"
+                    : string.Empty;
+
+                return new TransactionSummary
+                {
+                    Id = t.Id,
+                    TransactionCode = t.TransactionCode,
+                    Status = t.Status,
+                    Amount = t.Amount,
+                    Currency = t.Currency,
+                    Description = t.Description,
+                    CreatedAt = t.CreatedAt,
+                    PaidAtUtc = t.PaidAtUtc,
+                    ParentId = t.ParentId,
+                    ParentName = parentName,
+                    ParentEmail = t.Parent?.Email ?? string.Empty,
+                    StudentId = firstItem?.StudentId,
+                    StudentName = studentName,
+                    StudentCount = t.TransportFeeItems?.Count ?? 0
+                };
             }).ToList();
 
             return new TransactionListResponseDto
@@ -320,17 +355,33 @@ namespace Services.Implementations
             var (transactions, totalCount) = await _transactionRepo.GetTransactionsByStudentAsync(studentId, page, pageSize);
 
             // Map to DTOs
-            var transactionSummaries = transactions.Select(t => new TransactionSummary
+            var transactionSummaries = transactions.Select(t =>
             {
-                Id = t.Id,
-                TransactionCode = t.TransactionCode,
-                Status = t.Status,
-                Amount = t.Amount,
-                Currency = t.Currency,
-                Description = t.Description,
-                CreatedAt = t.CreatedAt,
-                PaidAtUtc = t.PaidAtUtc,
-                ParentId = t.ParentId
+                var firstItem = t.TransportFeeItems?.FirstOrDefault();
+                var studentName = firstItem?.Student != null
+                    ? $"{firstItem.Student.FirstName} {firstItem.Student.LastName}"
+                    : string.Empty;
+                var parentName = t.Parent != null
+                    ? $"{t.Parent.FirstName} {t.Parent.LastName}"
+                    : string.Empty;
+
+                return new TransactionSummary
+                {
+                    Id = t.Id,
+                    TransactionCode = t.TransactionCode,
+                    Status = t.Status,
+                    Amount = t.Amount,
+                    Currency = t.Currency,
+                    Description = t.Description,
+                    CreatedAt = t.CreatedAt,
+                    PaidAtUtc = t.PaidAtUtc,
+                    ParentId = t.ParentId,
+                    ParentName = parentName,
+                    ParentEmail = t.Parent?.Email ?? string.Empty,
+                    StudentId = firstItem?.StudentId,
+                    StudentName = studentName,
+                    StudentCount = t.TransportFeeItems?.Count ?? 0
+                };
             }).ToList();
 
             return new TransactionListResponseDto

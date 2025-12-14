@@ -70,6 +70,7 @@ namespace Services.Models.Trip
         public Guid StudentId { get; set; }
         public string StudentName { get; set; } = string.Empty;
         public string ClassName { get; set; } = string.Empty;
+        public Guid? StudentImageId { get; set; }
         public DateTime? BoardedAt { get; set; }
         public DateTime? AlightedAt { get; set; }
         public string State { get; set; } = string.Empty;

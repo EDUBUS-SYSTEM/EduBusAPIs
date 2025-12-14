@@ -60,6 +60,7 @@ namespace Services.Contracts
 		// Parent-specific trip operations
 		Task<IEnumerable<Trip>> GetTripsByScheduleForParentAsync(string parentEmail, int days = 7);
 		Task<IEnumerable<Trip>> GetTripsByDateForParentAsync(string parentEmail, DateTime? date = null);
+		Task<IEnumerable<Trip>> GetTripsByDateRangeForParentAsync(string parentEmail, DateTime startDate, DateTime endDate);
 		Task<Trip?> GetTripDetailForParentAsync(Guid tripId, string parentEmail);
 		Task<Trip.VehicleLocation?> GetTripCurrentLocationAsync(Guid tripId, string parentEmail);
         Task<IEnumerable<Guid>> GetParentsForPickupPointAsync(Guid tripId, Guid pickupPointId);

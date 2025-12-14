@@ -17,6 +17,7 @@ using Services.Models.Student;
 using Services.Models.StudentAbsenceRequest;
 using Services.Models.StudentGrade;
 using Services.Models.Trip;
+using Services.Models.TripIncident;
 using Services.Models.UnitPrice;
 using Services.Models.UserAccount;
 using Services.Models.Vehicle;
@@ -255,6 +256,10 @@ namespace Services.MapperProfiles
 
             CreateMap<StudentAbsenceRequest, StudentAbsenceRequestResponseDto>();
             CreateMap<StudentAbsenceRequest, StudentAbsenceRequestListItemDto>();
+
+            // Trip incident mappings
+            CreateMap<TripIncidentReport, TripIncidentResponseDto>();
+            CreateMap<TripIncidentReport, TripIncidentListItemDto>();
 
             // EnrollmentSemesterSettings mappings
             CreateMap<EnrollmentSemesterSettings, EnrollmentSemesterSettingsDto>();

@@ -4,10 +4,13 @@ using Data.Models.Enums;
 using Data.Repos.Interfaces;
 using Services.Contracts;
 using Services.Models.Driver;
+using Services.Models.Notification;
 using Microsoft.Extensions.Logging;
 using Utils;
 using Microsoft.EntityFrameworkCore;
 using Services.Models.Common;
+using Constants;
+using Route = Data.Models.Route;
 namespace Services.Implementations
 {
     public class DriverLeaveService : IDriverLeaveService
@@ -17,6 +20,9 @@ namespace Services.Implementations
         private readonly IDriverVehicleRepository _driverVehicleRepo;
         private readonly INotificationService _notificationService;
         private readonly IConfigurationService _configurationService;
+        private readonly ITripService _tripService;
+        private readonly IDatabaseFactory _databaseFactory;
+        private readonly IEmailService _emailService;
         private readonly IMapper _mapper;
         private readonly ILogger<DriverLeaveService> _logger;
 
@@ -26,6 +32,9 @@ namespace Services.Implementations
             IDriverVehicleRepository driverVehicleRepo,
             INotificationService notificationService,
             IConfigurationService configurationService,
+            ITripService tripService,
+            IDatabaseFactory databaseFactory,
+            IEmailService emailService,
             IMapper mapper,
             ILogger<DriverLeaveService> logger)
         {
@@ -34,6 +43,9 @@ namespace Services.Implementations
             _driverVehicleRepo = driverVehicleRepo;
             _notificationService = notificationService;
             _configurationService = configurationService;
+            _tripService = tripService;
+            _databaseFactory = databaseFactory;
+            _emailService = emailService;
             _mapper = mapper;
             _logger = logger;
         }
@@ -55,15 +67,19 @@ namespace Services.Implementations
                  throw new InvalidOperationException("Driver must have an active vehicle assignment before requesting leave.");
              }
 
+            // Normalize start/end to day boundaries
+            var startOfDay = dto.StartDate.Date;                 // 00:00:00
+            var endOfDay = dto.EndDate.Date.AddDays(1).AddTicks(-1); // 23:59:59.9999999
+
             // Validate start date is not in the past
             var today = DateTime.UtcNow.Date;
-            if (dto.StartDate < today)
+            if (startOfDay < today)
             {
                 _logger.LogWarning("Leave request rejected: Start date {StartDate} is in the past. Current date: {CurrentDate}",
                     dto.StartDate, today);
-                throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {dto.StartDate:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
+                throw new InvalidOperationException($"Leave start date cannot be in the past. Start date: {startOfDay:yyyy-MM-dd}, Current date: {today:yyyy-MM-dd}");
             }
-            if (dto.EndDate < dto.StartDate)
+            if (endOfDay < startOfDay)
             {
                 throw new InvalidOperationException("Leave end date cannot be before start date.");
             }
@@ -85,7 +101,7 @@ namespace Services.Implementations
                 : minimumAdvanceTime;
             
             // Validate advance notice requirement
-            if (dto.StartDate < requiredAdvanceTime)
+            if (startOfDay < requiredAdvanceTime)
             {
                 var hoursRequired = isEmergencyLeave && settings.AllowEmergencyLeaveRequests 
                     ? settings.EmergencyLeaveAdvanceNoticeHours 
@@ -104,17 +120,13 @@ namespace Services.Implementations
                 throw new InvalidOperationException(errorMessage);
             }
 
-            // Check for overlapping leave requests
-            var normalizedStartDate = dto.StartDate.Date; // 00:00:00.000
-            var normalizedEndDate = dto.EndDate.Date.AddDays(1).AddTicks(-1); // 23:59:59.999
-
             // Check for overlapping leave requests with normalized dates
             var hasOverlappingLeave = await _leaveRepo.HasOverlappingLeaveAsync(
-                dto.DriverId, normalizedStartDate, normalizedEndDate);
+                dto.DriverId, startOfDay, endOfDay);
             if (hasOverlappingLeave)
             {
                 // Get detailed information about overlapping leaves
-                var overlappingLeaves = await _leaveRepo.GetLeavesByDriverAndDateRangeAsync(dto.DriverId, dto.StartDate, dto.EndDate);
+                var overlappingLeaves = await _leaveRepo.GetLeavesByDriverAndDateRangeAsync(dto.DriverId, startOfDay, endOfDay);
                 var activeOverlappingLeaves = overlappingLeaves.Where(l => l.Status == LeaveStatus.Pending || l.Status == LeaveStatus.Approved).ToList();
                 
                 if (activeOverlappingLeaves.Any())
@@ -136,12 +148,14 @@ namespace Services.Implementations
             entity.Id = Guid.NewGuid();
             entity.RequestedAt = DateTime.UtcNow;
             entity.Status = LeaveStatus.Pending;
+            entity.StartDate = startOfDay;
+            entity.EndDate = endOfDay;
             var created = await _leaveRepo.AddAsync(entity);
             
             // Send notification to admin about new leave request
             try
             {
-                var message = $"New leave request from {driver?.FirstName} {driver?.LastName} for {dto.LeaveType} from {dto.StartDate:yyyy-MM-dd} to {dto.EndDate:yyyy-MM-dd}";
+                var message = $"New leave request from {driver?.FirstName} {driver?.LastName} for {dto.LeaveType} from {startOfDay:yyyy-MM-dd} to {endOfDay:yyyy-MM-dd}";
                 
                 var metadata = new Dictionary<string, object>
                 {
@@ -190,36 +204,17 @@ namespace Services.Implementations
                 throw new InvalidOperationException($"Cannot approve leave request. Leave start date ({entity.StartDate:yyyy-MM-dd}) must be after today ({today:yyyy-MM-dd}).");
             }
             
-            // Lưu thông tin replacement driver nếu có
             if (dto.ReplacementDriverId.HasValue)
             {
-                entity.SuggestedReplacementDriverId = dto.ReplacementDriverId.Value;
-                entity.SuggestionGeneratedAt = DateTime.UtcNow;
+                await ProcessReplacementDriverAssignmentAsync(entity, dto.ReplacementDriverId.Value, adminId);
             }
             
-            // TODO: Commented out validation for EffectiveFrom/EffectiveTo as these properties are not being used effectively
-            // The validation only checks if dates match but doesn't provide real value
-            // Consider removing these properties entirely or implementing proper functionality
-            /*
-            if (dto.EffectiveFrom.HasValue && dto.EffectiveFrom.Value != entity.StartDate)
-            {
-                throw new InvalidOperationException("EffectiveFrom date must match the leave request start date.");
-            }
-            
-            if (dto.EffectiveTo.HasValue && dto.EffectiveTo.Value != entity.EndDate)
-            {
-                throw new InvalidOperationException("EffectiveTo date must match the leave request end date.");
-            }
-            */
-            
-            //entity.Status = dto.IsApproved ? LeaveStatus.Approved : LeaveStatus.Rejected;
             entity.Status = LeaveStatus.Approved;
             entity.ApprovedAt = DateTime.UtcNow;
             entity.ApprovedByAdminId = adminId;
             entity.ApprovalNote = dto.Notes;
             var updated = await _leaveRepo.UpdateAsync(entity);
             
-            // Send notification to driver about approval/rejection
             try
             {
                 var driver = await _driverRepo.FindAsync(entity.DriverId);
@@ -239,21 +234,33 @@ namespace Services.Implementations
                 
                 var metadata = new Dictionary<string, object>
                 {
-                    ["leaveRequestId"] = entity.Id,
-                    ["driverId"] = entity.DriverId,
-                    ["adminId"] = adminId,
+                    ["leaveRequestId"] = entity.Id.ToString(),
+                    ["driverId"] = entity.DriverId.ToString(),
+                    ["adminId"] = adminId.ToString(),
                     ["status"] = entity.Status.ToString(),
                     ["approvalNote"] = dto.Notes ?? "",
                     ["replacementDriverId"] = dto.ReplacementDriverId?.ToString() ?? ""
                 };
-                
-                await _notificationService.CreateDriverLeaveNotificationAsync(
-                    entity.Id, 
-                    NotificationType.LeaveApproval, 
-                    message, 
-                    metadata
-                );
-                
+
+                var approvalNotification = new CreateNotificationDto
+                {
+                    UserId = entity.DriverId,
+                    Title = "Leave request update",
+                    Message = message,
+                    NotificationType = NotificationType.LeaveApproval,
+                    RecipientType = RecipientType.Driver,
+                    Priority = 2,
+                    RelatedEntityId = entity.Id,
+                    RelatedEntityType = "DriverLeaveRequest",
+                    ActionRequired = false,
+                    ActionUrl = null,
+                    ExpiresAt = DateTime.UtcNow.AddDays(30),
+                    Metadata = metadata
+                };
+
+                _logger.LogInformation("Sending leave approval notification to driver {DriverId} for leave {LeaveId}", entity.DriverId, entity.Id);
+                await _notificationService.CreateNotificationAsync(approvalNotification);
+                _logger.LogInformation("Sent leave approval notification to driver {DriverId} for leave {LeaveId}", entity.DriverId, entity.Id);
                 _logger.LogInformation("Created leave approval notification for leave {LeaveId}", entity.Id);
             }
             catch (Exception ex)
@@ -323,18 +330,31 @@ namespace Services.Implementations
                 
                 var metadata = new Dictionary<string, object>
                 {
-                    ["leaveRequestId"] = entity.Id,
-                    ["driverId"] = entity.DriverId,
-                    ["adminId"] = adminId,
+                    ["leaveRequestId"] = entity.Id.ToString(),
+                    ["driverId"] = entity.DriverId.ToString(),
+                    ["adminId"] = adminId.ToString(),
                     ["rejectionReason"] = dto.Reason
                 };
-                
-                await _notificationService.CreateDriverLeaveNotificationAsync(
-                    entity.Id, 
-                    NotificationType.LeaveApproval, 
-                    message, 
-                    metadata
-                );
+
+                var rejectionNotification = new CreateNotificationDto
+                {
+                    UserId = entity.DriverId,
+                    Title = "Leave request update",
+                    Message = message,
+                    NotificationType = NotificationType.LeaveApproval,
+                    RecipientType = RecipientType.Driver,
+                    Priority = 2,
+                    RelatedEntityId = entity.Id,
+                    RelatedEntityType = "DriverLeaveRequest",
+                    ActionRequired = false,
+                    ActionUrl = null,
+                    ExpiresAt = DateTime.UtcNow.AddDays(30),
+                    Metadata = metadata
+                };
+
+                _logger.LogInformation("Sending leave rejection notification to driver {DriverId} for leave {LeaveId}", entity.DriverId, entity.Id);
+                await _notificationService.CreateNotificationAsync(rejectionNotification);
+                _logger.LogInformation("Sent leave rejection notification to driver {DriverId} for leave {LeaveId}", entity.DriverId, entity.Id);
                 
                 _logger.LogInformation("Created leave rejection notification for leave {LeaveId}", entity.Id);
             }
@@ -635,6 +655,306 @@ namespace Services.Implementations
                 _logger.LogError(ex, "Error getting active replacement matches");
                 return new List<DriverReplacementMatchDto>();
             }
+        }
+
+        private async Task ProcessReplacementDriverAssignmentAsync(DriverLeaveRequest leaveRequest, Guid replacementDriverId, Guid adminId)
+        {
+            leaveRequest.SuggestedReplacementDriverId = replacementDriverId;
+            leaveRequest.SuggestionGeneratedAt = DateTime.UtcNow;
+            
+            var replacementDriver = await _driverRepo.FindAsync(replacementDriverId);
+            if (replacementDriver == null || replacementDriver.IsDeleted)
+            {
+                throw new InvalidOperationException("Replacement driver not found.");
+            }
+            
+            var primaryVehicle = await _driverVehicleRepo.GetPrimaryVehicleForDriverAsync(leaveRequest.DriverId);
+            if (primaryVehicle == null)
+            {
+                throw new InvalidOperationException("Driver has no primary vehicle assignment.");
+            }
+            
+            var createdAssignment = await CreateTemporaryDriverVehicleAssignmentAsync(
+                replacementDriverId, 
+                primaryVehicle.VehicleId, 
+                leaveRequest.StartDate, 
+                leaveRequest.EndDate, 
+                adminId,
+                leaveRequest.Id);
+            
+            leaveRequest.SuggestedReplacementVehicleId = primaryVehicle.VehicleId;
+            
+            await UpdateTripsWithReplacementDriverAsync(
+                primaryVehicle.VehicleId, 
+                leaveRequest.StartDate, 
+                leaveRequest.EndDate, 
+                createdAssignment.Id, 
+                replacementDriver);
+            
+            await SendReplacementDriverNotificationAsync(leaveRequest, replacementDriver, primaryVehicle.VehicleId);
+            
+            await SendReplacementDriverEmailAsync(replacementDriver, leaveRequest.StartDate, leaveRequest.EndDate);
+        }
+
+        private async Task<DriverVehicle> CreateTemporaryDriverVehicleAssignmentAsync(
+            Guid driverId, 
+            Guid vehicleId, 
+            DateTime startDate, 
+            DateTime endDate, 
+            Guid adminId,
+            Guid leaveRequestId)
+        {
+            var startTime = startDate.Date;
+            var endTime = endDate.Date.AddDays(1).AddTicks(-1);
+            
+            var tempAssignment = new DriverVehicle
+            {
+                Id = Guid.NewGuid(),
+                DriverId = driverId,
+                VehicleId = vehicleId,
+                IsPrimaryDriver = false,
+                StartTimeUtc = startTime,
+                EndTimeUtc = endTime,
+                Status = DriverVehicleStatus.Assigned,
+                AssignedByAdminId = adminId,
+                AssignmentReason = $"Temporary replacement for driver on leave from {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}"
+            };
+            
+            var createdAssignment = await _driverVehicleRepo.AssignDriverAsync(tempAssignment);
+            _logger.LogInformation("Created temporary DriverVehicle assignment {AssignmentId} for replacement driver {DriverId}", 
+                createdAssignment.Id, driverId);
+            
+            return createdAssignment;
+        }
+
+        private async Task UpdateTripsWithReplacementDriverAsync(
+            Guid vehicleId, 
+            DateTime startDate, 
+            DateTime endDate, 
+            Guid driverVehicleId, 
+            Driver replacementDriver)
+        {
+            try
+            {
+                var tripRepo = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+                var routeRepo = _databaseFactory.GetRepositoryByType<IMongoRepository<Route>>(DatabaseType.MongoDb);
+                
+                _logger.LogInformation("Searching trips for vehicle {VehicleId} from {StartDate} to {EndDate}", 
+                    vehicleId, startDate, endDate);
+                
+                var allTrips = new List<Trip>();
+                
+                var tripsByVehicle = await tripRepo.GetTripsByVehicleAndDateRangeAsync(vehicleId, startDate, endDate);
+                allTrips.AddRange(tripsByVehicle);
+                
+                var routes = await routeRepo.FindByConditionAsync(r => r.VehicleId == vehicleId && r.IsActive && !r.IsDeleted);
+                foreach (var route in routes)
+                {
+                    var routeTrips = await tripRepo.GetTripsByRouteAsync(route.Id);
+                    var filteredRouteTrips = routeTrips.Where(t => 
+                        !t.IsDeleted && 
+                        t.ServiceDate.Date >= startDate.Date && 
+                        t.ServiceDate.Date <= endDate.Date);
+                    allTrips.AddRange(filteredRouteTrips);
+                }
+                
+                var uniqueTrips = allTrips
+                    .Where(t => !t.IsDeleted && 
+                                t.ServiceDate.Date >= startDate.Date && 
+                                t.ServiceDate.Date <= endDate.Date)
+                    .GroupBy(t => t.Id)
+                    .Select(g => g.First())
+                    .ToList();
+                
+                _logger.LogInformation("Found {Count} unique trips for vehicle {VehicleId} in date range", uniqueTrips.Count, vehicleId);
+                
+                var updatedCount = 0;
+                foreach (var trip in uniqueTrips)
+                {
+                    _logger.LogInformation("Updating trip {TripId} (ServiceDate: {ServiceDate}, RouteId: {RouteId}, CurrentDriverVehicleId: {CurrentDriverVehicleId}) with replacement driver {DriverId} (DriverVehicleId: {DriverVehicleId})", 
+                        trip.Id, trip.ServiceDate, trip.RouteId, trip.DriverVehicleId, replacementDriver.Id, driverVehicleId);
+                    
+                    var originalDriverVehicleId = trip.DriverVehicleId;
+                    
+                    trip.DriverVehicleId = driverVehicleId;
+                    trip.Driver = new Trip.DriverSnapshot
+                    {
+                        Id = replacementDriver.Id,
+                        FullName = $"{replacementDriver.FirstName} {replacementDriver.LastName}".Trim(),
+                        Phone = replacementDriver.PhoneNumber ?? string.Empty,
+                        IsPrimary = false,
+                        SnapshottedAtUtc = DateTime.UtcNow
+                    };
+                    
+                    var updatedTrip = await _tripService.UpdateTripAsync(trip);
+                    if (updatedTrip != null)
+                    {
+                        if (updatedTrip.DriverVehicleId == driverVehicleId && updatedTrip.Driver?.Id == replacementDriver.Id)
+                        {
+                            updatedCount++;
+                            _logger.LogInformation("Successfully updated trip {TripId} with replacement driver {DriverId} (DriverVehicleId: {DriverVehicleId})", 
+                                trip.Id, replacementDriver.Id, driverVehicleId);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Trip {TripId} was updated but driver info doesn't match. Expected DriverVehicleId: {ExpectedDriverVehicleId}, Got: {ActualDriverVehicleId}. Expected DriverId: {ExpectedDriverId}, Got: {ActualDriverId}", 
+                                trip.Id, driverVehicleId, updatedTrip.DriverVehicleId, replacementDriver.Id, updatedTrip.Driver?.Id);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to update trip {TripId} - UpdateTripAsync returned null", trip.Id);
+                    }
+                }
+                
+                _logger.LogInformation("Updated {Count} out of {Total} trips with replacement driver {DriverId}", 
+                    updatedCount, uniqueTrips.Count, replacementDriver.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating trips with replacement driver {DriverId}", replacementDriver.Id);
+                throw;
+            }
+        }
+
+        private async Task SendReplacementDriverNotificationAsync(
+            DriverLeaveRequest leaveRequest, 
+            Driver replacementDriver, 
+            Guid vehicleId)
+        {
+            try
+            {
+                var messageEn = $"You have been assigned as a replacement driver from {leaveRequest.StartDate:yyyy-MM-dd} to {leaveRequest.EndDate:yyyy-MM-dd}. Please check your work schedule.";
+                
+                var notificationMetadata = new Dictionary<string, object>
+                {
+                    ["leaveRequestId"] = leaveRequest.Id.ToString(),
+                    ["replacementDriverId"] = replacementDriver.Id.ToString(),
+                    ["startDate"] = leaveRequest.StartDate,
+                    ["endDate"] = leaveRequest.EndDate,
+                    ["vehicleId"] = vehicleId.ToString()
+                };
+                
+                _logger.LogInformation("Creating notification for replacement driver {DriverId} (UserId: {UserId}) at email {Email}", 
+                    replacementDriver.Id, replacementDriver.Id, replacementDriver.Email);
+                
+                var notificationDto = new CreateNotificationDto
+                {
+                    UserId = replacementDriver.Id,
+                    Title = "Replacement assignment",
+                    Message = messageEn,
+                    NotificationType = NotificationType.ReplacementTrip,
+                    RecipientType = RecipientType.Driver,
+                    Priority = 2,
+                    RelatedEntityId = leaveRequest.Id,
+                    RelatedEntityType = "DriverLeaveRequest",
+                    ActionRequired = false,
+                    ActionUrl = null,
+                    ExpiresAt = DateTime.UtcNow.AddDays(30),
+                    Metadata = notificationMetadata
+                };
+                
+                _logger.LogInformation("Sending replacement trip notification to driver {DriverId} for leave {LeaveId}", replacementDriver.Id, leaveRequest.Id);
+                await _notificationService.CreateNotificationAsync(notificationDto);
+                _logger.LogInformation("Sent replacement trip notification to driver {DriverId} for leave {LeaveId}", replacementDriver.Id, leaveRequest.Id);
+                
+                _logger.LogInformation("Successfully sent notification to replacement driver {DriverId} (UserId: {UserId})", 
+                    replacementDriver.Id, replacementDriver.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending notification to replacement driver {DriverId} (UserId: {UserId})", 
+                    replacementDriver.Id, replacementDriver.Id);
+            }
+        }
+
+        private async Task SendReplacementDriverEmailAsync(Driver replacementDriver, DateTime startDate, DateTime endDate)
+        {
+            try
+            {
+                var emailSubject = "Phân công tài xế thay thế | Replacement Driver Assignment";
+                var (_, emailBody) = CreateReplacementDriverEmailTemplate(
+                    replacementDriver.FirstName, 
+                    replacementDriver.LastName, 
+                    startDate, 
+                    endDate);
+
+                await _emailService.SendEmailAsync(replacementDriver.Email, emailSubject, emailBody);
+                _logger.LogInformation("Sent email to replacement driver {DriverId} at {Email}", replacementDriver.Id, replacementDriver.Email);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error sending email to replacement driver {DriverId}", replacementDriver.Id);
+            }
+        }
+
+        private (string subject, string body) CreateReplacementDriverEmailTemplate(string firstName, string lastName, DateTime startDate, DateTime endDate)
+        {
+            var subject = "Phân công tài xế thay thế | Replacement Driver Assignment";
+            
+            var body = $@"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+</head>
+<body style=""margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;"">
+    <div style=""max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px;"">
+        <h2 style=""color: #2E7D32; margin-top: 0;"">🚌 Phân công tài xế thay thế</h2>
+        
+        <p>Kính gửi <strong>{firstName} {lastName}</strong>,</p>
+        
+        <p>Bạn đã được chỉ định làm <strong>tài xế thay thế</strong> từ <strong>{startDate:dd/MM/yyyy}</strong> đến <strong>{endDate:dd/MM/yyyy}</strong>.</p>
+        
+        <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
+            <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Thông tin phân công:</h3>
+            <p style=""margin: 10px 0;""><strong>Ngày bắt đầu:</strong> {startDate:dd/MM/yyyy}</p>
+            <p style=""margin: 10px 0;""><strong>Ngày kết thúc:</strong> {endDate:dd/MM/yyyy}</p>
+            <p style=""margin: 10px 0;""><strong>Vai trò:</strong> Tài xế thay thế</p>
+        </div>
+        
+        <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
+            <h3 style=""color: #F57C00; margin-top: 0;"">📋 Hướng dẫn:</h3>
+            <p style=""margin: 10px 0;"">Vui lòng <strong>kiểm tra lịch làm việc</strong> của bạn trong ứng dụng EduBus để xem các chuyến xe được phân công trong khoảng thời gian này.</p>
+            <p style=""margin: 10px 0;"">Đảm bảo bạn đã nắm rõ lịch trình và sẵn sàng thực hiện các chuyến xe được giao.</p>
+        </div>
+        
+        <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ bộ phận quản lý.</p>
+        
+        <p style=""margin-top: 30px;"">Trân trọng,<br>
+        <strong style=""color: #2E7D32;"">Đội ngũ quản lý EduBus</strong></p>
+        
+        <hr style=""border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;"">
+        
+        <h2 style=""color: #2E7D32;"">🚌 Replacement Driver Assignment</h2>
+        
+        <p>Dear <strong>{firstName} {lastName}</strong>,</p>
+        
+        <p>You have been assigned as a <strong>replacement driver</strong> from <strong>{startDate:yyyy-MM-dd}</strong> to <strong>{endDate:yyyy-MM-dd}</strong>.</p>
+        
+        <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
+            <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Assignment Information:</h3>
+            <p style=""margin: 10px 0;""><strong>Start Date:</strong> {startDate:yyyy-MM-dd}</p>
+            <p style=""margin: 10px 0;""><strong>End Date:</strong> {endDate:yyyy-MM-dd}</p>
+            <p style=""margin: 10px 0;""><strong>Role:</strong> Replacement Driver</p>
+        </div>
+        
+        <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
+            <h3 style=""color: #F57C00; margin-top: 0;"">📋 Instructions:</h3>
+            <p style=""margin: 10px 0;"">Please <strong>check your work schedule</strong> in the EduBus app to view trip assignments during this period.</p>
+            <p style=""margin: 10px 0;"">Ensure you are familiar with the schedule and ready to perform the assigned trips.</p>
+        </div>
+        
+        <p>If you have any questions, please contact the management team.</p>
+        
+        <p style=""margin-top: 30px;"">Best regards,<br>
+        <strong style=""color: #2E7D32;"">EduBus Management Team</strong></p>
+    </div>
+</body>
+</html>";
+
+            return (subject, body);
         }
     }
 }

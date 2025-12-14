@@ -1,4 +1,4 @@
-﻿using Data.Models;
+using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -100,6 +100,97 @@ namespace APIs.Controllers
                 },
                 error = (object?)null
             });
+        }
+
+        // POST /auth/send-otp
+        [HttpPost("send-otp")]
+        public async Task<IActionResult> SendOtp([FromBody] SendOtpRequest request)
+        {
+            var result = await _authService.SendOtpAsync(request.Email);
+            if (!result)
+            {
+                return NotFound(new
+                {
+                    success = false,
+                    data = (object?)null,
+                    error = new { code = "USER_NOT_FOUND", message = "No user found with this email" }
+                });
+            }
+
+            return Ok(new
+            {
+                success = true,
+                data = new { message = "OTP sent successfully to your email" },
+                error = (object?)null
+            });
+        }
+
+        // POST /auth/verify-otp-reset
+        [HttpPost("verify-otp-reset")]
+        public async Task<IActionResult> VerifyOtpReset([FromBody] PasswordResetOtpRequest request)
+        {
+            try
+            {
+                var result = await _authService.VerifyOtpAndResetPasswordAsync(request.Email, request.OtpCode, request.NewPassword);
+                if (!result)
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        data = (object?)null,
+                        error = new { code = "INVALID_OTP", message = "Invalid or expired OTP code" }
+                    });
+                }
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new { message = "Password reset successfully" },
+                    error = (object?)null
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    data = (object?)null,
+                    error = new { code = "VALIDATION_ERROR", message = ex.Message }
+                });
+            }
+        }
+
+        // POST /auth/change-password
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
+                {
+                    return Unauthorized();
+                }
+
+                await _authService.ChangePasswordAsync(Guid.Parse(userId), request.CurrentPassword, request.NewPassword);
+
+                return Ok(new
+                {
+                    success = true,
+                    data = new { message = "Password changed successfully" },
+                    error = (object?)null
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    data = (object?)null,
+                    error = new { code = "VALIDATION_ERROR", message = ex.Message }
+                });
+            }
         }
 
     }

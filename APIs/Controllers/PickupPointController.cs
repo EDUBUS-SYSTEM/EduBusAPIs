@@ -4,6 +4,7 @@ using Services.Contracts;
 using Services.Models.PickupPoint;
 using System.ComponentModel.DataAnnotations;
 using Constants;
+using System.Security.Claims;
 
 namespace APIs.Controllers
 {
@@ -85,6 +86,42 @@ namespace APIs.Controllers
 			return Ok(result);
 		}
 
+
+
+		[HttpGet("parent/requests")]
+		[Authorize(Roles = Roles.Parent)]
+		[ProducesResponseType(typeof(List<PickupPointRequestDetailDto>), StatusCodes.Status200OK)]
+		[ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+		public async Task<IActionResult> GetParentRequests(
+			[FromQuery] string? status,
+			[FromQuery, Range(0, int.MaxValue)] int skip = 0,
+			[FromQuery, Range(1, 200)] int take = 50)
+		{
+			var parentEmail = User.FindFirst(ClaimTypes.Email)?.Value
+				?? User.FindFirst("email")?.Value
+				?? User.FindFirst("Email")?.Value;
+
+			if (string.IsNullOrWhiteSpace(parentEmail))
+			{
+				return Unauthorized(Problem(title: "Unauthorized",
+									  detail: "Parent email not found in claims.",
+									  statusCode: StatusCodes.Status401Unauthorized));
+			}
+
+			if (take <= 0 || take > 200) take = 50;
+			if (skip < 0) skip = 0;
+
+			var query = new PickupPointRequestListQuery
+			{
+				Status = status,
+				ParentEmail = parentEmail,
+				Skip = skip,
+				Take = take
+			};
+
+			var list = await _svc.ListRequestDetailsAsync(query);
+			return Ok(list);
+		}
 
 
 		/// <summary>

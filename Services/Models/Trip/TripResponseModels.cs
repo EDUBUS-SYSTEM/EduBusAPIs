@@ -23,7 +23,7 @@ namespace Services.Models.Trip
 	{
 		public Guid StudentId { get; set; }
 		public string StudentName { get; set; } = null!;
-		public string? PhotoUrl { get; set; }
+		public Guid? StudentImageId { get; set; }
 		public string CurrentStatus { get; set; } = "NotYetBoarded"; // "NotYetBoarded" | "Boarded" | "Alighted"
 		public bool IsBoarded { get; set; }
 		public bool IsAlighted { get; set; }
