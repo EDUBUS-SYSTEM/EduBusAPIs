@@ -75,12 +75,37 @@ namespace Services.Models.Trip
 	public class ManualAttendanceRequest
 	{
 		[Required]
-		public int StopId { get; set; }
+		public Guid PickupPointId { get; set; }
 		[Required]
 		public Guid StudentId { get; set; }
 		public string? BoardStatus { get; set; }
 		public string? AlightStatus { get; set; }
 		public DateTime? Timestamp { get; set; }
+	}
+
+	public class FaceRecognitionAttendanceRequest
+	{
+		[Required]
+		public Guid PickupPointId { get; set; }
+
+		[Required]
+		public Guid StudentId { get; set; }
+
+		[Required]
+		[Range(0.0, 1.0, ErrorMessage = "Similarity must be between 0 and 1")]
+		public double Similarity { get; set; }
+
+		[Range(0.0, 1.0, ErrorMessage = "LivenessScore must be between 0 and 1")]
+		public double LivenessScore { get; set; } = 0.0;
+
+		[Required]
+		[Range(1, 10, ErrorMessage = "FramesConfirmed must be between 1 and 10")]
+		public int FramesConfirmed { get; set; }
+
+		[Required]
+		public string DeviceId { get; set; } = null!;
+
+		public DateTime? RecognizedAt { get; set; }
 	}
 
 }

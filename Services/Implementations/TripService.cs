@@ -9,13 +9,16 @@ using Services.Contracts;
 using Services.Models.Notification;
 using Services.Models.Trip;
 using Utils;
+using System.Collections.Concurrent;
 using Route = Data.Models.Route;
 
 namespace Services.Implementations
 {
 	public class TripService : ITripService
 	{
-        const double ARRIVAL_THRESHOLD_KM = 0.3; //300 meters
+        const double ARRIVAL_THRESHOLD_KM = 0.3;
+
+		private static readonly ConcurrentDictionary<Guid, Guid> _currentStopByTrip = new();
 
         private readonly IDatabaseFactory _databaseFactory;
 		private readonly ILogger<TripService> _logger;
@@ -2511,32 +2514,36 @@ namespace Services.Implementations
 
 			// Verify vehicle location using VietMapService
 			if (trip.CurrentLocation == null || stop.Location == null)
-                throw new InvalidOperationException("Vehicle location not available. Please ensure location tracking is enabled");
-            var distance = await _vietMapService.CalculateDistanceAsync(
-                trip.CurrentLocation.Latitude,
-                trip.CurrentLocation.Longitude,
-                stop.Location.Latitude,
-                stop.Location.Longitude
-            );
+				throw new InvalidOperationException("Vehicle location not available. Please ensure location tracking is enabled");
+			var distance = await _vietMapService.CalculateDistanceAsync(
+				trip.CurrentLocation.Latitude,
+				trip.CurrentLocation.Longitude,
+				stop.Location.Latitude,
+				stop.Location.Longitude
+			);
 
-            if (distance == null)
-            {
-                _logger.LogWarning("Failed to calculate distance for trip {TripId}, stop {StopId}", tripId, stopId);
-                throw new InvalidOperationException("Unable to verify vehicle location. Please try again");
-            }
+			if (distance == null)
+			{
+				_logger.LogWarning("Failed to calculate distance for trip {TripId}, stop {StopId}", tripId, stopId);
+				throw new InvalidOperationException("Unable to verify vehicle location. Please try again");
+			}
 
-            if (distance > ARRIVAL_THRESHOLD_KM)
-            {
-                var distanceMeters = Math.Round(distance.Value * 1000);
-                _logger.LogWarning(
-                    "Driver {DriverId} attempted to confirm arrival at stop {StopId}, but vehicle is {Distance} km away (threshold: {Threshold} km)",
-                    driverId, stopId, distance, ARRIVAL_THRESHOLD_KM);
-                throw new InvalidOperationException($"Vehicle is {distanceMeters} meters away. Please move closer to the pickup point");
-            }
+			if (distance > ARRIVAL_THRESHOLD_KM)
+			{
+				var distanceMeters = Math.Round(distance.Value * 1000);
+				_logger.LogWarning(
+					"Driver {DriverId} attempted to confirm arrival at stop {StopId}, but vehicle is {Distance} km away (threshold: {Threshold} km)",
+					driverId, stopId, distance, ARRIVAL_THRESHOLD_KM);
+				throw new InvalidOperationException($"Vehicle is {distanceMeters} meters away. Please move closer to the pickup point");
+			}
 
-            // Update arrival time
-            stop.ArrivedAt = DateTime.UtcNow;
+			// Update arrival time
+			stop.ArrivedAt = DateTime.UtcNow;
             await tripRepo.UpdateAsync(trip);
+
+			// Set as current stop for Jetson
+			_currentStopByTrip[tripId] = stopId;
+			_logger.LogInformation("Set current stop for trip {TripId} to {StopId}", tripId, stopId);
 
             // Broadcast realtime update to parents tracking this trip via TripHub
             try
@@ -2637,10 +2644,10 @@ namespace Services.Implementations
                 await _notificationService.CreateNotificationAsync(notificationDto);
             }
 
-            _logger.LogInformation(
-                "Driver {DriverId} confirmed arrival at stop {StopId} for trip {TripId}. Vehicle distance: {Distance} km",
-                driverId, stopId, tripId, distance);
-        }
+			_logger.LogInformation(
+				"Driver {DriverId} confirmed arrival at stop {StopId} for trip {TripId}. Vehicle distance: {Distance} km",
+				driverId, stopId, tripId, distance);
+		}
 
 		public async Task<Trip?> ArrangeStopSequenceAsync(Guid tripId, Guid driverId, Guid pickupPointId, int newSequenceOrder)
 		{
@@ -2761,6 +2768,16 @@ namespace Services.Implementations
 				_logger.LogError(ex, "Error arranging stop sequence for trip {TripId}", tripId);
 				throw;
 			}
+		}
+
+		/// <summary>
+		/// Get current stop for a trip (for Jetson polling)
+		/// </summary>
+		public Guid? GetCurrentStopForTrip(Guid tripId)
+		{
+			return _currentStopByTrip.TryGetValue(tripId, out var pickupPointId) 
+				? pickupPointId 
+				: null;
 		}
 
 		public async Task<Trip?> UpdateMultipleStopsSequenceAsync(Guid tripId, Guid driverId, List<(Guid PickupPointId, int SequenceOrder)> stopSequences)
@@ -3064,10 +3081,10 @@ namespace Services.Implementations
 			if (trip == null)
 				throw new KeyNotFoundException("Trip not found");
 
-			// Find stop by sequence order (using StopId as sequence)
-			var stop = trip.Stops.FirstOrDefault(s => s.SequenceOrder == request.StopId);
+			// Find stop by PickupPointId
+			var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == request.PickupPointId);
 			if (stop == null)
-				throw new KeyNotFoundException("Stop not found");
+				throw new KeyNotFoundException($"Stop with PickupPointId {request.PickupPointId} not found in this trip");
 
 			// Get student info
 			var student = await _studentRepository.FindAsync(request.StudentId);
@@ -3221,5 +3238,142 @@ namespace Services.Implementations
 			return "NotYetBoarded";
 		}
 
-	}
-}
+        public async Task<(bool success, string message, Guid? studentId, DateTime? timestamp)>
+    SubmitFaceRecognitionAttendanceAsync(Guid tripId, FaceRecognitionAttendanceRequest request)
+{
+    var tripRepository = _databaseFactory.GetRepositoryByType<ITripRepository>(DatabaseType.MongoDb);
+    // 1. Get trip from MongoDB
+    var trip = await tripRepository.FindAsync(tripId);
+    if (trip == null)
+        throw new KeyNotFoundException($"Trip {tripId} not found");
+    
+    // 2. Find stop by PickupPointId
+    var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == request.PickupPointId);
+    if (stop == null)
+        throw new ArgumentException($"Stop with PickupPointId {request.PickupPointId} not found in trip");
+    
+    // 3. Verify student exists in SQL Server
+    var student = await _studentRepository.FindAsync(request.StudentId);
+    if (student == null)
+        throw new ArgumentException($"Student {request.StudentId} not found");
+    
+    var timestamp = request.RecognizedAt ?? DateTime.UtcNow;
+    var studentName = $"{student.FirstName} {student.LastName}".Trim();
+    
+    // 4. Check if attendance already recorded for this student at this stop
+    var existingAttendance = stop.Attendance.FirstOrDefault(a => a.StudentId == request.StudentId);
+    
+    if (existingAttendance != null)
+    {
+        // Update existing record (boarding if not already boarded)
+        if (existingAttendance.BoardStatus == null || existingAttendance.BoardedAt == null)
+        {
+            existingAttendance.StudentName = studentName;
+            existingAttendance.BoardStatus = Constants.TripConstants.AttendanceStates.Present;
+            existingAttendance.BoardedAt = timestamp;
+            existingAttendance.RecognitionMethod = Constants.TripConstants.FaceRecognitionConstants.RecognitionMethods.FaceRecognition;
+            
+            // Update or create face recognition data
+            if (existingAttendance.FaceRecognitionData == null)
+            {
+                existingAttendance.FaceRecognitionData = new Data.Models.FaceRecognitionData();
+            }
+            existingAttendance.FaceRecognitionData.Similarity = request.Similarity;
+            existingAttendance.FaceRecognitionData.LivenessScore = request.LivenessScore;
+            existingAttendance.FaceRecognitionData.FramesConfirmed = request.FramesConfirmed;
+            existingAttendance.FaceRecognitionData.DeviceId = request.DeviceId;
+            existingAttendance.FaceRecognitionData.ModelVersion = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1;
+            existingAttendance.FaceRecognitionData.RecognizedAt = timestamp;
+            
+            // Update state based on board/alight status
+            if (existingAttendance.AlightStatus == TripConstants.AttendanceStates.Present)
+            {
+                existingAttendance.State = TripConstants.AttendanceStates.Alighted;
+            }
+            else if (existingAttendance.BoardStatus == TripConstants.AttendanceStates.Present)
+            {
+                existingAttendance.State = TripConstants.AttendanceStates.Boarded;
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Student {StudentId} already boarded at stop {StopId}",
+                request.StudentId, request.PickupPointId);
+            return (false, "Student already boarded at this stop", request.StudentId, existingAttendance.BoardedAt);
+        }
+    }
+    else
+    {
+        // 5. Create new attendance record with face recognition data
+        var attendance = new Data.Models.Attendance
+        {
+            StudentId = request.StudentId,
+            StudentName = studentName,
+            BoardStatus = Constants.TripConstants.AttendanceStates.Present,
+            BoardedAt = timestamp,
+            AlightStatus = null,
+            AlightedAt = null,
+            State = Constants.TripConstants.AttendanceStates.Boarded,
+            RecognitionMethod = Constants.TripConstants.FaceRecognitionConstants.RecognitionMethods.FaceRecognition,
+            FaceRecognitionData = new Data.Models.FaceRecognitionData
+            {
+                Similarity = request.Similarity,
+                LivenessScore = request.LivenessScore,
+                FramesConfirmed = request.FramesConfirmed,
+                DeviceId = request.DeviceId,
+                ModelVersion = Constants.TripConstants.FaceRecognitionConstants.ModelVersions.MobileFaceNet_V1,
+                RecognizedAt = timestamp
+            }
+        };
+        
+        stop.Attendance.Add(attendance);
+    }
+    
+    // 6. Update trip in MongoDB
+    await tripRepository.UpdateAsync(trip);
+    
+    _logger.LogInformation("Face recognition attendance recorded: Student {StudentId} ({StudentName}), Stop {StopId}, Similarity {Similarity}",
+        request.StudentId, studentName, request.PickupPointId, request.Similarity);
+
+    // 7. Send SignalR notification using ITripHubService
+    if (_tripHubService != null)
+    {
+        try
+        {
+            var attendanceSummary = new
+            {
+                total = stop.Attendance.Count,
+                boarded = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Boarded),
+                alighted = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Alighted),
+                present = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Present),
+                absent = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Absent),
+                pending = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Pending),
+                late = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Late),
+                excused = stop.Attendance.Count(a => a.State == TripConstants.AttendanceStates.Excused),
+                arrivedAt = stop.ArrivedAt,
+                departedAt = stop.DepartedAt,
+                studentId = request.StudentId,
+                studentName = studentName,
+                timestamp = timestamp,
+                method = "FaceRecognition",
+                similarity = request.Similarity,
+                framesConfirmed = request.FramesConfirmed,
+                deviceId = request.DeviceId
+            };
+
+            await _tripHubService.BroadcastAttendanceUpdatedAsync(
+                tripId: tripId,
+                stopId: stop.PickupPointId,
+                attendanceSummary: attendanceSummary);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send SignalR notification for face recognition attendance");
+            // Don't fail the request if SignalR fails
+        }
+    }
+
+    return (true, "Student boarded successfully via face recognition", request.StudentId, timestamp);
+}        }
+
+    }

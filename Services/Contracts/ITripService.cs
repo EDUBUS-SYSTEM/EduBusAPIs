@@ -71,5 +71,8 @@ namespace Services.Contracts
 		// Supervisor manual attendance operations
 		Task<StudentsForAttendanceResponse> GetStudentsForAttendanceAsync(Guid tripId);
 		Task<(bool Success, string Message, Guid StudentId, DateTime Timestamp)> SubmitManualAttendanceAsync(Guid tripId, ManualAttendanceRequest request);
-	}
+        Task<(bool success, string message, Guid? studentId, DateTime? timestamp)> SubmitFaceRecognitionAttendanceAsync(Guid tripId, FaceRecognitionAttendanceRequest request);
+		
+		Guid? GetCurrentStopForTrip(Guid tripId);
+    }
 }

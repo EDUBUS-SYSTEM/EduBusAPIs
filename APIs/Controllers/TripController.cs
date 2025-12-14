@@ -17,7 +17,6 @@ using Route = Data.Models.Route;
 
 namespace APIs.Controllers
 {
-	[Authorize]
 	[Route("api/[controller]")]
 	[ApiController]
 	public class TripController : ControllerBase
@@ -818,6 +817,49 @@ namespace APIs.Controllers
             }
         }
 
+		[HttpGet("{tripId}/current-stop")]
+		[AllowAnonymous]
+		public async Task<ActionResult<object>> GetCurrentStop(Guid tripId)
+		{
+			try
+			{
+				// Get current stop from tracking
+				var pickupPointId = _tripService.GetCurrentStopForTrip(tripId);
+				if (!pickupPointId.HasValue)
+				{
+					return NotFound(new { message = "No current stop set for this trip" });
+				}
+
+				// Get trip to retrieve stop metadata
+				var trip = await _tripService.GetTripWithStopsAsync(tripId);
+				if (trip == null)
+				{
+					return NotFound(new { message = "Trip not found" });
+				}
+
+				// Find stop by pickupPointId
+				var stop = trip.Stops.FirstOrDefault(s => s.PickupPointId == pickupPointId.Value);
+				if (stop == null)
+				{
+					return NotFound(new { message = "Stop not found in trip" });
+				}
+
+				return Ok(new
+				{
+					tripId = tripId,
+					pickupPointId = pickupPointId.Value,
+					stopName = stop.Location?.Address ?? "Unknown",
+					arrivedAt = stop.ArrivedAt,
+					sequenceOrder = stop.SequenceOrder
+				});
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Error getting current stop for trip {TripId}", tripId);
+				return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+			}
+		}
+
         #endregion
 
         #region Parent Endpoints
@@ -1120,5 +1162,39 @@ namespace APIs.Controllers
 			}
 		}
 
-	}
+        [HttpPost("{tripId}/attendance/face-recognition")]
+        public async Task<ActionResult> SubmitFaceRecognitionAttendance(Guid tripId, [FromBody] FaceRecognitionAttendanceRequest request)
+        {
+            try
+            {
+                var (success, message, studentId, timestamp) =
+                    await _tripService.SubmitFaceRecognitionAttendanceAsync(tripId, request);
+
+                return Ok(new
+                {
+                    success = success,
+                    message = message,
+                    studentId = studentId,
+                    timestamp = timestamp,
+                    similarity = request.Similarity,
+                    framesConfirmed = request.FramesConfirmed
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid face recognition attendance request for trip {TripId}", tripId);
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Resource not found for trip {TripId}", tripId);
+                return NotFound(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error submitting face recognition attendance for trip {TripId}", tripId);
+                return StatusCode(500, new { message = "Internal server error", error = ex.Message });
+            }
+        }
+    }
 }

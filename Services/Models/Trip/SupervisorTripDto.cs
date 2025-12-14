@@ -51,14 +51,15 @@ namespace Services.Models.Trip
     public class SupervisorTripStopDto
     {
         public Guid Id { get; set; }
+        public Guid PickupPointId { get; set; }
         public string Name { get; set; } = string.Empty;
         public DateTime PlannedArrival { get; set; }
         public DateTime? ActualArrival { get; set; }
         public DateTime PlannedDeparture { get; set; }
         public DateTime? ActualDeparture { get; set; }
         public int Sequence { get; set; }
-        public StopLocationDto Location { get; set; } = new StopLocationDto();
-        public List<SupervisorAttendanceDto> Attendance { get; set; } = new List<SupervisorAttendanceDto>();
+        public StopLocationDto Location { get; set; } = new();
+        public List<SupervisorAttendanceDto> Attendance { get; set; } = new();
     }
 
     /// <summary>
