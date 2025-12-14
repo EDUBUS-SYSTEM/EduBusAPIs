@@ -3908,6 +3908,92 @@ namespace Services.Implementations
         }
     }
 
+    // 8. Send push notification to parent
+    try
+    {
+        if (student.ParentId.HasValue)
+        {
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+            var serviceDate = trip.ServiceDate.ToString("MMMM dd, yyyy");
+
+            var parentNotification = new CreateNotificationDto
+            {
+                UserId = student.ParentId.Value,
+                Title = tripType == TripType.Departure ? "Student Boarded Bus" : "Student Picked Up",
+                Message = $"{studentName} has boarded the bus via face recognition ({tripTypeText} - {serviceDate}).",
+                NotificationType = NotificationType.TripInfo,
+                Metadata = new Dictionary<string, object>
+                {
+                    { "tripId", trip.Id.ToString() },
+                    { "studentId", student.Id.ToString() },
+                    { "studentName", studentName },
+                    { "boardStatus", TripConstants.AttendanceStates.Present },
+                    { "recognitionMethod", "FaceRecognition" },
+                    { "similarity", request.Similarity },
+                    { "timestamp", timestamp.ToString("O") }
+                }
+            };
+
+            await _notificationService.CreateNotificationAsync(parentNotification);
+
+            _logger.LogInformation(
+                "Sent face recognition attendance notification to parent {ParentId} for student {StudentId}",
+                student.ParentId.Value,
+                student.Id
+            );
+        }
+        else
+        {
+            _logger.LogWarning("Student {StudentId} has no parent assigned, skipping parent notification", student.Id);
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogWarning(ex, "Failed to send notification to parent for student {StudentId}", student.Id);
+        
+    }
+
+    //Send push notification to supervisor 
+    try
+    {
+        if (trip.Supervisor?.Id != null)
+        {
+            var tripType = trip.ScheduleSnapshot?.TripType ?? TripType.Unknown;
+            var tripTypeText = tripType == TripType.Departure ? "Departure Trip" : "Return Trip";
+
+            var supervisorNotification = new CreateNotificationDto
+            {
+                UserId = trip.Supervisor.Id,
+                Title = "Student Boarded via Face Recognition",
+                Message = $"{studentName} has boarded the bus via face recognition ({tripTypeText}).",
+                NotificationType = NotificationType.TripInfo,
+                Metadata = new Dictionary<string, object>
+                {
+                    { "tripId", trip.Id.ToString() },
+                    { "studentId", student.Id.ToString() },
+                    { "studentName", studentName },
+                    { "recognitionMethod", "FaceRecognition" },
+                    { "similarity", request.Similarity },
+                    { "framesConfirmed", request.FramesConfirmed },
+                    { "timestamp", timestamp.ToString("O") }
+                }
+            };
+
+            await _notificationService.CreateNotificationAsync(supervisorNotification);
+
+            _logger.LogInformation(
+                "Sent face recognition attendance notification to supervisor {SupervisorId} for student {StudentId}",
+                trip.Supervisor.Id,
+                student.Id
+            );
+        }
+    }
+    catch (Exception ex)
+    {
+        _logger.LogWarning(ex, "Failed to send notification to supervisor for student {StudentId}", student.Id);
+    }
+
     return (true, "Student boarded successfully via face recognition", request.StudentId, timestamp);
 }        }
 
