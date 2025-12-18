@@ -148,5 +148,19 @@ namespace APIs.Controllers
                 return StatusCode(500, new { success = false, error = "An error occurred while retrieving current semester." });
             }
         }
+
+        [HttpGet("semesters")]
+        public async Task<ActionResult<object>> GetAllSemesters()
+        {
+            try
+            {
+                var semesters = await _dashboardService.GetAllSemestersAsync();
+                return Ok(new { success = true, data = semesters });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, error = "An error occurred while retrieving semesters." });
+            }
+        }
     }
 }

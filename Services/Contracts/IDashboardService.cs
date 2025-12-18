@@ -22,6 +22,8 @@ namespace Services.Contracts
 
         Task<ActiveSemesterDto?> GetCurrentSemesterAsync();
 
+        Task<List<ActiveSemesterDto>> GetAllSemestersAsync();
+
         Task<List<RevenueTimelinePointDto>> GetRevenueTimelineAsync(DateTime? from = null, DateTime? to = null);
     }
 }
