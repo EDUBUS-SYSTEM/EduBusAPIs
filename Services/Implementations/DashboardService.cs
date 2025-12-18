@@ -115,12 +115,12 @@ namespace Services.Implementations
         private async Task<int> GetStudentCountForDate(IMongoCollection<Trip> collection, DateTime date)
         {
             var dayStart = date.Date;
-            var dayEnd = dayStart.AddDays(1);
+            var dayEnd = date.Date;
 
             var filter = Builders<Trip>.Filter.And(
                 Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
                 Builders<Trip>.Filter.Gte(t => t.ServiceDate, dayStart),
-                Builders<Trip>.Filter.Lt(t => t.ServiceDate, dayEnd)
+                Builders<Trip>.Filter.Lte(t => t.ServiceDate, dayEnd)
             );
 
             var trips = await collection.Find(filter).ToListAsync();
@@ -287,7 +287,7 @@ namespace Services.Implementations
                 {
                     filterBuilder.Eq(t => t.IsDeleted, false),
                     filterBuilder.Gte(t => t.ServiceDate, startDate),
-                    filterBuilder.Lt(t => t.ServiceDate, endDate)
+                    filterBuilder.Lte(t => t.ServiceDate, endDate)
                 };
 
                 if (vehicleId.HasValue)
@@ -366,7 +366,7 @@ namespace Services.Implementations
                 {
                     filterBuilder.Eq(t => t.IsDeleted, false),
                     filterBuilder.Gte(t => t.ServiceDate, startDate),
-                    filterBuilder.Lt(t => t.ServiceDate, endDate)
+                    filterBuilder.Lte(t => t.ServiceDate, endDate)
                 };
 
                 if (routeId.HasValue)
@@ -553,18 +553,107 @@ namespace Services.Implementations
                     return null;
                 }
 
+                _logger.LogInformation("Querying enrollment settings for SemesterCode: {Code}, AcademicYear: {Year}", 
+                    currentSemester.Semester.Code, currentSemester.Calendar.AcademicYear);
+
+                var enrollmentSettings = await _mongoDatabase.GetCollection<EnrollmentSemesterSettings>("EnrollmentSemesterSettings")
+                    .Find(e => e.SemesterCode == currentSemester.Semester.Code 
+                            && e.AcademicYear == currentSemester.Calendar.AcademicYear
+                            && !e.IsDeleted)
+                    .FirstOrDefaultAsync();
+
+                if (enrollmentSettings == null)
+                {
+                    _logger.LogWarning("No enrollment settings found for SemesterCode: {Code}, AcademicYear: {Year}", 
+                        currentSemester.Semester.Code, currentSemester.Calendar.AcademicYear);
+                }
+                else
+                {
+                    _logger.LogInformation("Found enrollment settings with registration dates: {Start} to {End}",
+                        enrollmentSettings.RegistrationStartDate, enrollmentSettings.RegistrationEndDate);
+                }
+
                 return new ActiveSemesterDto
                 {
                     AcademicYear = currentSemester.Calendar.AcademicYear,
                     SemesterCode = currentSemester.Semester.Code,
                     SemesterName = currentSemester.Semester.Name,
                     SemesterStartDate = currentSemester.Semester.StartDate,
-                    SemesterEndDate = currentSemester.Semester.EndDate
+                    SemesterEndDate = currentSemester.Semester.EndDate,
+                    RegistrationStartDate = enrollmentSettings?.RegistrationStartDate,
+                    RegistrationEndDate = enrollmentSettings?.RegistrationEndDate
                 };
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error getting current semester");
+                throw;
+            }
+        }
+
+        public async Task<List<ActiveSemesterDto>> GetAllSemestersAsync()
+        {
+            try
+            {
+                var activeCalendars = await _academicCalendarRepository.GetActiveAsync();
+                if (!activeCalendars.Any())
+                {
+                    return new List<ActiveSemesterDto>();
+                }
+
+                var semesters = activeCalendars
+                    .SelectMany(cal => cal.Semesters
+                        .Where(s => s.IsActive)
+                        .Select(s => new { Calendar = cal, Semester = s }))
+                    .ToList();
+
+                var semesterCodes = semesters.Select(s => s.Semester.Code).ToList();
+                var enrollmentSettingsCollection = _mongoDatabase.GetCollection<EnrollmentSemesterSettings>("EnrollmentSemesterSettings");
+                var enrollmentSettingsList = await enrollmentSettingsCollection
+                    .Find(e => semesterCodes.Contains(e.SemesterCode) && !e.IsDeleted)
+                    .ToListAsync();
+
+                _logger.LogInformation("Found {Count} enrollment settings records for {CodesCount} semester codes",
+                    enrollmentSettingsList.Count, semesterCodes.Count);
+
+                var result = semesters
+                    .Select(s =>
+                    {
+                        var enrollment = enrollmentSettingsList.FirstOrDefault(e => 
+                            e.SemesterCode == s.Semester.Code && 
+                            e.AcademicYear == s.Calendar.AcademicYear);
+
+                        if (enrollment != null)
+                        {
+                            _logger.LogInformation("Matched enrollment for {Code}-{Year}: Reg dates {Start} to {End}",
+                                s.Semester.Code, s.Calendar.AcademicYear, 
+                                enrollment.RegistrationStartDate, enrollment.RegistrationEndDate);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("No enrollment match for {Code}-{Year}",
+                                s.Semester.Code, s.Calendar.AcademicYear);
+                        }
+
+                        return new ActiveSemesterDto
+                        {
+                            AcademicYear = s.Calendar.AcademicYear,
+                            SemesterCode = s.Semester.Code,
+                            SemesterName = s.Semester.Name,
+                            SemesterStartDate = s.Semester.StartDate,
+                            SemesterEndDate = s.Semester.EndDate,
+                            RegistrationStartDate = enrollment?.RegistrationStartDate,
+                            RegistrationEndDate = enrollment?.RegistrationEndDate
+                        };
+                    })
+                    .OrderByDescending(s => s.SemesterStartDate)
+                    .ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting all semesters");
                 throw;
             }
         }

@@ -7,6 +7,8 @@ namespace Services.Models.Dashboard
         public string AcademicYear { get; set; } = string.Empty;
         public DateTime SemesterStartDate { get; set; }
         public DateTime SemesterEndDate { get; set; }
+        public DateTime? RegistrationStartDate { get; set; }
+        public DateTime? RegistrationEndDate { get; set; }
     }
 }
 
