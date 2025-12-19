@@ -6,7 +6,6 @@ using Services.Models.SupervisorVehicle;
 using Data.Models.Enums;
 using Constants;
 using System.Security.Claims;
-using Utils;
 
 namespace APIs.Controllers
 {

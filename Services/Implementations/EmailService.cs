@@ -1,16 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using MailKit.Security;
+﻿using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MimeKit.Text;
 using MimeKit;
 using Services.Contracts;
-using Services.Models.Email;
 using System.Collections.Concurrent;
 
 public class EmailService : IEmailService, IHostedService, IDisposable

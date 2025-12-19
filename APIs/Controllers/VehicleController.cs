@@ -23,9 +23,6 @@ namespace APIs.Controllers
             _driverVehicleService = driverVehicleService;
         }
 
-        /// <summary>
-        /// Get list of vehicles with pagination, filtering, and sorting
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpGet]
         public async Task<ActionResult<VehicleListResponse>> GetVehicles(
@@ -46,9 +43,7 @@ namespace APIs.Controllers
 
             return Ok(result);
         }
-        /// <summary>
-        /// Get vehicle by ID
-        /// </summary>
+
         [HttpGet("{vehicleId}")]
         public async Task<ActionResult<VehicleResponse>> GetVehicleById(Guid vehicleId)
         {
@@ -59,9 +54,6 @@ namespace APIs.Controllers
             return Ok(vehicle);
         }
 
-        /// <summary>
-        /// Create a new vehicle
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPost]
         public async Task<ActionResult<VehicleResponse>> CreateVehicle([FromBody] VehicleCreateRequest request)
@@ -82,9 +74,6 @@ namespace APIs.Controllers
             return CreatedAtAction(nameof(GetVehicleById), new { vehicleId = result.Data!.Id }, result);
         }
 
-        /// <summary>
-        /// Update a vehicle (full update)
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPut("{vehicleId}")]
         public async Task<ActionResult<VehicleResponse>> UpdateVehicle(Guid vehicleId, [FromBody] VehicleUpdateRequest request)
@@ -101,9 +90,6 @@ namespace APIs.Controllers
             return Ok(updated);
         }
 
-        /// <summary>
-        /// Partial update a vehicle
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPatch("{vehicleId}")]
         public async Task<ActionResult<VehicleResponse>> PartialUpdateVehicle(Guid vehicleId, [FromBody] VehiclePartialUpdateRequest request)
@@ -120,9 +106,6 @@ namespace APIs.Controllers
             return Ok(updated);
         }
 
-        /// <summary>
-        /// Delete a vehicle (soft delete)
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpDelete("{vehicleId}")]
         public async Task<ActionResult<object>> DeleteVehicle(Guid vehicleId)
@@ -134,9 +117,6 @@ namespace APIs.Controllers
             return Ok(new { success = true });
         }
 
-        /// <summary>
-        /// Get drivers assigned to a vehicle
-        /// </summary>
         [HttpGet("{vehicleId}/drivers")]
         public async Task<ActionResult<VehicleDriversResponse>> GetDriversByVehicle(Guid vehicleId, [FromQuery] bool? isActive)
         {
@@ -147,9 +127,6 @@ namespace APIs.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Assign a driver to a vehicle
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPost("{vehicleId}/drivers")]
         public async Task<ActionResult<DriverAssignmentResponse>> AssignDriver(Guid vehicleId, [FromBody] DriverAssignmentRequest request)
@@ -174,9 +151,6 @@ namespace APIs.Controllers
             }
         }
 
-		/// <summary>
-		/// Get unassigned vehicles
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpGet("unassigned")]
 		public async Task<ActionResult<VehicleListResponse>> GetUnassignedVehicles([FromQuery] Guid? excludeRouteId = null)

@@ -23,9 +23,6 @@ namespace APIs.Controllers
             _transactionService = transactionService;
         }
 
-        /// <summary>
-        /// Get transport fee item detail by ID
-        /// </summary>
         [HttpGet("{id}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransportFeeItemDetailResponse>> GetDetail(Guid id)
@@ -56,9 +53,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get list of transport fee items with filtering and pagination
-        /// </summary>
         [HttpGet]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<TransportFeeItemListResponse>> GetList([FromQuery] TransportFeeItemListRequest request)
@@ -74,9 +68,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Create a new transport fee item
-        /// </summary>
         [HttpPost]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<Data.Models.TransportFeeItem>> Create([FromBody] CreateTransportFeeItemRequest request)
@@ -99,9 +90,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update transport fee item status
-        /// </summary>
         [HttpPut("{id}/status")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateStatus(Guid id, [FromBody] UpdateTransportFeeItemStatusRequest request)
@@ -126,9 +114,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update multiple transport fee items status
-        /// </summary>
         [HttpPut("status/batch")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateStatusBatch([FromBody] UpdateStatusBatchRequest request)
@@ -150,9 +135,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transport fee items by transaction ID
-        /// </summary>
         [HttpGet("transaction/{transactionId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByTransactionId(Guid transactionId)
@@ -189,9 +171,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transport fee items by student ID
-        /// </summary>
         [HttpGet("student/{studentId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByStudentId(Guid studentId)
@@ -217,9 +196,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transport fee items by parent email (Admin only)
-        /// </summary>
         [HttpGet("parent/{parentEmail}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<List<TransportFeeItemSummary>>> GetByParentEmail(string parentEmail)
@@ -239,9 +215,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get total amount by transaction ID
-        /// </summary>
         [HttpGet("transaction/{transactionId}/total")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<decimal>> GetTotalAmountByTransactionId(Guid transactionId)
@@ -280,9 +253,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get count by status
-        /// </summary>
         [HttpGet("count/{status}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<int>> GetCountByStatus(TransportFeeItemStatus status)
@@ -298,9 +268,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Delete transport fee item (soft delete)
-        /// </summary>
         [HttpDelete("{id}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> Delete(Guid id)

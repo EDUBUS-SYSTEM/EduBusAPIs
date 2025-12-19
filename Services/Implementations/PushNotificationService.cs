@@ -1,10 +1,8 @@
 ﻿using Data.Repos.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Services.Contracts;
 using Services.Models.Notification;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 
