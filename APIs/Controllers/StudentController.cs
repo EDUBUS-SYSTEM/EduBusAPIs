@@ -3,7 +3,6 @@ using Services.Contracts;
 using Services.Models.Student;
 using Microsoft.AspNetCore.Authorization;
 using Constants;
-using System.Security.Claims;
 using Utils;
 
 namespace APIs.Controllers
@@ -19,30 +18,6 @@ namespace APIs.Controllers
         {
             _studentService = studentService;
             _fileService = fileService;
-        }
-
-        private bool IsAuthorizedToAccessStudent(Guid studentParentId)
-        {
-            var isAdmin = User.IsInRole(Roles.Admin);
-            if (isAdmin) return true;
-
-            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
-                return false;
-
-            return studentParentId == currentParentId;
-        }
-
-        private bool IsAuthorizedToAccessParent(Guid parentId)
-        {
-            var isAdmin = User.IsInRole(Roles.Admin);
-            if (isAdmin) return true;
-
-            var parentIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(parentIdClaim) || !Guid.TryParse(parentIdClaim, out var currentParentId))
-                return false;
-
-            return parentId == currentParentId;
         }
 
         [Authorize(Roles = Roles.Admin)]
@@ -280,10 +255,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get all students that have not been assigned to any parent (ParentId is null)
-        /// Admin-only endpoint for new parent registration workflow
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpGet("unassigned")]
         public async Task<IActionResult> GetUnassignedStudents()
@@ -299,10 +270,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Bulk assign multiple students to a single parent
-        /// Admin-only endpoint for new parent registration workflow
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPatch("bulk-assign-parent")]
         public async Task<IActionResult> BulkAssignParent([FromBody] BulkAssignParentRequest request)
@@ -333,9 +300,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Upload photo for a student - Admin only
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPost("{studentId}/upload-photo")]
         [Consumes("multipart/form-data")]
@@ -364,9 +328,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get student photo file ID
-        /// </summary>
         [HttpGet("{studentId}/photo-file-id")]
         public async Task<IActionResult> GetStudentPhotoFileId(Guid studentId)
         {
@@ -384,9 +345,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get student photo - returns the image file directly
-        /// </summary>
         [Authorize]
         [HttpGet("{studentId}/photo")]
         public async Task<IActionResult> GetStudentPhoto(Guid studentId)

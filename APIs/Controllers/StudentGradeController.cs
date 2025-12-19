@@ -1,9 +1,5 @@
-﻿using DocumentFormat.OpenXml.Office2010.Excel;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
-using Services.Implementations;
-using Services.Models.Student;
 using Services.Models.StudentGrade;
 
 namespace APIs.Controllers
@@ -13,10 +9,12 @@ namespace APIs.Controllers
     public class StudentGradeController : ControllerBase
     {
         private readonly IStudentGradeService _studentGradeService;
+
         public StudentGradeController(IStudentGradeService studentGradeService)
         {
             _studentGradeService = studentGradeService;
         }
+
         [HttpPost]
         public async Task<IActionResult> CreateStudentGrade([FromBody] CreateStudentGradeRequest request)
         {
@@ -61,6 +59,7 @@ namespace APIs.Controllers
                 return StatusCode(500, new { message = "An unexpected error occurred.", detail = ex.Message });
             }
         }
+
         [HttpGet]
         public async Task<IActionResult> GetAllStudentGrades()
         {

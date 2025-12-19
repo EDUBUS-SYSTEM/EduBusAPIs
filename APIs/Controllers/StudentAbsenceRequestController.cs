@@ -129,9 +129,6 @@ namespace APIs.Controllers
             return Ok(requests);
         }
 
-        /// <summary>
-        /// Reject absence request - Admin only
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPatch("{requestId:guid}/reject")]
         public async Task<IActionResult> RejectRequest(Guid requestId, [FromBody] RejectStudentAbsenceRequestDto request)
@@ -161,9 +158,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Approve absence request - Admin only
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpPatch("{requestId:guid}/approve")]
         public async Task<IActionResult> ApproveRequest(Guid requestId, [FromBody] ApproveStudentAbsenceRequestDto request)

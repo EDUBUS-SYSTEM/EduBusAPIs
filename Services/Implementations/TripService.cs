@@ -8,8 +8,8 @@ using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Notification;
 using Services.Models.Trip;
-using Utils;
 using System.Collections.Concurrent;
+using Utils;
 using Route = Data.Models.Route;
 
 namespace Services.Implementations

@@ -8,11 +8,6 @@ using System.Security.Claims;
 
 namespace APIs.Controllers
 {
-	/// <summary>
-	/// Public (guest/parent) pickup point enrollment flow + Admin moderation.
-	/// Frontend provides geolocation (lat/lng) and distance. Backend validates email/otp,
-	/// persists requests (Mongo), and allows admin moderation (SQL + Mongo).
-	/// </summary>
 	[ApiController]
 	[Route("api/[controller]")]
 	public class PickupPointController : ControllerBase
@@ -26,17 +21,6 @@ namespace APIs.Controllers
 			_pickupPointService = pickupPointService;
 		}
 
-		// ===================================================================================
-		// DEPRECATED ENDPOINTS - Old Public Parent Registration Flow
-		// These endpoints are deprecated in favor of admin-managed parent registration
-		// New workflow: Admin creates parent account via /api/Student/bulk-assign-parent,
-		//               /api/PickupPoint/admin/create, and /api/Transaction/admin/create
-		// ===================================================================================
-
-		/// <summary>
-		/// [DEPRECATED] Public parent registration endpoint
-		/// Use admin-managed workflow instead
-		/// </summary>
 		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("register")]
 		[AllowAnonymous]
@@ -86,8 +70,6 @@ namespace APIs.Controllers
 			return Ok(result);
 		}
 
-
-
 		[HttpGet("parent/requests")]
 		[Authorize(Roles = Roles.Parent)]
 		[ProducesResponseType(typeof(List<PickupPointRequestDetailDto>), StatusCodes.Status200OK)]
@@ -123,11 +105,6 @@ namespace APIs.Controllers
 			return Ok(list);
 		}
 
-
-		/// <summary>
-		/// [DEPRECATED] OTP verification endpoint for public parent registration
-		/// Use admin-managed workflow instead
-		/// </summary>
 		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("verify-otp")]
 		[AllowAnonymous]
@@ -141,11 +118,6 @@ namespace APIs.Controllers
 			return Ok(result);
 		}
 
-
-		/// <summary>
-		/// [DEPRECATED] Public pickup point request submission
-		/// Use admin-managed workflow instead
-		/// </summary>
 		[Obsolete("This endpoint is deprecated. Use admin-managed parent registration workflow instead.")]
 		[HttpPost("submit-request")]
 		[AllowAnonymous]
@@ -196,9 +168,6 @@ namespace APIs.Controllers
 			return Ok(list);
 		}
 
-		/// <summary>
-		/// Approve a pickup point request.
-		/// </summary>
 		[HttpPost("requests/{id:guid}/approve")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -234,9 +203,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Reject a pickup point request with a reason.
-		/// </summary>
 		[HttpPost("requests/{id:guid}/reject")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -294,9 +260,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Get all pickup points with their assigned student status
-		/// </summary>
 		[HttpGet("with-student-status")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(typeof(List<PickupPointWithStudentStatusDto>), StatusCodes.Status200OK)]
@@ -313,10 +276,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Admin creates a pickup point directly (auto-approved, no approval workflow)
-		/// For new parent registration workflow
-		/// </summary>
 		[HttpPost("admin/create")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(typeof(AdminCreatePickupPointResponse), StatusCodes.Status201Created)]
@@ -362,12 +321,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Reset pickup points by semester
-		/// Admin selects semester (e.g., S1 2025-2026) with start and end dates
-		/// System finds all StudentPickupPoint records matching the semester criteria
-		/// and assigns PickupPointId to CurrentPickupPointId in Student table
-		/// </summary>
 		[HttpPost("admin/reset-by-semester")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(typeof(ResetPickupPointBySemesterResponse), StatusCodes.Status200OK)]
@@ -407,11 +360,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Get all pickup points with their assigned students by semester
-		/// Returns pickup points from StudentPickupPoint table filtered by semester criteria
-		/// Used for displaying pickup points before reset operation
-		/// </summary>
 		[HttpPost("admin/get-by-semester")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(typeof(GetPickupPointsBySemesterResponse), StatusCodes.Status200OK)]
@@ -438,11 +386,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Get all available semesters from StudentPickupPoint table
-		/// Returns distinct semesters that have pickup point assignments
-		/// Used for populating semester dropdown in reset form
-		/// </summary>
 		[HttpGet("admin/available-semesters")]
 		[Authorize(Roles = Roles.Admin)]
 		[ProducesResponseType(typeof(GetAvailableSemestersResponse), StatusCodes.Status200OK)]

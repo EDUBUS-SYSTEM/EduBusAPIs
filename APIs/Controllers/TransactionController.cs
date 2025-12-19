@@ -23,9 +23,6 @@ namespace APIs.Controllers
             _transportFeeItemService = transportFeeItemService;
         }
 
-        /// <summary>
-        /// Create transaction from approved pickup point request
-        /// </summary>
         [HttpPost("create-from-pickup-point")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<CreateTransactionFromPickupPointResponse>> CreateFromPickupPoint(
@@ -50,9 +47,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transaction detail by ID
-        /// </summary>
         [HttpGet("{transactionId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionDetailResponseDto>> GetTransactionDetail(Guid transactionId)
@@ -79,9 +73,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transaction list with filtering
-        /// </summary>
         [HttpGet]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionList(
@@ -98,9 +89,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update transaction status
-        /// </summary>
         [HttpPut("{transactionId}/status")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateTransactionStatus(
@@ -122,9 +110,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Calculate transport fee with automatic data retrieval
-        /// </summary>
         [HttpPost("calculate-fee")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(CalculateFeeResponse), StatusCodes.Status200OK)]
@@ -146,9 +131,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get next semester information
-        /// </summary>
         [HttpGet("next-semester")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(AcademicSemesterInfo), StatusCodes.Status200OK)]
@@ -170,9 +152,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Delete transaction (soft delete)
-        /// </summary>
         [HttpDelete("{transactionId}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> DeleteTransaction(Guid transactionId)
@@ -192,9 +171,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update transaction details
-        /// </summary>
         [HttpPut("{transactionId}")]
         [Authorize(Roles = Roles.Admin)]
         public async Task<ActionResult> UpdateTransaction(
@@ -216,9 +192,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transactions by parent ID
-        /// </summary>
         [HttpGet("parent/{parentId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionsByParent(
@@ -257,9 +230,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get current parent's transactions (auto-detect parent from JWT token)
-        /// </summary>
         [HttpGet("my-transactions")]
         [Authorize(Roles = Roles.Parent)]
         public async Task<ActionResult<TransactionListResponseDto>> GetMyTransactions(
@@ -298,9 +268,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transactions by student ID
-        /// </summary>
         [HttpGet("student/{studentId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionListResponseDto>> GetTransactionsByStudent(
@@ -337,9 +304,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get transaction by transport fee item ID
-        /// </summary>
         [HttpGet("by-transport-fee-item/{transportFeeItemId}")]
         [Authorize(Roles = $"{Roles.Admin},{Roles.Parent}")]
         public async Task<ActionResult<TransactionDetailResponseDto>> GetTransactionByTransportFeeItemId(Guid transportFeeItemId)
@@ -374,10 +338,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Admin creates a transaction for parent to pay semester fee
-        /// For new parent registration workflow
-        /// </summary>
         [HttpPost("admin/create")]
         [Authorize(Roles = Roles.Admin)]
         [ProducesResponseType(typeof(AdminCreateTransactionResponse), StatusCodes.Status201Created)]

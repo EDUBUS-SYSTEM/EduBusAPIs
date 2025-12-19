@@ -170,11 +170,6 @@ namespace Services.Implementations
 			};
 		}
 
-		/// <summary>
-		/// Reset pickup points by semester - Admin selects semester (e.g., S1 2025-2026) with start/end dates
-		/// System finds all StudentPickupPoint records matching the semester criteria
-		/// and assigns PickupPointId to CurrentPickupPointId in Student table
-		/// </summary>
 		public async Task<ResetPickupPointBySemesterResponse> ResetPickupPointBySemesterAsync(
 			ResetPickupPointBySemesterRequest request, Guid adminId)
 		{
@@ -401,10 +396,6 @@ namespace Services.Implementations
 			}
 		}
 
-		/// <summary>
-		/// Get all pickup points with their assigned students by semester
-		/// Returns pickup points from StudentPickupPoint table filtered by semester criteria
-		/// </summary>
 		public async Task<GetPickupPointsBySemesterResponse> GetPickupPointsBySemesterAsync(
 			GetPickupPointsBySemesterRequest request)
 		{
@@ -518,10 +509,6 @@ namespace Services.Implementations
 			};
 		}
 
-		/// <summary>
-		/// Get all available semesters from StudentPickupPoint table
-		/// Returns distinct semesters that have pickup point assignments
-		/// </summary>
 		public async Task<GetAvailableSemestersResponse> GetAvailableSemestersAsync()
 		{
 			// Get all non-deleted StudentPickupPoint records
