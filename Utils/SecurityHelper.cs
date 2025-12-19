@@ -63,23 +63,38 @@ namespace Utils
 
         public static string DecryptFromBytes(byte[] cipherBytes)
         {
-            using var aes = Aes.Create();
-            aes.Key = Key;
+            try
+            {
+                if (cipherBytes == null || cipherBytes.Length == 0)
+                    return string.Empty;
 
-            // Lấy IV từ đầu
-            var iv = new byte[aes.BlockSize / 8];
-            var cipher = new byte[cipherBytes.Length - iv.Length];
-            Array.Copy(cipherBytes, iv, iv.Length);
-            Array.Copy(cipherBytes, iv.Length, cipher, 0, cipher.Length);
+                using var aes = Aes.Create();
+                aes.Key = Key;
 
-            aes.IV = iv;
+                var ivLength = aes.BlockSize / 8;
+                if (cipherBytes.Length < ivLength) 
+                    return string.Empty; 
 
-            using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-            using var ms = new MemoryStream(cipher);
-            using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
-            using var sr = new StreamReader(cs);
+                var iv = new byte[ivLength];
+                var cipher = new byte[cipherBytes.Length - ivLength];
+                
+                Array.Copy(cipherBytes, iv, iv.Length);
+                Array.Copy(cipherBytes, iv.Length, cipher, 0, cipher.Length);
 
-            return sr.ReadToEnd();
+                aes.IV = iv;
+
+                using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+                using var ms = new MemoryStream(cipher);
+                using var cs = new CryptoStream(ms, decryptor, CryptoStreamMode.Read);
+                using var sr = new StreamReader(cs);
+
+                return sr.ReadToEnd();
+            }
+            catch (Exception)
+            {
+                 // Return empty string or handle error gracefully
+                 return string.Empty;
+            }
         }
 
         public static string DecryptFromBase64String(string base64EncryptedString)
