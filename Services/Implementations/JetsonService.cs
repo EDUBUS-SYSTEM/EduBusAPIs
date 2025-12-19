@@ -59,7 +59,7 @@ namespace Services.Implementations
 				}
 				catch 
 				{
-					// Skip if decryption fails
+
 				}
 			}
 
@@ -69,8 +69,6 @@ namespace Services.Implementations
 				return null;
 			}
 
-			// 3. Find active trip for this vehicle
-			// Status: "InProgress"
 			var activeTrip = (await _tripRepository.FindByConditionAsync(t => 
 				t.VehicleId == matchedVehicle.Id && 
 				t.Status == Constants.TripConstants.TripStatus.InProgress
@@ -136,14 +134,12 @@ namespace Services.Implementations
 
 		public async Task<JetsonStudentSyncResponse> GetStudentsForSyncAsync(string deviceId, Guid routeId)
 		{
-			// 1. Get route from MongoDB
 			var route = await _routeRepository.FindAsync(routeId);
 			if (route == null)
 				throw new KeyNotFoundException($"Route {routeId} not found");
 
 			_logger.LogInformation("Jetson device {DeviceId} syncing students for route {RouteId}", deviceId, routeId);
 
-			// 2. Get all pickup points for this route
 			var pickupPointIds = route.PickupPoints?.Select(s => s.PickupPointId).ToList() ?? new List<Guid>();
 
 			if (!pickupPointIds.Any())
@@ -159,7 +155,6 @@ namespace Services.Implementations
 				};
 			}
 
-			// 3. Get all students for these pickup points
 			var allStudents = new List<Student>();
 			foreach (var pickupPointId in pickupPointIds)
 			{
@@ -167,12 +162,10 @@ namespace Services.Implementations
 				allStudents.AddRange(students);
 			}
 
-			// Remove duplicates (student might be in multiple stops)
 			var uniqueStudents = allStudents.DistinctBy(s => s.Id).ToList();
 
 			_logger.LogInformation("Found {Count} unique students for route {RouteId}", uniqueStudents.Count, routeId);
 
-			// 4. Get embeddings for these students
 			var studentData = new List<JetsonStudentData>();
 
 			foreach (var student in uniqueStudents)
@@ -185,7 +178,6 @@ namespace Services.Implementations
 					continue;
 				}
 
-				// Deserialize embedding JSON to List<float>
 				List<float>? embeddingVector;
 				try
 				{
@@ -208,7 +200,7 @@ namespace Services.Implementations
 				{
 					StudentId = student.Id,
 					StudentName = $"{student.FirstName} {student.LastName}",
-					PhotoUrl = null, // Image model uses HashedUrl (byte[]), not string URL
+					PhotoUrl = null, 
 					Embedding = embeddingVector,
 					ModelVersion = embedding.ModelVersion
 				});

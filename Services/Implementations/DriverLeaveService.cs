@@ -282,35 +282,6 @@ namespace Services.Implementations
                 throw new InvalidOperationException($"Cannot reject leave request. Current status: {entity.Status}. Only pending leave requests can be rejected.");
             }
             
-            // TODO: Commented out validation for SuggestedAlternativeStartDate/SuggestedAlternativeEndDate
-            // These properties are not being used effectively - validation exists but no storage or notification
-            // Consider implementing proper functionality or removing these properties entirely
-            /*
-            if (dto.SuggestedAlternativeStartDate.HasValue && dto.SuggestedAlternativeEndDate.HasValue)
-            {
-                var today = DateTime.UtcNow.Date;
-                
-                if (dto.SuggestedAlternativeStartDate.Value < today)
-                {
-                    throw new InvalidOperationException("Suggested alternative start date cannot be in the past.");
-                }
-                
-                if (dto.SuggestedAlternativeEndDate.Value < today)
-                {
-                    throw new InvalidOperationException("Suggested alternative end date cannot be in the past.");
-                }
-                
-                if (dto.SuggestedAlternativeEndDate.Value < dto.SuggestedAlternativeStartDate.Value)
-                {
-                    throw new InvalidOperationException("Suggested alternative end date cannot be before suggested start date.");
-                }
-            }
-            else if (dto.SuggestedAlternativeStartDate.HasValue || dto.SuggestedAlternativeEndDate.HasValue)
-            {
-                throw new InvalidOperationException("Both suggested alternative start date and end date must be provided together.");
-            }
-            */
-            
             entity.Status = LeaveStatus.Rejected;
             entity.ApprovedAt = DateTime.UtcNow;
             entity.ApprovedByAdminId = adminId;
@@ -538,7 +509,6 @@ namespace Services.Implementations
                     HasNextPage = request.Page < totalPages,
                     HasPreviousPage = request.Page > 1
                 };
-
                 
                 var pendingLeavesCount = await _leaveRepo.GetQueryable()
                     .Where(l => !l.IsDeleted && l.Status == LeaveStatus.Pending)
@@ -893,67 +863,66 @@ namespace Services.Implementations
             var subject = "Phân công tài xế thay thế | Replacement Driver Assignment";
             
             var body = $@"
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset=""UTF-8"">
-    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-</head>
-<body style=""margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;"">
-    <div style=""max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px;"">
-        <h2 style=""color: #2E7D32; margin-top: 0;"">🚌 Phân công tài xế thay thế</h2>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset=""UTF-8"">
+                <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+            </head>
+            <body style=""margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f5f5f5;"">
+                <div style=""max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 20px;"">
+                    <h2 style=""color: #2E7D32; margin-top: 0;"">🚌 Phân công tài xế thay thế</h2>
         
-        <p>Kính gửi <strong>{firstName} {lastName}</strong>,</p>
+                    <p>Kính gửi <strong>{firstName} {lastName}</strong>,</p>
         
-        <p>Bạn đã được chỉ định làm <strong>tài xế thay thế</strong> từ <strong>{startDate:dd/MM/yyyy}</strong> đến <strong>{endDate:dd/MM/yyyy}</strong>.</p>
+                    <p>Bạn đã được chỉ định làm <strong>tài xế thay thế</strong> từ <strong>{startDate:dd/MM/yyyy}</strong> đến <strong>{endDate:dd/MM/yyyy}</strong>.</p>
         
-        <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
-            <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Thông tin phân công:</h3>
-            <p style=""margin: 10px 0;""><strong>Ngày bắt đầu:</strong> {startDate:dd/MM/yyyy}</p>
-            <p style=""margin: 10px 0;""><strong>Ngày kết thúc:</strong> {endDate:dd/MM/yyyy}</p>
-            <p style=""margin: 10px 0;""><strong>Vai trò:</strong> Tài xế thay thế</p>
-        </div>
+                    <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
+                        <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Thông tin phân công:</h3>
+                        <p style=""margin: 10px 0;""><strong>Ngày bắt đầu:</strong> {startDate:dd/MM/yyyy}</p>
+                        <p style=""margin: 10px 0;""><strong>Ngày kết thúc:</strong> {endDate:dd/MM/yyyy}</p>
+                        <p style=""margin: 10px 0;""><strong>Vai trò:</strong> Tài xế thay thế</p>
+                    </div>
         
-        <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
-            <h3 style=""color: #F57C00; margin-top: 0;"">📋 Hướng dẫn:</h3>
-            <p style=""margin: 10px 0;"">Vui lòng <strong>kiểm tra lịch làm việc</strong> của bạn trong ứng dụng EduBus để xem các chuyến xe được phân công trong khoảng thời gian này.</p>
-            <p style=""margin: 10px 0;"">Đảm bảo bạn đã nắm rõ lịch trình và sẵn sàng thực hiện các chuyến xe được giao.</p>
-        </div>
+                    <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
+                        <h3 style=""color: #F57C00; margin-top: 0;"">📋 Hướng dẫn:</h3>
+                        <p style=""margin: 10px 0;"">Vui lòng <strong>kiểm tra lịch làm việc</strong> của bạn trong ứng dụng EduBus để xem các chuyến xe được phân công trong khoảng thời gian này.</p>
+                        <p style=""margin: 10px 0;"">Đảm bảo bạn đã nắm rõ lịch trình và sẵn sàng thực hiện các chuyến xe được giao.</p>
+                    </div>
         
-        <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ bộ phận quản lý.</p>
+                    <p>Nếu bạn có bất kỳ câu hỏi nào, vui lòng liên hệ bộ phận quản lý.</p>
         
-        <p style=""margin-top: 30px;"">Trân trọng,<br>
-        <strong style=""color: #2E7D32;"">Đội ngũ quản lý EduBus</strong></p>
+                    <p style=""margin-top: 30px;"">Trân trọng,<br>
+                    <strong style=""color: #2E7D32;"">Đội ngũ quản lý EduBus</strong></p>
         
-        <hr style=""border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;"">
+                    <hr style=""border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;"">
         
-        <h2 style=""color: #2E7D32;"">🚌 Replacement Driver Assignment</h2>
+                    <h2 style=""color: #2E7D32;"">🚌 Replacement Driver Assignment</h2>
         
-        <p>Dear <strong>{firstName} {lastName}</strong>,</p>
+                    <p>Dear <strong>{firstName} {lastName}</strong>,</p>
         
-        <p>You have been assigned as a <strong>replacement driver</strong> from <strong>{startDate:yyyy-MM-dd}</strong> to <strong>{endDate:yyyy-MM-dd}</strong>.</p>
+                    <p>You have been assigned as a <strong>replacement driver</strong> from <strong>{startDate:yyyy-MM-dd}</strong> to <strong>{endDate:yyyy-MM-dd}</strong>.</p>
         
-        <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
-            <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Assignment Information:</h3>
-            <p style=""margin: 10px 0;""><strong>Start Date:</strong> {startDate:yyyy-MM-dd}</p>
-            <p style=""margin: 10px 0;""><strong>End Date:</strong> {endDate:yyyy-MM-dd}</p>
-            <p style=""margin: 10px 0;""><strong>Role:</strong> Replacement Driver</p>
-        </div>
+                    <div style=""background-color: #E8F5E8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2E7D32;"">
+                        <h3 style=""color: #2E7D32; margin-top: 0;"">📅 Assignment Information:</h3>
+                        <p style=""margin: 10px 0;""><strong>Start Date:</strong> {startDate:yyyy-MM-dd}</p>
+                        <p style=""margin: 10px 0;""><strong>End Date:</strong> {endDate:yyyy-MM-dd}</p>
+                        <p style=""margin: 10px 0;""><strong>Role:</strong> Replacement Driver</p>
+                    </div>
         
-        <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
-            <h3 style=""color: #F57C00; margin-top: 0;"">📋 Instructions:</h3>
-            <p style=""margin: 10px 0;"">Please <strong>check your work schedule</strong> in the EduBus app to view trip assignments during this period.</p>
-            <p style=""margin: 10px 0;"">Ensure you are familiar with the schedule and ready to perform the assigned trips.</p>
-        </div>
+                    <div style=""background-color: #FFF3E0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #F57C00;"">
+                        <h3 style=""color: #F57C00; margin-top: 0;"">📋 Instructions:</h3>
+                        <p style=""margin: 10px 0;"">Please <strong>check your work schedule</strong> in the EduBus app to view trip assignments during this period.</p>
+                        <p style=""margin: 10px 0;"">Ensure you are familiar with the schedule and ready to perform the assigned trips.</p>
+                    </div>
         
-        <p>If you have any questions, please contact the management team.</p>
+                    <p>If you have any questions, please contact the management team.</p>
         
-        <p style=""margin-top: 30px;"">Best regards,<br>
-        <strong style=""color: #2E7D32;"">EduBus Management Team</strong></p>
-    </div>
-</body>
-</html>";
-
+                    <p style=""margin-top: 30px;"">Best regards,<br>
+                    <strong style=""color: #2E7D32;"">EduBus Management Team</strong></p>
+                </div>
+            </body>
+            </html>";
             return (subject, body);
         }
     }

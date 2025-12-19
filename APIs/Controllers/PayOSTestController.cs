@@ -7,10 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace APIs.Controllers;
 
-/// <summary>
-/// Test controller for PayOS signature validation
-/// This controller should be removed in production
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(Roles = "Admin")] // Only admins can access test endpoints
@@ -30,9 +26,6 @@ public class PayOSTestController : ControllerBase
         _config = config.Value;
     }
 
-    /// <summary>
-    /// Test PayOS signature validation with sample data
-    /// </summary>
     [HttpPost("test-signature")]
     public async Task<ActionResult<PayOSSignatureTestResult>> TestSignatureValidation()
     {
@@ -48,9 +41,6 @@ public class PayOSTestController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Test signature generation with custom data
-    /// </summary>
     [HttpPost("test-signature-custom")]
     public async Task<ActionResult<object>> TestSignatureGeneration([FromBody] PayOSWebhookData data)
     {
@@ -72,9 +62,6 @@ public class PayOSTestController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Test signature verification with custom data and signature
-    /// </summary>
     [HttpPost("test-signature-verify")]
     public async Task<ActionResult<object>> TestSignatureVerification([FromBody] PayOSSignatureTestRequest request)
     {
@@ -97,9 +84,6 @@ public class PayOSTestController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Get PayOS configuration (without sensitive data)
-    /// </summary>
     [HttpGet("config")]
     public ActionResult<object> GetConfig()
     {
@@ -116,9 +100,6 @@ public class PayOSTestController : ControllerBase
     }
 }
 
-/// <summary>
-/// Request model for signature verification test
-/// </summary>
 public class PayOSSignatureTestRequest
 {
     public PayOSWebhookData Data { get; set; } = new();

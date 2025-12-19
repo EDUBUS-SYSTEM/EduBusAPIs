@@ -18,9 +18,6 @@ public class SchoolController : ControllerBase
         _schoolService = schoolService;
     }
 
-    /// <summary>
-    /// Get school information (public endpoint for homepage/mobile)
-    /// </summary>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(SchoolDto), StatusCodes.Status200OK)]
@@ -34,10 +31,6 @@ public class SchoolController : ControllerBase
         return Ok(school);
     }
 
-    /// <summary>
-    /// Get school information with internal notes (admin only)
-    /// Returns empty school if not found (to allow creation)
-    /// </summary>
     [HttpGet("admin")]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(SchoolDto), StatusCodes.Status200OK)]
@@ -75,9 +68,6 @@ public class SchoolController : ControllerBase
         return Ok(school);
     }
 
-    /// <summary>
-    /// Create school information (admin only)
-    /// </summary>
     [HttpPost]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(SchoolDto), StatusCodes.Status201Created)]
@@ -103,9 +93,6 @@ public class SchoolController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Update school information (admin only)
-    /// </summary>
     [HttpPut("{id:guid}")]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(SchoolDto), StatusCodes.Status200OK)]
@@ -131,9 +118,6 @@ public class SchoolController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Update school location from map picker (admin only)
-    /// </summary>
     [HttpPut("{id:guid}/location")]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(SchoolDto), StatusCodes.Status200OK)]
@@ -159,9 +143,6 @@ public class SchoolController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Get school images (Logo, Banner, Gallery) - admin only
-    /// </summary>
     [HttpGet("images")]
     [Authorize(Roles = Roles.Admin)]
     [ProducesResponseType(typeof(List<SchoolImageDto>), StatusCodes.Status200OK)]

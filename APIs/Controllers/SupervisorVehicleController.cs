@@ -8,10 +8,6 @@ using Utils;
 
 namespace APIs.Controllers
 {
-    /// <summary>
-    /// Controller for Supervisor-specific vehicle assignment operations
-    /// Note: Admin operations are handled by VehicleAssignmentController
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -24,10 +20,6 @@ namespace APIs.Controllers
             _supervisorVehicleService = supervisorVehicleService;
         }
 
-        /// <summary>
-        /// Get supervisor assignments with filtering and pagination
-        /// Supervisor can view own assignments, Admin can view any supervisor's assignments
-        /// </summary>
         [HttpGet("supervisor/{supervisorId}/assignments")]
         public async Task<ActionResult<SupervisorAssignmentListResponse>> GetSupervisorAssignments(
             Guid supervisorId,
@@ -53,9 +45,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get current supervisor's own vehicle from token - Supervisor only
-        /// </summary>
         [Authorize(Roles = Roles.Supervisor)]
         [HttpGet("current-vehicle")]
         public async Task<ActionResult<object>> GetCurrentVehicle()

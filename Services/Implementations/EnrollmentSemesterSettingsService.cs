@@ -356,9 +356,6 @@ namespace Services.Implementations
                 throw new ArgumentException($"{fieldName} cannot be default or empty");
         }
 
-        /// <summary>
-        /// Normalizes a DateTime to UTC and removes time component (sets to 00:00:00)
-        /// </summary>
         private static DateTime NormalizeDate(DateTime date)
         {
             // Convert to UTC if not already
@@ -368,7 +365,6 @@ namespace Services.Implementations
                     ? date.ToUniversalTime() 
                     : DateTime.SpecifyKind(date, DateTimeKind.Utc);
 
-            // Remove time component - keep only date part at midnight UTC
             return new DateTime(utcDate.Year, utcDate.Month, utcDate.Day, 0, 0, 0, DateTimeKind.Utc);
         }
 
@@ -428,8 +424,6 @@ namespace Services.Implementations
             if (semesterPeriod > maxSemesterPeriod)
                 throw new ArgumentException($"Semester period cannot exceed {maxSemesterPeriod.Days} days");
 
-            // Additional validation: Ensure registration period is reasonable relative to semester period
-            // Registration should not be longer than the semester itself
             if (registrationPeriod > semesterPeriod)
                 throw new ArgumentException("Registration period cannot be longer than the semester period");
         }

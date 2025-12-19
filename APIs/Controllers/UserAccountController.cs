@@ -23,9 +23,6 @@ namespace APIs.Controllers
             _userService = userService;
         }
 
-        /// <summary>
-        /// Get list of users with pagination, filtering, and sorting
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpGet]
         public async Task<ActionResult<UserListResponse>> GetUsers(
@@ -56,9 +53,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get user by ID - Users can view their own info, Admin can view any user
-        /// </summary>
         [HttpGet("{userId}")]
         public async Task<ActionResult<UserResponse>> GetUserById(Guid userId)
         {
@@ -92,9 +86,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update a user (full update) - Users can update their own info, Admin can update any user
-        /// </summary>
         [HttpPut("{userId}")]
         public async Task<ActionResult<UserResponse>> UpdateUser(Guid userId, [FromBody] UserUpdateRequest request)
         {
@@ -137,9 +128,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Update a user (partial update) - Users can update their own info, Admin can update any user
-        /// </summary>
         [HttpPatch("{userId}")]
         public async Task<ActionResult<UserResponse>> PartialUpdateUser(Guid userId, [FromBody] UserPartialUpdateRequest request)
         {
@@ -182,9 +170,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Delete a user - Only Admin can delete users
-        /// </summary>
         [Authorize(Roles = Roles.Admin)]
         [HttpDelete("{userId}")]
         public async Task<ActionResult<BasicSuccessResponse>> DeleteUser(Guid userId)
@@ -213,9 +198,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Upload user photo - Users can upload their own photo, Admin can upload for any user
-        /// </summary>
         [HttpPost("{userId}/upload-user-photo")]
         [Consumes("multipart/form-data")]
         public async Task<ActionResult<object>> UploadUserPhoto(Guid userId, IFormFile file)
@@ -245,9 +227,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get user photo - Any authenticated user can view
-        /// </summary>
         [Authorize]
         [HttpGet("{userId}/user-photo")]
         public async Task<IActionResult> GetUserPhoto(Guid userId)
@@ -273,9 +252,6 @@ namespace APIs.Controllers
             }
         }
 
-		/// <summary>
-		/// Lock a user account - Admin only
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpPost("{userId}/lock")]
 		public async Task<ActionResult<BasicSuccessResponse>> LockUser(Guid userId, [FromBody] LockUserRequest request)
@@ -308,9 +284,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Unlock a user account - Admin only
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpPost("{userId}/unlock")]
 		public async Task<ActionResult<BasicSuccessResponse>> UnlockUser(Guid userId)
@@ -343,9 +316,6 @@ namespace APIs.Controllers
 			}
 		}
         
-		/// <summary>
-		/// Lock multiple user accounts - Admin only
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpPost("lock-multiple")]
 		public async Task<ActionResult<BasicSuccessResponse>> LockMultipleUsers([FromBody] LockMultipleUsersRequest request)
@@ -378,9 +348,6 @@ namespace APIs.Controllers
 			}
 		}
 
-		/// <summary>
-		/// Unlock multiple user accounts - Admin only
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpPost("unlock-multiple")]
 		public async Task<ActionResult<BasicSuccessResponse>> UnlockMultipleUsers([FromBody] UnlockMultipleUsersRequest request)
@@ -414,9 +381,6 @@ namespace APIs.Controllers
 		}
 
 
-		/// <summary>
-		/// Reset all users' passwords to "password" - Admin only
-		/// </summary>
 		[Authorize(Roles = Roles.Admin)]
 		[HttpPost("reset-all-passwords")]
 		public async Task<ActionResult<BasicSuccessResponse>> ResetAllPasswords()

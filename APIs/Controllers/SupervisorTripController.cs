@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Services.Contracts;
-using Services.Models.Trip;
 using Constants;
 using System.Security.Claims;
 
@@ -21,9 +20,6 @@ namespace APIs.Controllers
             _logger = logger;
         }
 
-        /// <summary>
-        /// Get the list of trips assigned to the current supervisor.
-        /// </summary>
         [HttpGet]
         public async Task<ActionResult<object>> GetMyTrips(
             [FromQuery] DateTime? dateFrom = null,
@@ -54,9 +50,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get trips scheduled for today for the current supervisor.
-        /// </summary>
         [HttpGet("today")]
         public async Task<ActionResult<object>> GetTodayTrips()
         {
@@ -84,9 +77,6 @@ namespace APIs.Controllers
             }
         }
 
-        /// <summary>
-        /// Get trip details for the current supervisor (with limited payload).
-        /// </summary>
         [HttpGet("{tripId}")]
         public async Task<ActionResult<object>> GetTripDetail(Guid tripId)
         {

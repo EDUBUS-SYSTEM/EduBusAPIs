@@ -224,7 +224,6 @@ namespace Services.Implementations
                         var (rawPassword, hashedPassword) = SecurityHelper.GenerateAndHashPassword();
                         driver.HashedPassword = hashedPassword;
                         // Note: License number will be handled separately through DriverLicense entity
-                        // Thêm vào database
                         var createdDriver = await _driverRepository.AddAsync(driver);
 
                         var successResult = _mapper.Map<ImportUserSuccess>(createdDriver);
@@ -248,7 +247,7 @@ namespace Services.Implementations
                 }
                 return result;
             }
-            catch (Exception ex)
+            catch
             {
                 throw;
             }

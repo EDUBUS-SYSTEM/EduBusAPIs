@@ -1,4 +1,3 @@
-using Constants;
 using Data.Models;
 using Data.Repos.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -8,27 +7,23 @@ using Services.Contracts;
 using Services.Models.Dashboard;
 using Route = Data.Models.Route;
 using Data.Models.Enums;
-using Data.Repos.Interfaces;
 using Utils;
 
 namespace Services.Implementations
 {
     public class DashboardService : IDashboardService
     {
-        private readonly IDatabaseFactory _databaseFactory;
         private readonly ILogger<DashboardService> _logger;
         private readonly IMongoDatabase _mongoDatabase;
         private readonly ITransactionRepository _transactionRepository;
         private readonly IAcademicCalendarRepository _academicCalendarRepository;
 
         public DashboardService(
-            IDatabaseFactory databaseFactory,
             ILogger<DashboardService> logger,
             IMongoDatabase mongoDatabase,
             ITransactionRepository transactionRepository,
             IAcademicCalendarRepository academicCalendarRepository)
         {
-            _databaseFactory = databaseFactory;
             _logger = logger;
             _mongoDatabase = mongoDatabase;
             _transactionRepository = transactionRepository;

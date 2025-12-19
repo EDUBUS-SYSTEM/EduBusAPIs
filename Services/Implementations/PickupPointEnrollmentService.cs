@@ -8,12 +8,6 @@ using Services.Models.PickupPoint;
 
 namespace Services.Implementations
 {
-    /// Orchestrates the end-to-end flow for Parent pickup point registration:
-    /// - Check parent email
-    /// - Send/verify OTP (via Redis store)
-    /// - Create request to Mongo
-    /// - Admin approve -> create PickupPoint + Student history in SQL
-    /// </summary>
     public class PickupPointEnrollmentService : IPickupPointEnrollmentService
     {
         private readonly IStudentRepository _studentRepo;
@@ -126,11 +120,11 @@ namespace Services.Implementations
             // Send OTP email
             var subject = "[EduBus] Your OTP Code";
             var body = $@"
-<p>Hello,</p>
-<p>Your OTP code is <b>{otp}</b>. It is valid for <b>5 minutes</b>.</p>
-<p>Please use this code to verify your registration for the student pickup service.</p>
-<p>If you did not request this, please ignore this email.</p>
-<p>Best regards,<br/>EduBus Team</p>";
+            <p>Hello,</p>
+            <p>Your OTP code is <b>{otp}</b>. It is valid for <b>5 minutes</b>.</p>
+            <p>Please use this code to verify your registration for the student pickup service.</p>
+            <p>If you did not request this, please ignore this email.</p>
+            <p>Best regards,<br/>EduBus Team</p>";
 
             await _email.SendEmailAsync(dto.Email, subject, body);
 
