@@ -8,7 +8,7 @@ using Services.Contracts;
 using Services.Models.Dashboard;
 using Route = Data.Models.Route;
 using Data.Models.Enums;
-using Data.Repos.Interfaces;
+
 using Utils;
 
 namespace Services.Implementations
@@ -39,7 +39,7 @@ namespace Services.Implementations
         {
             try
             {
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 var fromDate = from ?? now.Date;
                 var toDate = to ?? now.Date.AddDays(1);
 
@@ -47,7 +47,7 @@ namespace Services.Implementations
                 {
                     DailyStudents = await GetDailyStudentsAsync(now.Date),
                     AttendanceRate = await GetAttendanceRateAsync("today"),
-                    VehicleRuntime = await GetVehicleRuntimeAsync(null, now.Date, now.Date.AddDays(1)),
+                    VehicleRuntime = await GetVehicleRuntimeAsync(null, fromDate, toDate),
                     RouteStatistics = await GetRouteStatisticsAsync(null, fromDate, toDate)
                 };
 
@@ -64,7 +64,8 @@ namespace Services.Implementations
         {
             try
             {
-                var targetDate = date ?? DateTime.UtcNow.Date;
+                var now = DateTime.UtcNow.AddHours(7);
+                var targetDate = date ?? now.Date;
                 var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
 
           
@@ -114,13 +115,15 @@ namespace Services.Implementations
 
         private async Task<int> GetStudentCountForDate(IMongoCollection<Trip> collection, DateTime date)
         {
-            var dayStart = date.Date;
-            var dayEnd = date.Date;
+            // Convert local date to UTC range (Local 00:00 is UTC -7h)
+            var localDayStart = date.Date;
+            var utcStart = localDayStart.AddHours(-7);
+            var utcEnd = utcStart.AddDays(1);
 
             var filter = Builders<Trip>.Filter.And(
                 Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
-                Builders<Trip>.Filter.Gte(t => t.ServiceDate, dayStart),
-                Builders<Trip>.Filter.Lte(t => t.ServiceDate, dayEnd)
+                Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcStart),
+                Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcEnd)
             );
 
             var trips = await collection.Find(filter).ToListAsync();
@@ -136,6 +139,7 @@ namespace Services.Implementations
                         {
                             foreach (var attendance in stop.Attendance)
                             {
+                                // Count all students assigned to the trip
                                 uniqueStudents.Add(attendance.StudentId);
                             }
                         }
@@ -144,6 +148,13 @@ namespace Services.Implementations
             }
 
             return uniqueStudents.Count;
+        }
+
+        private bool IsPositiveAttendance(string? state)
+        {
+            if (string.IsNullOrEmpty(state)) return false;
+            var s = state.ToLower();
+            return s == "present" || s == "late" || s == "boarded" || s == "alighted";
         }
 
         public async Task<AttendanceRateDto> GetAttendanceRateAsync(string period = "today")
@@ -170,15 +181,25 @@ namespace Services.Implementations
                 }
 
                 var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
+                
+                // Adjust for UTC offset
+                var utcStartDate = startDate.AddHours(-7);
+                var utcEndDate = endDate.AddHours(-7);
+
                 var filter = Builders<Trip>.Filter.And(
                     Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
-                    Builders<Trip>.Filter.Gte(t => t.ServiceDate, startDate),
-                    Builders<Trip>.Filter.Lt(t => t.ServiceDate, endDate)
+                    Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcStartDate),
+                    Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcEndDate)
                 );
 
                 var trips = await tripsCollection.Find(filter).ToListAsync();
 
-                int totalPresent = 0, totalAbsent = 0, totalLate = 0, totalExcused = 0, totalPending = 0;
+                var uniquePresent = new HashSet<Guid>();
+                var uniqueLate = new HashSet<Guid>();
+                var uniqueAbsent = new HashSet<Guid>();
+                var uniqueExcused = new HashSet<Guid>();
+                var uniquePending = new HashSet<Guid>();
+                var allScheduled = new HashSet<Guid>();
 
                 foreach (var trip in trips)
                 {
@@ -190,22 +211,27 @@ namespace Services.Implementations
                             {
                                 foreach (var att in stop.Attendance)
                                 {
-                                    switch (att.State?.ToLower())
+                                    var state = att.State?.ToLower();
+                                    allScheduled.Add(att.StudentId);
+
+                                    switch (state)
                                     {
                                         case "present":
-                                            totalPresent++;
-                                            break;
-                                        case "absent":
-                                            totalAbsent++;
+                                        case "boarded":
+                                        case "alighted":
+                                            uniquePresent.Add(att.StudentId);
                                             break;
                                         case "late":
-                                            totalLate++;
+                                            uniqueLate.Add(att.StudentId);
+                                            break;
+                                        case "absent":
+                                            uniqueAbsent.Add(att.StudentId);
                                             break;
                                         case "excused":
-                                            totalExcused++;
+                                            uniqueExcused.Add(att.StudentId);
                                             break;
                                         default:
-                                            totalPending++;
+                                            uniquePending.Add(att.StudentId);
                                             break;
                                     }
                                 }
@@ -214,8 +240,15 @@ namespace Services.Implementations
                     }
                 }
 
-                var totalStudents = totalPresent + totalAbsent + totalLate + totalExcused + totalPending;
-                var todayRate = totalStudents > 0 ? (double)totalPresent / totalStudents * 100 : 0;
+                // Priority: Present > Late > Absent > Excused > Pending
+                int totalPresent = uniquePresent.Count;
+                int totalLate = uniqueLate.Except(uniquePresent).Count();
+                int totalAbsent = uniqueAbsent.Except(uniquePresent).Except(uniqueLate).Count();
+                int totalExcused = uniqueExcused.Except(uniquePresent).Except(uniqueLate).Except(uniqueAbsent).Count();
+                int totalPending = uniquePending.Except(uniquePresent).Except(uniqueLate).Except(uniqueAbsent).Except(uniqueExcused).Count();
+                
+                int totalStudents = allScheduled.Count;
+                var todayRate = totalStudents > 0 ? (double)(totalPresent + totalLate) / totalStudents * 100 : 0;
 
                 var weekRate = await CalculateAttendanceRateForPeriod(tripsCollection, now.Date.AddDays(-7), now.Date.AddDays(1));
                 var monthRate = await CalculateAttendanceRateForPeriod(tripsCollection, now.Date.AddDays(-30), now.Date.AddDays(1));
@@ -242,14 +275,18 @@ namespace Services.Implementations
 
         private async Task<double> CalculateAttendanceRateForPeriod(IMongoCollection<Trip> collection, DateTime start, DateTime end)
         {
+            // Adjust for UTC offset
+            var utcStart = start.AddHours(-7);
+            var utcEnd = end.AddHours(-7);
+
             var filter = Builders<Trip>.Filter.And(
                 Builders<Trip>.Filter.Eq(t => t.IsDeleted, false),
-                Builders<Trip>.Filter.Gte(t => t.ServiceDate, start),
-                Builders<Trip>.Filter.Lt(t => t.ServiceDate, end)
+                Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcStart),
+                Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcEnd)
             );
 
             var trips = await collection.Find(filter).ToListAsync();
-            int present = 0, total = 0;
+            int attended = 0, totalMarked = 0;
 
             foreach (var trip in trips)
             {
@@ -261,24 +298,31 @@ namespace Services.Implementations
                         {
                             foreach (var att in stop.Attendance)
                             {
-                                total++;
-                                if (att.State?.ToLower() == "present")
-                                    present++;
+                                totalMarked++;
+                                if (IsPositiveAttendance(att.State))
+                                {
+                                    attended++;
+                                }
                             }
                         }
                     }
                 }
             }
 
-            return total > 0 ? (double)present / total * 100 : 0;
+            return totalMarked > 0 ? (double)attended / totalMarked * 100 : 0;
         }
 
         public async Task<VehicleRuntimeDto> GetVehicleRuntimeAsync(Guid? vehicleId = null, DateTime? from = null, DateTime? to = null)
         {
             try
             {
-                var startDate = from ?? DateTime.UtcNow.Date;
-                var endDate = to ?? DateTime.UtcNow.Date.AddDays(1);
+                var nowVn = DateTime.UtcNow.AddHours(7);
+                var localFrom = from ?? nowVn.Date;
+                var localTo = (to ?? nowVn.Date).AddDays(1);
+
+                // Adjust for UTC offset: Local 00:00 is UTC -7h
+                var utcStartDate = localFrom.AddHours(-7);
+                var utcEndDate = localTo.AddHours(-7);
 
                 var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
                 var filterBuilder = Builders<Trip>.Filter;
@@ -286,8 +330,8 @@ namespace Services.Implementations
                 var filters = new List<FilterDefinition<Trip>>
                 {
                     filterBuilder.Eq(t => t.IsDeleted, false),
-                    filterBuilder.Gte(t => t.ServiceDate, startDate),
-                    filterBuilder.Lte(t => t.ServiceDate, endDate)
+                    filterBuilder.Gte(t => t.ServiceDate, utcStartDate),
+                    filterBuilder.Lt(t => t.ServiceDate, utcEndDate)
                 };
 
                 if (vehicleId.HasValue)
@@ -301,9 +345,31 @@ namespace Services.Implementations
 
                 foreach (var trip in trips)
                 {
-                    if (trip.StartTime.HasValue && trip.EndTime.HasValue)
+                    double duration = 0;
+                    bool hasStarted = false;
+
+                    if (trip.Status == TripConstants.TripStatus.Completed)
                     {
-                        var duration = (trip.EndTime.Value - trip.StartTime.Value).TotalHours;
+                        var sTime = trip.StartTime ?? trip.PlannedStartAt;
+                        var eTime = trip.EndTime ?? trip.PlannedEndAt;
+                        if (eTime > sTime)
+                        {
+                            duration = (eTime - sTime).TotalHours;
+                            hasStarted = true;
+                        }
+                    }
+                    else if (trip.Status == TripConstants.TripStatus.InProgress)
+                    {
+                        var sTime = trip.StartTime ?? trip.PlannedStartAt;
+                        if (nowVn > sTime)
+                        {
+                            duration = (nowVn - sTime).TotalHours;
+                            hasStarted = true;
+                        }
+                    }
+
+                    if (hasStarted)
+                    {
                         totalHours += duration;
 
                         if (trip.VehicleId != Guid.Empty)
@@ -334,13 +400,13 @@ namespace Services.Implementations
                     })
                     .ToList();
 
-                var totalTrips = trips.Count(t => t.StartTime.HasValue && t.EndTime.HasValue);
+                var tripsWithRuntime = trips.Count(t => t.Status == TripConstants.TripStatus.Completed || t.Status == TripConstants.TripStatus.InProgress);
 
                 return new VehicleRuntimeDto
                 {
                     TotalHoursToday = Math.Round(totalHours, 2),
-                    AverageHoursPerTrip = totalTrips > 0 ? Math.Round(totalHours / totalTrips, 2) : 0,
-                    TotalTripsToday = totalTrips,
+                    AverageHoursPerTrip = tripsWithRuntime > 0 ? Math.Round(totalHours / tripsWithRuntime, 2) : 0,
+                    TotalTripsToday = trips.Count,
                     TopVehicles = topVehicles
                 };
             }
@@ -355,8 +421,13 @@ namespace Services.Implementations
         {
             try
             {
-                var startDate = from ?? DateTime.UtcNow.Date.AddDays(-30);
-                var endDate = to ?? DateTime.UtcNow.Date.AddDays(1);
+                var now = DateTime.UtcNow.AddHours(7);
+                var localFrom = from ?? now.Date.AddDays(-30);
+                var localTo = (to ?? now.Date).AddDays(1);
+
+                // Adjust for UTC offset: Local 00:00 is UTC -7h
+                var utcStartDate = localFrom.AddHours(-7);
+                var utcEndDate = localTo.AddHours(-7);
 
                 var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
                 var routesCollection = _mongoDatabase.GetCollection<Route>("routes");
@@ -365,8 +436,8 @@ namespace Services.Implementations
                 var filters = new List<FilterDefinition<Trip>>
                 {
                     filterBuilder.Eq(t => t.IsDeleted, false),
-                    filterBuilder.Gte(t => t.ServiceDate, startDate),
-                    filterBuilder.Lte(t => t.ServiceDate, endDate)
+                    filterBuilder.Gte(t => t.ServiceDate, utcStartDate),
+                    filterBuilder.Lt(t => t.ServiceDate, utcEndDate)
                 };
 
                 if (routeId.HasValue)
@@ -375,7 +446,7 @@ namespace Services.Implementations
                 var filter = filterBuilder.And(filters);
                 var trips = await tripsCollection.Find(filter).ToListAsync();
 
-                var routeStats = new Dictionary<Guid, (string name, int tripCount, HashSet<Guid> students, int present, int total, double totalRuntime, HashSet<Guid> vehicles)>();
+                var routeStats = new Dictionary<Guid, (string name, int totalTrips, int actualTrips, HashSet<Guid> students, int attended, int marked, double totalRuntime, HashSet<Guid> vehicles)>();
 
                 foreach (var trip in trips)
                 {
@@ -383,18 +454,42 @@ namespace Services.Implementations
                     {
                         var route = await routesCollection.Find(r => r.Id == trip.RouteId).FirstOrDefaultAsync();
                         var routeName = route?.RouteName ?? "Unknown Route";
-                        routeStats[trip.RouteId] = (routeName, 0, new HashSet<Guid>(), 0, 0, 0, new HashSet<Guid>());
+                        routeStats[trip.RouteId] = (routeName, 0, 0, new HashSet<Guid>(), 0, 0, 0, new HashSet<Guid>());
                     }
 
                     var current = routeStats[trip.RouteId];
-                    current.tripCount++;
+                    current.totalTrips++;
 
                     if (trip.VehicleId != Guid.Empty)
                         current.vehicles.Add(trip.VehicleId);
 
-                    if (trip.StartTime.HasValue && trip.EndTime.HasValue)
+                    double duration = 0;
+                    bool hasStarted = false;
+                    if (trip.Status == TripConstants.TripStatus.Completed)
                     {
-                        current.totalRuntime += (trip.EndTime.Value - trip.StartTime.Value).TotalHours;
+                        var sTime = trip.StartTime ?? trip.PlannedStartAt;
+                        var eTime = trip.EndTime ?? trip.PlannedEndAt;
+                        if (eTime > sTime)
+                        {
+                            duration = (eTime - sTime).TotalHours;
+                            hasStarted = true;
+                        }
+                    }
+                    else if (trip.Status == TripConstants.TripStatus.InProgress)
+                    {
+                        var sTime = trip.StartTime ?? trip.PlannedStartAt;
+                        var currentTime = DateTime.UtcNow;
+                        if (currentTime > sTime)
+                        {
+                            duration = (currentTime - sTime).TotalHours;
+                            hasStarted = true;
+                        }
+                    }
+
+                    if (hasStarted)
+                    {
+                        current.actualTrips++;
+                        current.totalRuntime += duration;
                     }
 
                     if (trip.Stops != null)
@@ -406,9 +501,11 @@ namespace Services.Implementations
                                 foreach (var att in stop.Attendance)
                                 {
                                     current.students.Add(att.StudentId);
-                                    current.total++;
-                                    if (att.State?.ToLower() == "present")
-                                        current.present++;
+                                    current.marked++;
+                                    if (IsPositiveAttendance(att.State))
+                                    {
+                                        current.attended++;
+                                    }
                                 }
                             }
                         }
@@ -421,10 +518,10 @@ namespace Services.Implementations
                 {
                     RouteId = r.Key,
                     RouteName = r.Value.name,
-                    TotalTrips = r.Value.tripCount,
+                    TotalTrips = r.Value.totalTrips,
                     TotalStudents = r.Value.students.Count,
-                    AttendanceRate = r.Value.total > 0 ? Math.Round((double)r.Value.present / r.Value.total * 100, 2) : 0,
-                    AverageRuntime = r.Value.tripCount > 0 ? Math.Round(r.Value.totalRuntime / r.Value.tripCount, 2) : 0,
+                    AttendanceRate = r.Value.marked > 0 ? Math.Round((double)r.Value.attended / r.Value.marked * 100, 2) : 0,
+                    AverageRuntime = r.Value.actualTrips > 0 ? Math.Round(r.Value.totalRuntime / r.Value.actualTrips, 2) : 0,
                     ActiveVehicles = r.Value.vehicles.Count
                 }).OrderByDescending(r => r.TotalTrips).ToList();
             }
@@ -439,8 +536,9 @@ namespace Services.Implementations
         {
             try
             {
-                var startDate = from ?? DateTime.UtcNow.Date.AddMonths(-1);
-                var endDate = to ?? DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
+                var startDate = from ?? now.Date.AddMonths(-1);
+                var endDate = to ?? now;
 
                 var transactionsQuery = _transactionRepository.GetQueryable().Where(t => !t.IsDeleted);
 
@@ -479,8 +577,9 @@ namespace Services.Implementations
         {
             try
             {
-                var startDate = from ?? DateTime.UtcNow.Date.AddMonths(-1);
-                var endDate = to ?? DateTime.UtcNow.Date.AddDays(1);
+                var now = DateTime.UtcNow.AddHours(7);
+                var startDate = from ?? now.Date.AddMonths(-1);
+                var endDate = to ?? now.Date.AddDays(1);
 
                 var transactionsQuery = _transactionRepository.GetQueryable().Where(t =>
                     !t.IsDeleted &&
@@ -512,7 +611,7 @@ namespace Services.Implementations
         {
             try
             {
-                var now = DateTime.UtcNow;
+                var now = DateTime.UtcNow.AddHours(7);
                 var activeCalendars = await _academicCalendarRepository.GetActiveAsync();
                 if (!activeCalendars.Any())
                 {

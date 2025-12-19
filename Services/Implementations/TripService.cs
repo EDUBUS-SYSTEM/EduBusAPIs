@@ -86,15 +86,17 @@ namespace Services.Implementations
 
 				if (serviceDate.HasValue)
 				{
-					var dayStart = serviceDate.Value.Date;
-					var dayEnd = dayStart.AddDays(1);
-					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, dayStart));
-					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, dayEnd));
+					var utcDayStart = serviceDate.Value.Date;
+					var utcDayEnd = utcDayStart.AddDays(1);
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcDayStart));
+					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcDayEnd));
 				}
 				else if (startDate.HasValue && endDate.HasValue)
 				{
-					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, startDate.Value.Date));
-					filters.Add(Builders<Trip>.Filter.Lte(t => t.ServiceDate, endDate.Value.Date));
+					var utcRangeStart = startDate.Value.Date;
+					var utcRangeEnd = endDate.Value.Date.AddDays(1);
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcRangeStart));
+					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcRangeEnd));
 				}
 
 				var filter = filters.Count == 1 ? filters[0] : Builders<Trip>.Filter.And(filters);
@@ -176,15 +178,17 @@ namespace Services.Implementations
 
 				if (serviceDate.HasValue)
 				{
-					var dayStart = serviceDate.Value.Date;
-					var dayEnd = dayStart.AddDays(1);
-					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, dayStart));
-					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, dayEnd));
+					var utcDayStart = serviceDate.Value.Date;
+					var utcDayEnd = utcDayStart.AddDays(1);
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcDayStart));
+					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcDayEnd));
 				}
 				else if (startDate.HasValue && endDate.HasValue)
 				{
-					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, startDate.Value.Date));
-					filters.Add(Builders<Trip>.Filter.Lte(t => t.ServiceDate, endDate.Value.Date));
+					var utcRangeStart = startDate.Value.Date;
+					var utcRangeEnd = endDate.Value.Date.AddDays(1);
+					filters.Add(Builders<Trip>.Filter.Gte(t => t.ServiceDate, utcRangeStart));
+					filters.Add(Builders<Trip>.Filter.Lt(t => t.ServiceDate, utcRangeEnd));
 				}
 
 				var filter = filters.Count == 1 ? filters[0] : Builders<Trip>.Filter.And(filters);
