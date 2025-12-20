@@ -2,9 +2,9 @@
 using Data.Models;
 using Data.Models.Enums;
 using Data.Repos.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using Services.Contracts;
 using Services.Models.PickupPoint;
+using Services.Models.Route;
 
 namespace Services.Implementations
 {
@@ -56,34 +56,46 @@ namespace Services.Implementations
 			var unassignedPickupPoints = await _pickupPointRepository.FindByConditionAsync(pp =>
 				!pp.IsDeleted && !assignedPickupPointIds.Contains(pp.Id));
 
-			// Get student counts for each unassigned pickup point
+			// Get student counts AND details for each unassigned pickup point
 			var pickupPointIds = unassignedPickupPoints.Select(pp => pp.Id).ToList();
-			var studentCounts = await _studentRepository.FindByConditionAsync(s =>
+
+			var students = await _studentRepository.FindByConditionAsync(s =>
 				pickupPointIds.Contains(s.CurrentPickupPointId ?? Guid.Empty) &&
 				s.Status == StudentStatus.Active &&
 				!s.IsDeleted);
 
-			// Group students by pickup point ID and count them
-			var studentCountsByPickupPoint = studentCounts
+			// Group students by pickup point ID
+			var studentsByPickupPoint = students
 				.Where(s => s.CurrentPickupPointId.HasValue)
 				.GroupBy(s => s.CurrentPickupPointId!.Value)
-				.ToDictionary(g => g.Key, g => g.Count());
+				.ToDictionary(
+					g => g.Key,
+					g => g.Select(s => new StudentInfoDto
+					{
+						Id = s.Id,
+						FirstName = s.FirstName,
+						LastName = s.LastName,
+						Status = s.Status,
+						PickupPointAssignedAt = s.PickupPointAssignedAt
+					}).ToList()
+				);
 
-            var pickupPointDtos = unassignedPickupPoints
-            .Where(pp => studentCountsByPickupPoint.ContainsKey(pp.Id))
-            .Select(pp => new PickupPointDto
-            {
-                Id = pp.Id,
-                Description = pp.Description,
-                Location = pp.Location,
-                Latitude = pp.Geog.Y,
-                Longitude = pp.Geog.X,
-                StudentCount = studentCountsByPickupPoint[pp.Id],
-                CreatedAt = pp.CreatedAt,
-                UpdatedAt = pp.UpdatedAt
-            }).ToList();
+			var pickupPointDtos = unassignedPickupPoints
+				.Where(pp => studentsByPickupPoint.ContainsKey(pp.Id))
+				.Select(pp => new PickupPointDto
+				{
+					Id = pp.Id,
+					Description = pp.Description,
+					Location = pp.Location,
+					Latitude = pp.Geog.Y,
+					Longitude = pp.Geog.X,
+					StudentCount = studentsByPickupPoint[pp.Id].Count,
+					Students = studentsByPickupPoint[pp.Id], 
+					CreatedAt = pp.CreatedAt,
+					UpdatedAt = pp.UpdatedAt
+				}).ToList();
 
-            return new PickupPointsResponse
+			return new PickupPointsResponse
 			{
 				PickupPoints = pickupPointDtos,
 				TotalCount = pickupPointDtos.Count

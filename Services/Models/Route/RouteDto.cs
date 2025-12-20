@@ -1,3 +1,4 @@
+using Data.Models.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +27,7 @@ namespace Services.Models.Route
         public int SequenceOrder { get; set; }
         public LocationInfoDto Location { get; set; } = new LocationInfoDto();
 		public int StudentCount { get; set; }
+		public List<StudentInfoDto> Students { get; set; } = new List<StudentInfoDto>();
 	}
 
     public class LocationInfoDto
@@ -34,4 +36,15 @@ namespace Services.Models.Route
         public double Longitude { get; set; }
         public string Address { get; set; } = string.Empty;
     }
+
+	public class StudentInfoDto
+	{
+		public Guid Id { get; set; }
+		public string FirstName { get; set; } = string.Empty;
+		public string LastName { get; set; } = string.Empty;
+		public string FullName => $"{FirstName} {LastName}";
+		public StudentStatus Status { get; set; }
+		public DateTime? PickupPointAssignedAt { get; set; }
+	}
+
 }

@@ -288,67 +288,9 @@ namespace Services.Implementations
 			return routeDto;
 		}
 
-        public async Task<IEnumerable<RouteDto>> GetAllRoutesAsync()
-        {
-            var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted);
-            var routeDtos = routes.Select(r => _mapper.Map<RouteDto>(r)).ToList();
-
-			foreach (var routeDto in routeDtos)
-			{
-				routeDto.PickupPoints = routeDto.PickupPoints
-					.OrderBy(pp => pp.SequenceOrder)
-					.ToList();
-			}
-
-			var allPickupPointIds = routeDtos
-		    .SelectMany(r => r.PickupPoints)
-		    .Select(pp => pp.PickupPointId)
-		    .Distinct()
-		    .ToList();
-
-			// Get student counts for each pickup point
-			var studentCounts = new Dictionary<Guid, int>();
-			if (allPickupPointIds.Any())
-			{
-				var students = await _studentRepository.FindByConditionAsync(s =>
-					allPickupPointIds.Contains(s.CurrentPickupPointId ?? Guid.Empty) &&
-					s.Status == StudentStatus.Active &&
-					!s.IsDeleted);
-
-				studentCounts = students
-					.Where(s => s.CurrentPickupPointId.HasValue)
-					.GroupBy(s => s.CurrentPickupPointId!.Value)
-					.ToDictionary(g => g.Key, g => g.Count());
-			}
-
-			// Populate student counts for each pickup point
-			foreach (var routeDto in routeDtos)
-			{
-				foreach (var pickupPoint in routeDto.PickupPoints)
-				{
-					pickupPoint.StudentCount = studentCounts.GetValueOrDefault(pickupPoint.PickupPointId, 0);
-				}
-			}
-
-			var vehicleIds = routeDtos.Select(r => r.VehicleId).Distinct().ToList();
-			var vehicles = await _vehicleRepository.FindByConditionAsync(v => vehicleIds.Contains(v.Id));
-
-			foreach (var routeDto in routeDtos)
-			{
-				var vehicle = vehicles.FirstOrDefault(v => v.Id == routeDto.VehicleId);
-				if (vehicle != null)
-				{
-					routeDto.VehicleCapacity = vehicle.Capacity;
-					routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
-				}
-			}
-
-            return routeDtos;
-		}
-
-        public async Task<IEnumerable<RouteDto>> GetActiveRoutesAsync()
-        {
-            var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted && r.IsActive);
+		public async Task<IEnumerable<RouteDto>> GetAllRoutesAsync()
+		{
+			var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted);
 			var routeDtos = routes.Select(r => _mapper.Map<RouteDto>(r)).ToList();
 
 			foreach (var routeDto in routeDtos)
@@ -359,13 +301,13 @@ namespace Services.Implementations
 			}
 
 			var allPickupPointIds = routeDtos
-		    .SelectMany(r => r.PickupPoints)
-		    .Select(pp => pp.PickupPointId)
-		    .Distinct()
-		    .ToList();
+				.SelectMany(r => r.PickupPoints)
+				.Select(pp => pp.PickupPointId)
+				.Distinct()
+				.ToList();
 
-			// Get student counts for each pickup point
-			var studentCounts = new Dictionary<Guid, int>();
+			// Get student counts AND student details for each pickup point
+			var studentsByPickupPoint = new Dictionary<Guid, List<StudentInfoDto>>();
 			if (allPickupPointIds.Any())
 			{
 				var students = await _studentRepository.FindByConditionAsync(s =>
@@ -373,18 +315,38 @@ namespace Services.Implementations
 					s.Status == StudentStatus.Active &&
 					!s.IsDeleted);
 
-				studentCounts = students
+				// Group students by pickup point
+				studentsByPickupPoint = students
 					.Where(s => s.CurrentPickupPointId.HasValue)
 					.GroupBy(s => s.CurrentPickupPointId!.Value)
-					.ToDictionary(g => g.Key, g => g.Count());
+					.ToDictionary(
+						g => g.Key,
+						g => g.Select(s => new StudentInfoDto
+						{
+							Id = s.Id,
+							FirstName = s.FirstName,
+							LastName = s.LastName,
+							Status = s.Status,
+							PickupPointAssignedAt = s.PickupPointAssignedAt
+						}).ToList()
+					);
 			}
 
-			// Populate student counts for each pickup point
+			// Populate student information for each pickup point
 			foreach (var routeDto in routeDtos)
 			{
 				foreach (var pickupPoint in routeDto.PickupPoints)
 				{
-					pickupPoint.StudentCount = studentCounts.GetValueOrDefault(pickupPoint.PickupPointId, 0);
+					if (studentsByPickupPoint.TryGetValue(pickupPoint.PickupPointId, out var students))
+					{
+						pickupPoint.Students = students;
+						pickupPoint.StudentCount = students.Count;
+					}
+					else
+					{
+						pickupPoint.Students = new List<StudentInfoDto>();
+						pickupPoint.StudentCount = 0;
+					}
 				}
 			}
 
@@ -404,7 +366,85 @@ namespace Services.Implementations
 			return routeDtos;
 		}
 
-        public async Task<RouteDto?> UpdateRouteAsync(Guid id, UpdateRouteRequest request)
+		public async Task<IEnumerable<RouteDto>> GetActiveRoutesAsync()
+		{
+			var routes = await _routeRepository.FindByConditionAsync(r => !r.IsDeleted && r.IsActive);
+			var routeDtos = routes.Select(r => _mapper.Map<RouteDto>(r)).ToList();
+
+			foreach (var routeDto in routeDtos)
+			{
+				routeDto.PickupPoints = routeDto.PickupPoints
+					.OrderBy(pp => pp.SequenceOrder)
+					.ToList();
+			}
+
+			var allPickupPointIds = routeDtos
+				.SelectMany(r => r.PickupPoints)
+				.Select(pp => pp.PickupPointId)
+				.Distinct()
+				.ToList();
+
+			// Get student counts AND student details for each pickup point
+			var studentsByPickupPoint = new Dictionary<Guid, List<StudentInfoDto>>();
+			if (allPickupPointIds.Any())
+			{
+				var students = await _studentRepository.FindByConditionAsync(s =>
+					allPickupPointIds.Contains(s.CurrentPickupPointId ?? Guid.Empty) &&
+					s.Status == StudentStatus.Active &&
+					!s.IsDeleted);
+
+				// Group students by pickup point
+				studentsByPickupPoint = students
+					.Where(s => s.CurrentPickupPointId.HasValue)
+					.GroupBy(s => s.CurrentPickupPointId!.Value)
+					.ToDictionary(
+						g => g.Key,
+						g => g.Select(s => new StudentInfoDto
+						{
+							Id = s.Id,
+							FirstName = s.FirstName,
+							LastName = s.LastName,
+							Status = s.Status,
+							PickupPointAssignedAt = s.PickupPointAssignedAt
+						}).ToList()
+					);
+			}
+
+			// Populate student information for each pickup point
+			foreach (var routeDto in routeDtos)
+			{
+				foreach (var pickupPoint in routeDto.PickupPoints)
+				{
+					if (studentsByPickupPoint.TryGetValue(pickupPoint.PickupPointId, out var students))
+					{
+						pickupPoint.Students = students;
+						pickupPoint.StudentCount = students.Count;
+					}
+					else
+					{
+						pickupPoint.Students = new List<StudentInfoDto>();
+						pickupPoint.StudentCount = 0;
+					}
+				}
+			}
+
+			var vehicleIds = routeDtos.Select(r => r.VehicleId).Distinct().ToList();
+			var vehicles = await _vehicleRepository.FindByConditionAsync(v => vehicleIds.Contains(v.Id));
+
+			foreach (var routeDto in routeDtos)
+			{
+				var vehicle = vehicles.FirstOrDefault(v => v.Id == routeDto.VehicleId);
+				if (vehicle != null)
+				{
+					routeDto.VehicleCapacity = vehicle.Capacity;
+					routeDto.VehicleNumberPlate = SecurityHelper.DecryptFromBytes(vehicle.HashedLicensePlate);
+				}
+			}
+
+			return routeDtos;
+		}
+
+		public async Task<RouteDto?> UpdateRouteAsync(Guid id, UpdateRouteRequest request)
         {
             if (id == Guid.Empty)
                 throw new ArgumentException("Invalid route ID", nameof(id));
