@@ -426,22 +426,54 @@ namespace Services.Implementations
                 var utcStartDate = localFrom.AddHours(-7);
                 var utcEndDate = localTo.AddHours(-7);
 
-                var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
-                var routesCollection = _mongoDatabase.GetCollection<Route>("routes");
-
-                var filterBuilder = Builders<Trip>.Filter;
-                var filters = new List<FilterDefinition<Trip>>
+                var routeSchedulesCollection = _mongoDatabase.GetCollection<RouteSchedule>("routeschedules");
+                var scheduleFilterBuilder = Builders<RouteSchedule>.Filter;
+                
+                var scheduleFilters = new List<FilterDefinition<RouteSchedule>>
                 {
-                    filterBuilder.Eq(t => t.IsDeleted, false),
-                    filterBuilder.Gte(t => t.ServiceDate, utcStartDate),
-                    filterBuilder.Lt(t => t.ServiceDate, utcEndDate)
+                    // EffectiveFrom <= endDate
+                    scheduleFilterBuilder.Lte(rs => rs.EffectiveFrom, utcEndDate),
+                    // EffectiveTo is null OR EffectiveTo >= startDate
+                    scheduleFilterBuilder.Or(
+                        scheduleFilterBuilder.Eq(rs => rs.EffectiveTo, null),
+                        scheduleFilterBuilder.Gte(rs => rs.EffectiveTo, utcStartDate)
+                    ),
+                    // Not deleted
+                    scheduleFilterBuilder.Eq(rs => rs.IsDeleted, false)
                 };
 
                 if (routeId.HasValue)
-                    filters.Add(filterBuilder.Eq(t => t.RouteId, routeId.Value));
+                {
+                    scheduleFilters.Add(scheduleFilterBuilder.Eq(rs => rs.RouteId, routeId.Value));
+                }
 
-                var filter = filterBuilder.And(filters);
-                var trips = await tripsCollection.Find(filter).ToListAsync();
+                var scheduleFilter = scheduleFilterBuilder.And(scheduleFilters);
+                var routeSchedules = await routeSchedulesCollection.Find(scheduleFilter).ToListAsync();
+                var routeIds = routeSchedules.Select(rs => rs.RouteId).Distinct().ToList();
+
+                if (!routeIds.Any())
+                {
+                    _logger.LogInformation("No route schedules found for date range {From} to {To}", localFrom, localTo);
+                    return new List<RouteStatisticsDto>();
+                }
+
+                var routesCollection = _mongoDatabase.GetCollection<Route>("routes");
+                var routesFilter = Builders<Route>.Filter.In(r => r.Id, routeIds);
+                var routes = await routesCollection.Find(routesFilter).ToListAsync();
+                var routeDict = routes.ToDictionary(r => r.Id);
+
+                var tripsCollection = _mongoDatabase.GetCollection<Trip>("trips");
+                var tripFilterBuilder = Builders<Trip>.Filter;
+                var tripFilters = new List<FilterDefinition<Trip>>
+                {
+                    tripFilterBuilder.Eq(t => t.IsDeleted, false),
+                    tripFilterBuilder.Gte(t => t.ServiceDate, utcStartDate),
+                    tripFilterBuilder.Lt(t => t.ServiceDate, utcEndDate),
+                    tripFilterBuilder.In(t => t.RouteId, routeIds)
+                };
+
+                var tripFilter = tripFilterBuilder.And(tripFilters);
+                var trips = await tripsCollection.Find(tripFilter).ToListAsync();
 
                 var routeStats = new Dictionary<Guid, (string name, int totalTrips, int actualTrips, HashSet<Guid> students, int attended, int marked, double totalRuntime, HashSet<Guid> vehicles)>();
 
@@ -449,16 +481,17 @@ namespace Services.Implementations
                 {
                     if (!routeStats.ContainsKey(trip.RouteId))
                     {
-                        var route = await routesCollection.Find(r => r.Id == trip.RouteId).FirstOrDefaultAsync();
+                        var route = routeDict.ContainsKey(trip.RouteId) ? routeDict[trip.RouteId] : null;
                         var routeName = route?.RouteName ?? "Unknown Route";
                         routeStats[trip.RouteId] = (routeName, 0, 0, new HashSet<Guid>(), 0, 0, 0, new HashSet<Guid>());
                     }
 
                     var current = routeStats[trip.RouteId];
-                    current.totalTrips++;
+                    var (name, totalTrips, actualTrips, students, attended, marked, totalRuntime, vehicles) = current;
+                    totalTrips++;
 
                     if (trip.VehicleId != Guid.Empty)
-                        current.vehicles.Add(trip.VehicleId);
+                        vehicles.Add(trip.VehicleId);
 
                     double duration = 0;
                     bool hasStarted = false;
@@ -485,8 +518,8 @@ namespace Services.Implementations
 
                     if (hasStarted)
                     {
-                        current.actualTrips++;
-                        current.totalRuntime += duration;
+                        actualTrips++;
+                        totalRuntime += duration;
                     }
 
                     if (trip.Stops != null)
@@ -497,30 +530,49 @@ namespace Services.Implementations
                             {
                                 foreach (var att in stop.Attendance)
                                 {
-                                    current.students.Add(att.StudentId);
-                                    current.marked++;
+                                    students.Add(att.StudentId);
+                                    marked++;
                                     if (IsPositiveAttendance(att.State))
                                     {
-                                        current.attended++;
+                                        attended++;
                                     }
                                 }
                             }
                         }
                     }
 
-                    routeStats[trip.RouteId] = current;
+                    routeStats[trip.RouteId] = (name, totalTrips, actualTrips, students, attended, marked, totalRuntime, vehicles);
                 }
 
-                return routeStats.Select(r => new RouteStatisticsDto
+                var result = new List<RouteStatisticsDto>();
+
+                foreach (var routeIdItem in routeIds)
                 {
-                    RouteId = r.Key,
-                    RouteName = r.Value.name,
-                    TotalTrips = r.Value.totalTrips,
-                    TotalStudents = r.Value.students.Count,
-                    AttendanceRate = r.Value.marked > 0 ? Math.Round((double)r.Value.attended / r.Value.marked * 100, 2) : 0,
-                    AverageRuntime = r.Value.actualTrips > 0 ? Math.Round(r.Value.totalRuntime / r.Value.actualTrips, 2) : 0,
-                    ActiveVehicles = r.Value.vehicles.Count
-                }).OrderByDescending(r => r.TotalTrips).ToList();
+                    if (!routeDict.TryGetValue(routeIdItem, out var route))
+                        continue;
+
+                    var stats = routeStats.ContainsKey(routeIdItem)
+                        ? routeStats[routeIdItem]
+                        : (route.RouteName, 0, 0, new HashSet<Guid>(), 0, 0, 0.0, new HashSet<Guid>());
+
+                    var status = route.IsDeleted ? "Deleted" : (route.IsActive ? "Active" : "Inactive");
+
+                    result.Add(new RouteStatisticsDto
+                    {
+                        RouteId = routeIdItem,
+                        RouteName = stats.Item1,
+                        TotalTrips = stats.Item2,
+                        TotalStudents = stats.Item4.Count,
+                        AttendanceRate = stats.Item6 > 0 ? Math.Round((double)stats.Item5 / stats.Item6 * 100, 2) : 0,
+                        AverageRuntime = stats.Item3 > 0 ? Math.Round(stats.Item7 / stats.Item3, 2) : 0,
+                        ActiveVehicles = stats.Item8.Count,
+                        IsDeleted = route.IsDeleted,
+                        IsActive = route.IsActive,
+                        Status = status
+                    });
+                }
+
+                return result.OrderByDescending(r => r.TotalTrips).ToList();
             }
             catch (Exception ex)
             {

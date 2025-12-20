@@ -69,20 +69,21 @@ namespace Services.Implementations
 				.GroupBy(s => s.CurrentPickupPointId!.Value)
 				.ToDictionary(g => g.Key, g => g.Count());
 
-			// Map to DTOs with student counts
-			var pickupPointDtos = unassignedPickupPoints.Select(pp => new PickupPointDto
-			{
-				Id = pp.Id,
-				Description = pp.Description,
-				Location = pp.Location,
-				Latitude = pp.Geog.Y, // NetTopologySuite uses Y for latitude
-				Longitude = pp.Geog.X, // NetTopologySuite uses X for longitude
-				StudentCount = studentCountsByPickupPoint.GetValueOrDefault(pp.Id, 0),
-				CreatedAt = pp.CreatedAt,
-				UpdatedAt = pp.UpdatedAt
-			}).ToList();
+            var pickupPointDtos = unassignedPickupPoints
+            .Where(pp => studentCountsByPickupPoint.ContainsKey(pp.Id))
+            .Select(pp => new PickupPointDto
+            {
+                Id = pp.Id,
+                Description = pp.Description,
+                Location = pp.Location,
+                Latitude = pp.Geog.Y,
+                Longitude = pp.Geog.X,
+                StudentCount = studentCountsByPickupPoint[pp.Id],
+                CreatedAt = pp.CreatedAt,
+                UpdatedAt = pp.UpdatedAt
+            }).ToList();
 
-			return new PickupPointsResponse
+            return new PickupPointsResponse
 			{
 				PickupPoints = pickupPointDtos,
 				TotalCount = pickupPointDtos.Count
