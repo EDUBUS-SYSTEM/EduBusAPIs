@@ -9,7 +9,6 @@ using MongoDB.Driver;
 using Services.Contracts;
 using Services.Models.Notification;
 using Services.Models.VietMap;
-using Data.Models.Enums;
 using Constants;
 namespace Services.Backgrounds
 {
@@ -17,8 +16,8 @@ namespace Services.Backgrounds
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<PickupApproachNotificationService> _logger;
-        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1); // Check every 1 minute
-        private const int APPROACH_THRESHOLD_METERS = 2000; // Notify when 1.5km away
+        private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1); 
+        private const int APPROACH_THRESHOLD_METERS = 1000; 
 
         public PickupApproachNotificationService(
             IServiceScopeFactory scopeFactory,
