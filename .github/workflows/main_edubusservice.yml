@@ -27,7 +27,7 @@ jobs:
         run: dotnet build --configuration Release
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
+        run: dotnet publish ./APIs/APIs.csproj -c Release -o "${{env.DOTNET_ROOT}}/myapp"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -47,7 +47,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: .net-app
-      
+          path: myapp
+          
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -61,5 +62,6 @@ jobs:
         with:
           app-name: 'edubusservice'
           slot-name: 'Production'
-          package: .
+          package: myapp
+
           
